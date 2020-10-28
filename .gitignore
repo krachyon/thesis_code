@@ -1,0 +1,5 @@
+*.zip
+*[A-Z]/
+Armazones
+.idea
+*.fits
