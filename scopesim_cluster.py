@@ -1,16 +1,18 @@
-import scopesim
-import scopesim_templates
+import os
+from typing import List, Tuple
+
+import anisocado
+import astropy.table
+import matplotlib.pyplot as plt
 import numpy as np
 import pyckles
-from scipy.optimize import curve_fit
-import astropy.table
-from typing import List, Tuple
-import matplotlib.pyplot as plt
+import scopesim
+import scopesim_templates
 from matplotlib.colors import LogNorm
-import anisocado
-import tempfile
+from scipy.optimize import curve_fit
 
 plt.ion()
+
 
 # globals
 pixel_scale = 0.004  # TODO get this from scopesim?
@@ -44,7 +46,7 @@ def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
 
     assert (len(x) == len(y) and len(m) == len(x))
     Nprime = len(x)
-    filter = "MICADO/filters/TC_filter_K-cont.dat"  # TODO: how to make system find this?
+    filter_name = "MICADO/filters/TC_filter_K-cont.dat"  # TODO: how to make system find this?
     ## TODO: random spectral types, adapt this to a realistic cluster distribution or maybe just use
     ## scopesim_templates.basic.stars.cluster
     # random_spectral_types = np.random.choice(get_spectral_types(), Nprime)
@@ -52,7 +54,10 @@ def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
     # That's what scopesim seemed to use for all stars.ü
     spectral_types = ["A0V"] * Nprime
 
-    return scopesim_templates.basic.stars.stars(filter_name=filter, amplitudes=m, spec_types=spectral_types, x=x, y=y)
+    return scopesim_templates.basic.stars.stars(filter_name=filter_name,
+                                                amplitudes=m,
+                                                spec_types=spectral_types,
+                                                x=x, y=y)
 
 
 def download() -> None:
@@ -62,6 +67,7 @@ def download() -> None:
                                "instruments/MICADO"])
 
 
+# noinspection PyPep8Naming
 def generate_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: int = 512):
     hdus = anisocado.misc.make_simcado_psf_file(
         [shift], [psf_wavelength], pixelSize=pixel_scale, N=N)
@@ -69,6 +75,8 @@ def generate_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: i
     image.data = np.squeeze(image.data)  # remove leading dimension, we're only looking at a single picture, not a stack
     image.writeto('temp.fits', overwrite=True)
 
+
+    # noinspection PyTypeChecker
     tmp_psf = anisocado.AnalyticalScaoPsf(N=N, wavelength=psf_wavelength)
     strehl = tmp_psf.strehl_ratio
 
@@ -79,11 +87,6 @@ def generate_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: i
         psf_side_length=N,
         strehl_ratio=strehl, )
     # convolve_mode=''
-
-
-def airy_minimum(pixel_scale):
-    # Todo where does this come from?
-    return 1.22 * 2.2e-6 / 39 / (pixel_scale / 3600 / 180 * np.pi)
 
 
 def gauss(x, a, x0, σ):
@@ -179,12 +182,21 @@ def write_ds9_regionfile(x_y_data: np.ndarray, filename: str):
             f.write(f"image;circle( {row[0] + 1:f}, {row[1] + 1:f}, 1.5)\n")
         f.close()
 
+
 # TODO: difference between two observations
 # TODO: SNR vs Sigma plot
 
 def main(verbose=True, output=True):
-    ## uncomment if directory not populated:
-    # download()
+    if not os.path.exists('MICADO'):
+        # TODO is it really necessary to always throw shit into the current wdir?
+        print('''Simcado Data missing. Do you want to download?
+        Attention: Will write into current working dir!''')
+        choice = input('[y/N] ')
+        if choice == 'y' or choice == 'Y':
+            download()
+        else:
+            exit(-1)
+
     psf_effect = generate_psf()
     cluster = make_simcado_cluster()
     stars_in_cluster = len(cluster.meta['x'])  # TODO again, stupid way of looking this information up...
