@@ -3,6 +3,7 @@ from typing import List, Tuple
 
 import anisocado
 import astropy.table
+from astropy.io.fits import PrimaryHDU
 import matplotlib.pyplot as plt
 import numpy as np
 import pyckles
@@ -10,6 +11,7 @@ import scopesim
 import scopesim_templates
 from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
+
 
 plt.ion()
 
@@ -183,6 +185,7 @@ def write_ds9_regionfile(x_y_data: np.ndarray, filename: str):
         f.close()
 
 
+# TODO: return types
 # TODO: difference between two observations
 # TODO: SNR vs Sigma plot
 
@@ -215,6 +218,7 @@ def main(verbose=True, output=True):
     # TODO - would be nice if Effect Objects where frozen, e.g. with the dataclas decorator. Used ".included" first and
     # TODO   was annoyed that it wasn't working...
     micado['relay_psf'].include = False
+    micado['micado_ncpas_psf'].include = False
 
     if verbose:
         micado.effects.pprint(max_lines=100, max_width=300)
@@ -230,7 +234,8 @@ def main(verbose=True, output=True):
     x_y_data = np.vstack((photometry_result['x_fit'], photometry_result['y_fit'])).T
 
     if verbose:
-        f'found {len(x_y_data)} out of {stars_in_cluster} stars with photometry'
+        print(f'Got σ={σ} for the PSF')
+        print(f'found {len(x_y_data)} out of {stars_in_cluster} stars with photometry')
 
     if output:
         observed_hdus[1].writeto('observed.fits', overwrite=True)
@@ -238,10 +243,17 @@ def main(verbose=True, output=True):
         residual_hdu.data = residual_image
         residual_hdu.writeto('residual.fits', overwrite=True)
 
+        PrimaryHDU(psf_effect.data).writeto('psf.fits')
+
         write_ds9_regionfile(x_y_data, 'centroids.reg')
 
     # Visualization
     fit_gaussian_to_psf(psf_effect.data, plot=True)
+
+    plt.figure()
+    plt.imshow(psf_effect.data, norm=LogNorm(), vmax=1E5)
+    plt.colorbar()
+    plt.title('PSF')
 
     plt.figure(figsize=(10, 10))
     plt.imshow(observed_image, norm=LogNorm(), vmax=1E5)
