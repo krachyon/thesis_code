@@ -19,14 +19,14 @@ def get_spectral_types() -> List[astropy.table.Row]:
     return list(pickles_lib.table['name'])
 
 
-def make_scopesim_cluster(seed:int =9999) -> scopesim.Source:
+def make_scopesim_cluster(seed: int = 9999) -> scopesim.Source:
     return scopesim_templates.basic.stars.cluster(mass=1000,  # Msun
                                                   distance=50000,  # parsec
                                                   core_radius=0.3,  # parsec
                                                   seed=seed)
 
 
-def make_simcado_cluster(seed:int =9999) -> scopesim.Source:
+def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
     np.random.seed(seed)
     N = 1000
     x = np.random.normal(0, 1, N)
@@ -36,8 +36,8 @@ def make_simcado_cluster(seed:int =9999) -> scopesim.Source:
     y_in_px = y / pixel_scale + 512 + 1
 
     mask = (m > 14) * (0 < x_in_px) * (x_in_px < 1024) * (0 < y_in_px) * (y_in_px < 1024)
-    x = x[mask];
-    y = y[mask];
+    x = x[mask]
+    y = y[mask]
     m = m[mask]
 
     assert (len(x) == len(y) and len(m) == len(x))
@@ -46,7 +46,7 @@ def make_simcado_cluster(seed:int =9999) -> scopesim.Source:
     ## TODO: random spectral types, adapt this to a realistic cluster distribution or maybe just use
     ## scopesim_templates.basic.stars.cluster
     # random_spectral_types = np.random.choice(get_spectral_types(), Nprime)
-    spectral_types = ("A0V")
+    spectral_types = ["A0V"] * Nprime
 
     return scopesim_templates.basic.stars.stars(filter_name=filter, amplitudes=m, spec_types=spectral_types, x=x, y=y)
 
@@ -58,29 +58,46 @@ def download() -> None:
                                "instruments/MICADO"])
 
 
-def generate_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0,14), N: int = 512):
-    # Idea: Micado optical train comes with a relay_psf effect. Disable this and build our own anisocado based
-    # version.
-    # eg.: micado['relay_psf'].include=False
-    # Problems: - there seems to be no way to make an AnisocadoConstPSF without a temporary file
-    #           - It expects the imageHDU to be the first element of the HDU list, when writing it out a PrimaryHDU
-    #             is prepended
-    #           - the Strehl ratio is expected as an argument but shouldn't that be able to be calculated from other params?
+def generate_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: int = 512):
     hdus = anisocado.misc.make_simcado_psf_file(
         [shift], [psf_wavelength], pixelSize=pixel_scale, N=N)
-    hdus[2].writeto('temp.fits', overwrite=True)
+    image = hdus[2]
+    image.data = np.squeeze(image.data)  # remove leading dimension, we're only looking at a single picture, not a stack
+    image.writeto('temp.fits', overwrite=True)
 
-    # noinspection PyTypeChecker
-    psf = anisocado.AnalyticalScaoPsf(N=N, wavelength=psf_wavelength)
-    return scopesim.effects.AnisocadoConstPSF(
-        filename='temp.fits', strehl=psf.strehl_ratio, wavelength=psf_wavelength, psf_side_length=N)
+    tmp_psf = anisocado.AnalyticalScaoPsf(N=N, wavelength=psf_wavelength)
+    strehl = tmp_psf.strehl_ratio
+
+    return scopesim.effects.FieldConstantPSF(
+                                            name="anisocado_psf",
+                                            filename='temp.fits',
+                                            wavelength=psf_wavelength,
+                                            psf_side_length=N,
+                                            strehl_ratio=strehl,)
+    # convolve_mode=''
 
 def main():
     ## uncomment if directory not populated:
     # download()
+    psf_effect = generate_psf()
+    cluster = make_simcado_cluster()
 
     micado = scopesim.OpticalTrain("MICADO")
-    cluster = make_simcado_cluster()
+
+    # the previous psf had that optical element so put it in the same spot.
+    # Todo This way of looking it up is pretty stupid. Is there a better way?
+    element_idx = [element.meta['name'] for element in micado.optics_manager.optical_elements].index('default_ro')
+
+    micado.optics_manager.add_effect(psf_effect, ext=element_idx)
+
+    # disable old psf
+    # TODO why is there no remove_effect with a similar interface? Why do I need to go through a dictionary attached to
+    # TODO would be nice if Effect Objects where frozen, e.g. with the dataclas decorator. Used ".included" first and
+    # was annoyed that it wasn't working...
+    micado['relay_psf'].include = False
+
+    micado.effects.pprint(max_lines=100, max_width=300)
+
     micado.observe(cluster)
     hdus = micado.readout()[0]
 
