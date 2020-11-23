@@ -21,7 +21,7 @@ plt.ion()
 # globals
 pixel_scale = 0.004  # TODO get this from scopesim?
 psf_name = 'anisocado_psf'
-N_simulation = 10
+N_simulation = 4
 output_folder = 'output_files'
 
 
@@ -44,7 +44,7 @@ def to_pixel_scale(pos):
     :param pos:
     :return:
     """
-    return pos / pixel_scale + 512 + 1
+    return pos / pixel_scale + 512
 
 
 def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
@@ -253,6 +253,10 @@ def setup_optical_train() -> scopesim.OpticalTrain:
     micado['relay_psf'].include = False
     micado['micado_ncpas_psf'].include = False
 
+    # TODO Aparently atmospheric dispersion is messed up. Ignore both dispersion and correction for now
+    micado['armazones_atmo_dispersion'].include = False
+    micado['micado_adc_3D_shift'].include = False
+
     return micado
 
 
@@ -373,6 +377,8 @@ def plot_images(results: List[Tuple[np.ndarray, np.ndarray, Table, float]]) -> N
         if output:
             plt.savefig(f'{output_folder}/residual{i:02d}.png')
 
+        plt.close('all')
+
 
 def plot_source_vs_photometry(image, photometry_result, source):
     from matplotlib.markers import MarkerStyle
@@ -382,9 +388,9 @@ def plot_source_vs_photometry(image, photometry_result, source):
     plt.figure()
     plt.imshow(image, norm=LogNorm(), vmax=1E5)
     plt.plot(x_y_observed[:, 0], x_y_observed[:, 1], 'o', fillstyle='none',
-                markeredgewidth=0.5, markeredgecolor='red', label='photometry')
+                markeredgewidth=1, markeredgecolor='red', label='photometry')
     plt.plot(x_y_source[:, 0], x_y_source[:, 1], '^', fillstyle='none',
-                markeredgewidth=0.5, markeredgecolor='orange', label='source')
+                markeredgewidth=1, markeredgecolor='orange', label='source')
     plt.legend()
 
 
