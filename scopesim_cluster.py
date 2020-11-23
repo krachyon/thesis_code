@@ -21,7 +21,7 @@ plt.ion()
 # globals
 pixel_scale = 0.004  # TODO get this from scopesim?
 psf_name = 'anisocado_psf'
-N_simulation = 12
+N_simulation = 10
 output_folder = 'output_files'
 
 
@@ -387,8 +387,6 @@ def plot_deviation(photometry_results: List[Table]) -> None:
     means = stacked.group_by('ref_index').groups.aggregate(np.mean)
     stds = stacked.group_by('ref_index').groups.aggregate(np.std)
 
-    plt.close('all')
-
     plt.figure()
     plt.plot(-2.5 * np.log10(means['flux_fit']), stds['offset'], 'o')
     plt.title('magnitude vs std-deviation of position')
@@ -421,6 +419,10 @@ psf_effect = micado[psf_name]
 # Weird lockup when cluster is shared between processes...
 args = [(copy.deepcopy(cluster), i) for i in range(N_simulation)]
 
+# TODO Multiprocessing sometimes seems to cause some issues in scopesim, probably due to shared connection object
+#  File "ScopeSim/scopesim/effects/ter_curves.py", line 247, in query_server
+#     tbl.columns[i].name = colname
+#  UnboundLocalError: local variable 'tbl' referenced before assignment
 with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
     results = pool.starmap(observation_and_photometry, args)
 
@@ -447,6 +449,7 @@ if output:
 photometry_results = [photometry_result for observed_image, residual_image, photometry_result, sigma in results]
 
 if output:
+    plt.close('all')
     plot_deviation(photometry_results)
 
 script_has_run = True
