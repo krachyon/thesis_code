@@ -4,4 +4,4 @@ Armazones
 .idea
 *.fits
 *.reg
-output_files/
+output_files/*

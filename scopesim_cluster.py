@@ -21,8 +21,7 @@ plt.ion()
 # globals
 pixel_scale = 0.004  # TODO get this from scopesim?
 psf_name = 'anisocado_psf'
-N_simulation = 3
-
+N_simulation = 2
 
 def get_spectral_types() -> List[astropy.table.Row]:
     pickles_lib = pyckles.SpectralLibrary('pickles', return_style='synphot')
@@ -34,6 +33,16 @@ def make_scopesim_cluster(seed: int = 9999) -> scopesim.Source:
                                                   distance=50000,  # parsec
                                                   core_radius=0.3,  # parsec
                                                   seed=seed)
+
+
+@np.vectorize
+def to_pixel_scale(pos):
+    """
+    convert position of objects from arcseconds to pixel coordinates
+    :param pos:
+    :return:
+    """
+    return pos / pixel_scale + 512 + 1
 
 
 def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
@@ -219,6 +228,40 @@ def setup_optical_train() -> scopesim.OpticalTrain:
 
     return micado
 
+# TODO: This does not work, there's a constant shift between the object and the image
+def match_observation_to_source(astronomical_object: scopesim.Source, photometry_result: astropy.table.Table) \
+        -> astropy.table.Table:
+    """
+    Find the nearest source for a fitted astrometry result and add this information to the photometry_result table
+    :param astronomical_object: The source object that was observed with scopesim
+    :param photometry_result: What the photometry found out about it
+    :return: table modified with extra information
+    """
+    from scipy.spatial import cKDTree
+    assert (len(astronomical_object.fields) == 1)  # Can't handle multiple fields
+
+    x_y = np.array((astronomical_object.fields[0]['x'], astronomical_object.fields[0]['y'])).T
+    x_y_pixel = to_pixel_scale(x_y)
+    lookup_tree = cKDTree(x_y_pixel)
+
+    photometry_result['x_orig'] = np.nan
+    photometry_result['y_orig'] = np.nan
+    photometry_result['offset'] = np.nan
+
+    seen_indices = set()
+    for row in photometry_result:
+
+        dist, index = lookup_tree.query((row['x_fit'], row['y_fit']))
+        if index in seen_indices:
+            print('Warning: multiple match for source')  # TODO make this message more useful/use warning module
+        seen_indices.add(index)
+        row['x_orig'] = x_y_pixel[index, 0]
+        row['y_orig'] = x_y_pixel[index, 1]
+        row['offset'] = dist
+
+    return photometry_result
+
+
 
 def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) \
         -> Tuple[np.ndarray, np.ndarray, astropy.table.Table]:
@@ -232,6 +275,8 @@ def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) 
     _, _, σ = fit_gaussian_to_psf(detector[psf_name].data)
     photometry_result, residual_image = do_photometry(observed_image, σ)
     photometry_result.sigma_input = σ
+
+    # photometry_result = match_observation_to_source(astronomical_object, photometry_result)
 
     return observed_image, residual_image, photometry_result
 
@@ -254,10 +299,10 @@ def main(verbose=True, output=True):
     pool = multiprocessing.Pool(multiprocessing.cpu_count())
     args = [(cluster, i) for i in range(N_simulation)]
 
-    results = pool.starmap(observation_and_photometry, args)
+    #r esults = pool.starmap(observation_and_photometry, args)
     # debuggable version
-    # import itertools
-    # results = list(itertools.starmap(observation_and_photometry, args))
+    import itertools
+    results = list(itertools.starmap(observation_and_photometry, args))
 
     if output:
         if not os.path.exists('output_files'):
