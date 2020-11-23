@@ -374,6 +374,20 @@ def plot_images(results: List[Tuple[np.ndarray, np.ndarray, Table, float]]) -> N
             plt.savefig(f'{output_folder}/residual{i:02d}.png')
 
 
+def plot_source_vs_photometry(image, photometry_result, source):
+    from matplotlib.markers import MarkerStyle
+    x_y_observed = np.vstack((photometry_result['x_fit'], photometry_result['y_fit'])).T
+    x_y_source = to_pixel_scale(np.array((source.fields[0]['x'], source.fields[0]['y'])).T)
+
+    plt.figure()
+    plt.imshow(image, norm=LogNorm(), vmax=1E5)
+    plt.plot(x_y_observed[:, 0], x_y_observed[:, 1], 'o', fillstyle='none',
+                markeredgewidth=0.5, markeredgecolor='red', label='photometry')
+    plt.plot(x_y_source[:, 0], x_y_source[:, 1], '^', fillstyle='none',
+                markeredgewidth=0.5, markeredgecolor='orange', label='source')
+    plt.legend()
+
+
 def plot_deviation(photometry_results: List[Table]) -> None:
     match_observations(photometry_results)
 
@@ -452,4 +466,3 @@ if output:
     plt.close('all')
     plot_deviation(photometry_results)
 
-script_has_run = True
