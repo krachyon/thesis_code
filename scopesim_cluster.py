@@ -1,29 +1,31 @@
+import copy
+import multiprocessing
 import os
+import tempfile
 from typing import List, Tuple
 
 import anisocado
 import astropy.table
-from astropy.io.fits import PrimaryHDU
 import matplotlib.pyplot as plt
 import numpy as np
 import pyckles
 import scopesim
 import scopesim_templates
+from astropy.io.fits import PrimaryHDU
+from astropy.table import Table, Row
 from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
-import multiprocessing
-import tempfile
-
 
 plt.ion()
-
 
 # globals
 pixel_scale = 0.004  # TODO get this from scopesim?
 psf_name = 'anisocado_psf'
-N_simulation = 2
+N_simulation = 12
+output_folder = 'output_files'
 
-def get_spectral_types() -> List[astropy.table.Row]:
+
+def get_spectral_types() -> List[Row]:
     pickles_lib = pyckles.SpectralLibrary('pickles', return_style='synphot')
     return list(pickles_lib.table['name'])
 
@@ -46,6 +48,11 @@ def to_pixel_scale(pos):
 
 
 def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
+    """
+    Emulates custom cluster creation from initial script
+    :param seed:
+    :return:
+    """
     np.random.seed(seed)
     N = 1000
     x = np.random.normal(0, 1, N)
@@ -66,7 +73,7 @@ def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
     ## scopesim_templates.basic.stars.cluster
     # random_spectral_types = np.random.choice(get_spectral_types(), Nprime)
 
-    # That's what scopesim seemed to use for all stars.ü
+    # That's what scopesim seemed to use for all stars.
     spectral_types = ['A0V'] * Nprime
 
     return scopesim_templates.basic.stars.stars(filter_name=filter_name,
@@ -76,6 +83,10 @@ def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
 
 
 def download() -> None:
+    """
+    get scopesim file if not present
+    :return:
+    """
     if not os.path.exists('MICADO'):
         # TODO is it really necessary to always throw shit into the current wdir?
         print('''Simcado Data missing. Do you want to download?
@@ -91,13 +102,19 @@ def download() -> None:
 
 # noinspection PyPep8Naming
 def make_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: int = 512) -> scopesim.effects.Effect:
+    """
+    create a psf effect for scopesim to be as close as possible to how an anisocado PSF is used in simcado
+    :param psf_wavelength:
+    :param shift:
+    :param N: ? Size of kernel?
+    :return: effect object you can plug into OpticalTrain
+    """
     hdus = anisocado.misc.make_simcado_psf_file(
         [shift], [psf_wavelength], pixelSize=pixel_scale, N=N)
     image = hdus[2]
     image.data = np.squeeze(image.data)  # remove leading dimension, we're only looking at a single picture, not a stack
     filename = tempfile.NamedTemporaryFile('w', suffix='.fits').name
     image.writeto(filename)
-
 
     # noinspection PyTypeChecker
     tmp_psf = anisocado.AnalyticalScaoPsf(N=N, wavelength=psf_wavelength)
@@ -144,7 +161,7 @@ def fit_gaussian_to_psf(psf: np.ndarray, plot=False) -> np.ndarray:
     return popt
 
 
-def do_photometry(image: np.ndarray, σ_psf: float) -> Tuple[astropy.table.Table, np.ndarray]:
+def do_photometry(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
     """
     Find stars in an image
 
@@ -194,6 +211,12 @@ def do_photometry(image: np.ndarray, σ_psf: float) -> Tuple[astropy.table.Table
 
 
 def write_ds9_regionfile(x_y_data: np.ndarray, filename: str) -> None:
+    """
+    Create a DS9 region file from a list of coordinates
+    :param x_y_data: set of x-y coordinate pairs
+    :param filename: where to write to
+    :return:
+    """
     assert (x_y_data.ndim == 2)
     assert (x_y_data.shape[1] == 2)
 
@@ -208,6 +231,10 @@ def write_ds9_regionfile(x_y_data: np.ndarray, filename: str) -> None:
 
 
 def setup_optical_train() -> scopesim.OpticalTrain:
+    """
+    Create a Micado optical train with custom PSF
+    :return: OpticalTrain object
+    """
     psf_effect = make_psf()
 
     micado = scopesim.OpticalTrain('MICADO')
@@ -221,16 +248,17 @@ def setup_optical_train() -> scopesim.OpticalTrain:
     # disable old psf
     # TODO - why is there no remove_effect with a similar interface? Why do I need to go through a dictionary attached to
     # TODO   a different class?
-    # TODO - would be nice if Effect Objects where frozen, e.g. with the dataclas decorator. Used ".included" first and
+    # TODO - would be nice if Effect Objects where frozen, e.g. with the dataclass decorator. Used ".included" first and
     # TODO   was annoyed that it wasn't working...
     micado['relay_psf'].include = False
     micado['micado_ncpas_psf'].include = False
 
     return micado
 
+
 # TODO: This does not work, there's a constant shift between the object and the image
-def match_observation_to_source(astronomical_object: scopesim.Source, photometry_result: astropy.table.Table) \
-        -> astropy.table.Table:
+def match_observation_to_source(astronomical_object: scopesim.Source, photometry_result: Table) \
+        -> Table:
     """
     Find the nearest source for a fitted astrometry result and add this information to the photometry_result table
     :param astronomical_object: The source object that was observed with scopesim
@@ -262,9 +290,42 @@ def match_observation_to_source(astronomical_object: scopesim.Source, photometry
     return photometry_result
 
 
+def match_observations(observations: List[Table]):
+    """
+    given a set of astrometric measurements, take the first as reference and determine difference in centroid position
+    by nearest neighbour search.
+    :param observations: Multiple astrometric measurments of same object
+    :return: None, modifies table inplace
+    """
+    from scipy.spatial import cKDTree  # O(n log n) instead of O(n**2)  lookup speed
+    assert (len(observations) != 0)
+
+    ref_obs = observations[0]
+    x_y = np.array((ref_obs['x_fit'], ref_obs['y_fit'])).T
+    lookup_tree = cKDTree(x_y)
+
+    for photometry_result in observations:
+        photometry_result['x_ref'] = np.nan
+        photometry_result['y_ref'] = np.nan
+        photometry_result['ref_index'] = -1
+        photometry_result['offset'] = np.nan
+
+        for row in photometry_result:
+            dist, index = lookup_tree.query((row['x_fit'], row['y_fit']))
+            row['x_ref'] = x_y[index, 0]
+            row['y_ref'] = x_y[index, 1]
+            row['ref_index'] = index
+            row['offset'] = dist
+
 
 def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) \
-        -> Tuple[np.ndarray, np.ndarray, astropy.table.Table]:
+        -> Tuple[np.ndarray, np.ndarray, Table, float]:
+    """
+    Observe an object with scopesim and perform photometry on resulting image. Deterministic wrt. to given random seed
+    :param astronomical_object: what to observe
+    :param seed: for making randomness repeatable
+    :return: Tuple [observed image, residual image after photometry, photometry data, sigma of assumed psf]
+    """
 
     np.random.seed(seed)
 
@@ -274,63 +335,26 @@ def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) 
 
     _, _, σ = fit_gaussian_to_psf(detector[psf_name].data)
     photometry_result, residual_image = do_photometry(observed_image, σ)
-    photometry_result.sigma_input = σ
 
     # photometry_result = match_observation_to_source(astronomical_object, photometry_result)
 
-    return observed_image, residual_image, photometry_result
+    return observed_image, residual_image, photometry_result, σ
 
 
-# TODO: return types
-# TODO: difference between two observations
-# TODO: SNR vs Sigma plot
-
-def main(verbose=True, output=True):
-    download()
-
-    cluster = make_simcado_cluster()
-    stars_in_cluster = len(cluster.meta['x'])  # TODO again, stupid way of looking this information up...
-
-    micado = setup_optical_train()  # this can't be pickled and not be used in multiprocessing, so create independently
-    if verbose:
-        micado.effects.pprint(max_lines=100, max_width=300)
-    psf_effect = micado[psf_name]
-
-    pool = multiprocessing.Pool(multiprocessing.cpu_count())
-    args = [(cluster, i) for i in range(N_simulation)]
-
-    #r esults = pool.starmap(observation_and_photometry, args)
-    # debuggable version
-    import itertools
-    results = list(itertools.starmap(observation_and_photometry, args))
-
-    if output:
-        if not os.path.exists('output_files'):
-            os.mkdir('output_files')
-        PrimaryHDU(psf_effect.data).writeto('output_files/psf.fits', overwrite=True)
-
-    fit_gaussian_to_psf(psf_effect.data, plot=True)
-    plt.savefig(f'output_files/psf_fit.png')
-
-    plt.figure()
-    plt.imshow(psf_effect.data, norm=LogNorm(), vmax=1E5)
-    plt.colorbar()
-    plt.title('PSF')
-    plt.savefig(f'output_files/psf.png')
-
-    for i, (observed_image, residual_image, photometry_result) in enumerate(results):
+def plot_images(results: List[Tuple[np.ndarray, np.ndarray, Table, float]]) -> None:
+    for i, (observed_image, residual_image, photometry_result, sigma) in enumerate(results):
 
         x_y_data = np.vstack((photometry_result['x_fit'], photometry_result['y_fit'])).T
 
         if verbose:
-            print(f"Got σ={photometry_result.sigma_input} for the PSF")
+            print(f"Got σ={sigma} for the PSF")
             print(f'found {len(x_y_data)} out of {stars_in_cluster} stars with photometry')
 
         if output:
-            PrimaryHDU(observed_image).writeto(f'output_files/observed_{i:02d}.fits', overwrite=True)
-            PrimaryHDU(residual_image).writeto(f'output_files/residual_{i:02d}.fits', overwrite=True)
+            PrimaryHDU(observed_image).writeto(f'{output_folder}/observed_{i:02d}.fits', overwrite=True)
+            PrimaryHDU(residual_image).writeto(f'{output_folder}/residual_{i:02d}.fits', overwrite=True)
 
-            write_ds9_regionfile(x_y_data, f'output_files/centroids_{i:02d}.reg')
+            write_ds9_regionfile(x_y_data, f'{output_folder}/centroids_{i:02d}.reg')
 
         # Visualization
 
@@ -339,17 +363,90 @@ def main(verbose=True, output=True):
         plt.scatter(x_y_data[:, 0], x_y_data[:, 1], marker="o", lw=1, color=None, edgecolors='red')
         plt.title('observed')
         plt.colorbar()
-        plt.savefig(f'output_files/obsverved_{i:02d}.png')
+        if output:
+            plt.savefig(f'{output_folder}/obsverved_{i:02d}.png')
 
         plt.figure(figsize=(10, 10))
         plt.imshow(residual_image, norm=LogNorm(), vmax=1E5)
         plt.title('residual')
         plt.colorbar()
-        plt.savefig(f'output_files/residual{i:02d}.png')
+        if output:
+            plt.savefig(f'{output_folder}/residual{i:02d}.png')
 
 
+def plot_deviation(photometry_results: List[Table]) -> None:
+    match_observations(photometry_results)
+
+    stacked = astropy.table.vstack(photometry_results)
+
+    # only select stars that are seen in all observations
+    stacked = stacked.group_by('ref_index').groups.filter(lambda tab, keys: len(tab) == len(photometry_results))
+
+    # evil table magic to combine information for objects that where matched to single reference
+
+    means = stacked.group_by('ref_index').groups.aggregate(np.mean)
+    stds = stacked.group_by('ref_index').groups.aggregate(np.std)
+
+    plt.close('all')
+
+    plt.figure()
+    plt.plot(-2.5 * np.log10(means['flux_fit']), stds['offset'], 'o')
+    plt.title('magnitude vs std-deviation of position')
+    plt.savefig(f'{output_folder}/magnitude_vs_std.png')
+
+    plt.figure()
+    plt.plot(-2.5 * np.log10(stacked['flux_fit']), stacked['offset'], '.')
+    plt.title('spread of measurements')
+    plt.xlabel('magnitude')
+    plt.ylabel('measured deviation')
+    plt.savefig(f'{output_folder}/magnitude_vs_spread.png')
+
+    rms = np.sqrt(np.mean(stacked['offset'] ** 2))
+    print(f'Total RMS of offset between values: {rms}')
 
 
-if __name__ == '__main__':
-    main()
-    plt.show()
+verbose = True
+output = True
+
+download()
+
+cluster = make_simcado_cluster()
+stars_in_cluster = len(cluster.meta['x'])  # TODO again, stupid way of looking this information up...
+
+micado = setup_optical_train()  # this can't be pickled and not be used in multiprocessing, so create independently
+if verbose:
+    micado.effects.pprint(max_lines=100, max_width=300)
+psf_effect = micado[psf_name]
+
+# Weird lockup when cluster is shared between processes...
+args = [(copy.deepcopy(cluster), i) for i in range(N_simulation)]
+
+with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+    results = pool.starmap(observation_and_photometry, args)
+
+# debuggable version
+# import itertools
+# results = list(itertools.starmap(observation_and_photometry, args))
+
+if output:
+    if not os.path.exists(output_folder):
+        os.mkdir(output_folder)
+    PrimaryHDU(psf_effect.data).writeto(f'{output_folder}/psf.fits', overwrite=True)
+
+    fit_gaussian_to_psf(psf_effect.data, plot=True)
+    plt.savefig(f'{output_folder}/psf_fit.png')
+
+    plt.figure()
+    plt.imshow(psf_effect.data, norm=LogNorm(), vmax=1E5)
+    plt.colorbar()
+    plt.title('PSF')
+    plt.savefig(f'{output_folder}/psf.png')
+
+    plot_images(results)
+
+photometry_results = [photometry_result for observed_image, residual_image, photometry_result, sigma in results]
+
+if output:
+    plot_deviation(photometry_results)
+
+script_has_run = True
