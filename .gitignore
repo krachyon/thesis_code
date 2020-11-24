@@ -7,3 +7,4 @@ Paranal
 *.fits
 *.reg
 output_files/*
+*.txt
