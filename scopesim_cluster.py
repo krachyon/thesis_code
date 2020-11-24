@@ -16,13 +16,23 @@ from astropy.table import Table, Row
 from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
 
+# TODO Try out cluster algorithms to avoid shifting stars too far if they don't exist in all photometry
+#  why did the filter for length of result not eliminate all outliers?
+# TODO Disable detector saturation to see if high fluxes get better
+#
+
+
 plt.ion()
 
-# globals
+# globals/configuration
 pixel_scale = 0.004  # TODO get this from scopesim?
 psf_name = 'anisocado_psf'
-N_simulation = 4
+N_simulation = 8
 output_folder = 'output_files'
+verbose = True
+output = False
+
+scopesim_lock = multiprocessing.Lock()
 
 
 def get_spectral_types() -> List[Row]:
@@ -44,7 +54,14 @@ def to_pixel_scale(pos):
     :param pos:
     :return:
     """
+
+    # TODO the +1 here was probably wrong...
     return pos / pixel_scale + 512
+
+
+@np.vectorize
+def flux_to_magnitude(flux):
+    return -2.5 * np.log10(flux)
 
 
 def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
@@ -69,6 +86,7 @@ def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
     assert (len(x) == len(y) and len(m) == len(x))
     Nprime = len(x)
     filter_name = 'MICADO/filters/TC_filter_K-cont.dat'  # TODO: how to make system find this?
+
     ## TODO: random spectral types, adapt this to a realistic cluster distribution or maybe just use
     ## scopesim_templates.basic.stars.cluster
     # random_spectral_types = np.random.choice(get_spectral_types(), Nprime)
@@ -237,7 +255,13 @@ def setup_optical_train() -> scopesim.OpticalTrain:
     """
     psf_effect = make_psf()
 
-    micado = scopesim.OpticalTrain('MICADO')
+    # TODO Multiprocessing sometimes seems to cause some issues in scopesim, probably due to shared connection object
+    # #  File "ScopeSim/scopesim/effects/ter_curves.py", line 247, in query_server
+    # #     tbl.columns[i].name = colname
+    # #  UnboundLocalError: local variable 'tbl' referenced before assignment
+    # mutexing this line seems to solve it...
+    with scopesim_lock:
+        micado = scopesim.OpticalTrain('MICADO')
 
     # the previous psf had that optical element so put it in the same spot.
     # Todo This way of looking up the index is pretty stupid. Is there a better way?
@@ -253,9 +277,12 @@ def setup_optical_train() -> scopesim.OpticalTrain:
     micado['relay_psf'].include = False
     micado['micado_ncpas_psf'].include = False
 
-    # TODO Aparently atmospheric dispersion is messed up. Ignore both dispersion and correction for now
+    # TODO Apparently atmospheric dispersion is messed up. Ignore both dispersion and correction for now
     micado['armazones_atmo_dispersion'].include = False
     micado['micado_adc_3D_shift'].include = False
+
+    # TODO does this also apply to the custom PSF?
+    micado.cmds["!SIM.sub_pixel.flag"] = True
 
     return micado
 
@@ -294,12 +321,12 @@ def match_observation_to_source(astronomical_object: scopesim.Source, photometry
     return photometry_result
 
 
-def match_observations(observations: List[Table]):
+def match_observations_nearest(observations: List[Table]):
     """
     given a set of astrometric measurements, take the first as reference and determine difference in centroid position
     by nearest neighbour search.
     :param observations: Multiple astrometric measurments of same object
-    :return: None, modifies table inplace
+    :return: None, modifies tables inplace
     """
     from scipy.spatial import cKDTree  # O(n log n) instead of O(n**2)  lookup speed
     assert (len(observations) != 0)
@@ -321,6 +348,46 @@ def match_observations(observations: List[Table]):
             row['ref_index'] = index
             row['offset'] = dist
 
+        # filter out everything with a distance greater than one pixel -> outliers and failed fits
+        if verbose:
+            print(f'removing {sum(photometry_result["offset"] > 1)} photometric detections due to distance > 1px')
+        photometry_result.remove_rows(photometry_result['offset'] > 1)
+
+
+def match_observations_clustering(observations: List[Table]) -> Table:
+    """
+    given a set of astrometric measurements, take the first as reference and determine difference in centroid position
+    with a cluster finder
+    :param observations: Multiple astrometric measurments of same object
+    :return: stacked Table
+    """
+    assert (len(observations) != 0)
+    from sklearn.cluster import dbscan
+
+    # make sure we can disentangle results later
+    for i, table in enumerate(observations):
+        table['run_id'] = i
+    observation_stack = astropy.table.vstack(observations)
+
+    x_y = np.array((observation_stack['x_fit'], observation_stack['y_fit'])).T
+
+    # parameters for cluster finder:
+    # min_samples: discard everything that does not occcur in at least half of the photometry
+    # eps: separation should be no more than a quarter pixel TODO: not sure about the universality of that...
+    _, label = dbscan(x_y, min_samples=N_simulation / 2, eps=0.25)
+
+    assert np.all(len(label) == len(x_y))
+    observation_stack['ref_index'] = label
+
+    if verbose:
+        print(f'{sum(label == -1)} astrometry detections could not be assigned')
+    observation_stack.remove_rows(observation_stack['ref_index'] == -1)
+
+    # TODO: Use the information to write back the centroid position to the table and then subtract from the fit
+    #  x-y values to get the offset
+    #  Problem: How to write it back, use a table join somehow?
+    observation_stack.group_by('ref_index').groups.aggregate(np.mean)
+
 
 def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) \
         -> Tuple[np.ndarray, np.ndarray, Table, float]:
@@ -334,6 +401,7 @@ def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) 
     np.random.seed(seed)
 
     detector = setup_optical_train()
+
     detector.observe(astronomical_object, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
@@ -381,26 +449,33 @@ def plot_images(results: List[Tuple[np.ndarray, np.ndarray, Table, float]]) -> N
 
 
 def plot_source_vs_photometry(image, photometry_result, source):
-    from matplotlib.markers import MarkerStyle
     x_y_observed = np.vstack((photometry_result['x_fit'], photometry_result['y_fit'])).T
     x_y_source = to_pixel_scale(np.array((source.fields[0]['x'], source.fields[0]['y'])).T)
 
     plt.figure()
     plt.imshow(image, norm=LogNorm(), vmax=1E5)
     plt.plot(x_y_observed[:, 0], x_y_observed[:, 1], 'o', fillstyle='none',
-                markeredgewidth=1, markeredgecolor='red', label='photometry')
+             markeredgewidth=1, markeredgecolor='red', label='photometry')
     plt.plot(x_y_source[:, 0], x_y_source[:, 1], '^', fillstyle='none',
-                markeredgewidth=1, markeredgecolor='orange', label='source')
+             markeredgewidth=1, markeredgecolor='orange', label='source')
     plt.legend()
 
 
+def plot_photometry_centroids(image, photometry_results):
+    plt.imshow(image, norm=LogNorm())
+    for result in photometry_results:
+        x_y = np.vstack((result['x_fit'], result['y_fit'])).T
+        plt.plot(x_y[:, 0], x_y[:, 1], 'o', fillstyle='none',
+                 markeredgewidth=1, markeredgecolor='red', label='photometry')
+
+
 def plot_deviation(photometry_results: List[Table]) -> None:
-    match_observations(photometry_results)
+    match_observations_nearest(photometry_results)
 
     stacked = astropy.table.vstack(photometry_results)
 
     # only select stars that are seen in all observations
-    stacked = stacked.group_by('ref_index').groups.filter(lambda tab, keys: len(tab) == len(photometry_results))
+    # stacked = stacked.group_by('ref_index').groups.filter(lambda tab, keys: len(tab) == len(photometry_results))
 
     # evil table magic to combine information for objects that where matched to single reference
 
@@ -408,14 +483,15 @@ def plot_deviation(photometry_results: List[Table]) -> None:
     stds = stacked.group_by('ref_index').groups.aggregate(np.std)
 
     plt.figure()
-    plt.plot(-2.5 * np.log10(means['flux_fit']), stds['offset'], 'o')
-    plt.title('magnitude vs std-deviation of position')
+    plt.plot(means['flux_fit'], stds['offset'], 'o')
+    plt.axhline(0)
+    plt.title('flux vs std-deviation of position')
     plt.savefig(f'{output_folder}/magnitude_vs_std.png')
 
     plt.figure()
-    plt.plot(-2.5 * np.log10(stacked['flux_fit']), stacked['offset'], '.')
+    plt.plot(stacked['flux_fit'], stacked['offset'], '.')
     plt.title('spread of measurements')
-    plt.xlabel('magnitude')
+    plt.xlabel('flux')
     plt.ylabel('measured deviation')
     plt.savefig(f'{output_folder}/magnitude_vs_spread.png')
 
@@ -423,13 +499,11 @@ def plot_deviation(photometry_results: List[Table]) -> None:
     print(f'Total RMS of offset between values: {rms}')
 
 
-verbose = True
-output = True
-
 download()
 
 cluster = make_simcado_cluster()
-stars_in_cluster = len(cluster.meta['x'])  # TODO again, stupid way of looking this information up...
+# cluster = make_scopesim_cluster()
+stars_in_cluster = len(cluster.fields[0]['x'])  # TODO again, stupid way of looking this information up...
 
 micado = setup_optical_train()  # this can't be pickled and not be used in multiprocessing, so create independently
 if verbose:
@@ -439,10 +513,6 @@ psf_effect = micado[psf_name]
 # Weird lockup when cluster is shared between processes...
 args = [(copy.deepcopy(cluster), i) for i in range(N_simulation)]
 
-# TODO Multiprocessing sometimes seems to cause some issues in scopesim, probably due to shared connection object
-#  File "ScopeSim/scopesim/effects/ter_curves.py", line 247, in query_server
-#     tbl.columns[i].name = colname
-#  UnboundLocalError: local variable 'tbl' referenced before assignment
 with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
     results = pool.starmap(observation_and_photometry, args)
 
@@ -471,4 +541,3 @@ photometry_results = [photometry_result for observed_image, residual_image, phot
 if output:
     plt.close('all')
     plot_deviation(photometry_results)
-

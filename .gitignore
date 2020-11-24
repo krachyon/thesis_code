@@ -2,6 +2,7 @@ __pycache__
 *.zip
 *[A-Z]/
 Armazones
+Paranal
 .idea
 *.fits
 *.reg
