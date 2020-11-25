@@ -2,7 +2,7 @@ import copy
 import multiprocessing
 import os
 import tempfile
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 
 import anisocado
 import astropy.table
@@ -30,7 +30,7 @@ psf_name = 'anisocado_psf'
 N_simulation = 8
 output_folder = 'output_files'
 verbose = True
-output = False
+output = True
 
 scopesim_lock = multiprocessing.Lock()
 
@@ -321,7 +321,7 @@ def match_observation_to_source(astronomical_object: scopesim.Source, photometry
     return photometry_result
 
 
-def match_observations_nearest(observations: List[Table]):
+def match_observations_nearest(observations: Table) -> Table:
     """
     given a set of astrometric measurements, take the first as reference and determine difference in centroid position
     by nearest neighbour search.
@@ -331,45 +331,41 @@ def match_observations_nearest(observations: List[Table]):
     from scipy.spatial import cKDTree  # O(n log n) instead of O(n**2)  lookup speed
     assert (len(observations) != 0)
 
-    ref_obs = observations[0]
+    ref_obs = observations[observations['run_id'] == 0]
     x_y = np.array((ref_obs['x_fit'], ref_obs['y_fit'])).T
     lookup_tree = cKDTree(x_y)
 
-    for photometry_result in observations:
-        photometry_result['x_ref'] = np.nan
-        photometry_result['y_ref'] = np.nan
-        photometry_result['ref_index'] = -1
-        photometry_result['offset'] = np.nan
 
-        for row in photometry_result:
-            dist, index = lookup_tree.query((row['x_fit'], row['y_fit']))
-            row['x_ref'] = x_y[index, 0]
-            row['y_ref'] = x_y[index, 1]
-            row['ref_index'] = index
-            row['offset'] = dist
+    observations['x_ref'] = np.nan
+    observations['y_ref'] = np.nan
+    observations['ref_index'] = -1
+    observations['offset'] = np.nan
 
-        # filter out everything with a distance greater than one pixel -> outliers and failed fits
-        if verbose:
-            print(f'removing {sum(photometry_result["offset"] > 1)} photometric detections due to distance > 1px')
-        photometry_result.remove_rows(photometry_result['offset'] > 1)
+    for row in observations:
+        dist, index = lookup_tree.query((row['x_fit'], row['y_fit']))
+        row['x_ref'] = x_y[index, 0]
+        row['y_ref'] = x_y[index, 1]
+        row['ref_index'] = index
+        row['offset'] = dist
+
+    # filter out everything with a distance greater than one pixel -> outliers and failed fits
+    if verbose:
+        print(f'removing {sum(observations["offset"] > 1)} photometric detections due to distance > 1px')
+    observations.remove_rows(observations['offset'] > 1)
+
+    return observations
 
 
-def match_observations_clustering(observations: List[Table]) -> Table:
+def match_observations_clustering(observations: Table) -> Table:
     """
     given a set of astrometric measurements, take the first as reference and determine difference in centroid position
     with a cluster finder
     :param observations: Multiple astrometric measurments of same object
     :return: stacked Table
     """
-    assert (len(observations) != 0)
     from sklearn.cluster import dbscan
 
-    # make sure we can disentangle results later
-    for i, table in enumerate(observations):
-        table['run_id'] = i
-    observation_stack = astropy.table.vstack(observations)
-
-    x_y = np.array((observation_stack['x_fit'], observation_stack['y_fit'])).T
+    x_y = np.array((observations['x_fit'], observations['y_fit'])).T
 
     # parameters for cluster finder:
     # min_samples: discard everything that does not occcur in at least half of the photometry
@@ -377,16 +373,23 @@ def match_observations_clustering(observations: List[Table]) -> Table:
     _, label = dbscan(x_y, min_samples=N_simulation / 2, eps=0.25)
 
     assert np.all(len(label) == len(x_y))
-    observation_stack['ref_index'] = label
+    observations['ref_index'] = label
 
     if verbose:
         print(f'{sum(label == -1)} astrometry detections could not be assigned')
-    observation_stack.remove_rows(observation_stack['ref_index'] == -1)
+    observations.remove_rows(observations['ref_index'] == -1)
 
     # TODO: Use the information to write back the centroid position to the table and then subtract from the fit
     #  x-y values to get the offset
     #  Problem: How to write it back, use a table join somehow?
-    observation_stack.group_by('ref_index').groups.aggregate(np.mean)
+    means = observations.group_by('ref_index').groups.aggregate(np.mean)[['ref_index', 'x_fit', 'y_fit', 'flux_fit']]
+    means.rename_columns(['x_fit', 'y_fit', 'flux_fit'], ['x_fit_mean', 'y_fit_mean', 'flux_fit_mean'])
+    observations = astropy.table.join(observations, means, keys='ref_index')
+    observations['offset'] = np.sqrt(
+        (observations['x_fit']-observations['x_fit_mean'])**2 +
+        (observations['y_fit']-observations['y_fit_mean'])**2
+    )
+    return observations
 
 
 def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) \
@@ -448,54 +451,60 @@ def plot_images(results: List[Tuple[np.ndarray, np.ndarray, Table, float]]) -> N
         plt.close('all')
 
 
-def plot_source_vs_photometry(image, photometry_result, source):
-    x_y_observed = np.vstack((photometry_result['x_fit'], photometry_result['y_fit'])).T
+def plot_source_vs_photometry(image: np.ndarray, photometry_table: Table, source: scopesim.Source):
+    x_y_observed = np.vstack((photometry_table['x_fit'], photometry_table['y_fit'])).T
     x_y_source = to_pixel_scale(np.array((source.fields[0]['x'], source.fields[0]['y'])).T)
 
-    plt.figure()
+    plt.figure(figsize=(15, 15))
     plt.imshow(image, norm=LogNorm(), vmax=1E5)
     plt.plot(x_y_observed[:, 0], x_y_observed[:, 1], 'o', fillstyle='none',
              markeredgewidth=1, markeredgecolor='red', label='photometry')
     plt.plot(x_y_source[:, 0], x_y_source[:, 1], '^', fillstyle='none',
              markeredgewidth=1, markeredgecolor='orange', label='source')
     plt.legend()
+    plt.savefig(f'{output_folder}/source_vs_photometry.png', dpi=300)
 
 
-def plot_photometry_centroids(image, photometry_results):
+def plot_photometry_centroids(image: np.ndarray, photometry_table: Table):
+    plt.figure(figsize=(15, 15))
     plt.imshow(image, norm=LogNorm())
-    for result in photometry_results:
-        x_y = np.vstack((result['x_fit'], result['y_fit'])).T
-        plt.plot(x_y[:, 0], x_y[:, 1], 'o', fillstyle='none',
-                 markeredgewidth=1, markeredgecolor='red', label='photometry')
+    x_y = np.vstack((photometry_table['x_fit'], photometry_table['y_fit'])).T
+    plt.plot(x_y[:, 0], x_y[:, 1], 'o', fillstyle='none',
+             markeredgewidth=1, markeredgecolor='red', label='photometry')
+    plt.savefig(f'{output_folder}/photometry_centroids.png', dpi=300)
 
 
-def plot_deviation(photometry_results: List[Table]) -> None:
-    match_observations_nearest(photometry_results)
 
-    stacked = astropy.table.vstack(photometry_results)
+def plot_deviation(photometry_table: Table, match_method: Callable[[Table], Table] = match_observations_nearest) \
+        -> None:
+
+    matched = match_method(photometry_table)
 
     # only select stars that are seen in all observations
     # stacked = stacked.group_by('ref_index').groups.filter(lambda tab, keys: len(tab) == len(photometry_results))
 
     # evil table magic to combine information for objects that where matched to single reference
 
-    means = stacked.group_by('ref_index').groups.aggregate(np.mean)
-    stds = stacked.group_by('ref_index').groups.aggregate(np.std)
+    means = matched.group_by('ref_index').groups.aggregate(np.mean)
+    stds = matched.group_by('ref_index').groups.aggregate(np.std)
 
+    name = match_method.__name__
     plt.figure()
     plt.plot(means['flux_fit'], stds['offset'], 'o')
     plt.axhline(0)
-    plt.title('flux vs std-deviation of position')
-    plt.savefig(f'{output_folder}/magnitude_vs_std.png')
+    plt.title(f'flux vs std-deviation of position, method: {name}')
+    plt.xlabel('flux')
+    plt.ylabel('std deviation over simulations')
+    plt.savefig(f'{output_folder}/magnitude_vs_std_{name}.png')
 
     plt.figure()
-    plt.plot(stacked['flux_fit'], stacked['offset'], '.')
-    plt.title('spread of measurements')
+    plt.plot(matched['flux_fit'], matched['offset'], '.')
+    plt.title(f'spread of measurements, method: {name}')
     plt.xlabel('flux')
     plt.ylabel('measured deviation')
-    plt.savefig(f'{output_folder}/magnitude_vs_spread.png')
+    plt.savefig(f'{output_folder}/magnitude_vs_spread_{name}.png')
 
-    rms = np.sqrt(np.mean(stacked['offset'] ** 2))
+    rms = np.sqrt(np.mean(matched['offset'] ** 2))
     print(f'Total RMS of offset between values: {rms}')
 
 
@@ -520,6 +529,16 @@ with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
 # import itertools
 # results = list(itertools.starmap(observation_and_photometry, args))
 
+
+
+photometry_results = [photometry_result for observed_image, residual_image, photometry_result, sigma in results]
+# make sure we can disentangle results later
+for i, table in enumerate(photometry_results):
+    table['run_id'] = i
+
+photometry_table = astropy.table.vstack(photometry_results)
+
+
 if output:
     if not os.path.exists(output_folder):
         os.mkdir(output_folder)
@@ -534,10 +553,13 @@ if output:
     plt.title('PSF')
     plt.savefig(f'{output_folder}/psf.png')
 
-    plot_images(results)
-
-photometry_results = [photometry_result for observed_image, residual_image, photometry_result, sigma in results]
-
-if output:
     plt.close('all')
-    plot_deviation(photometry_results)
+    plot_images(results)
+    plt.close('all')
+
+    plot_source_vs_photometry(results[0][0], photometry_table, cluster)
+
+    plt.close('all')
+    plot_deviation(photometry_table, match_observations_nearest)
+    plot_deviation(photometry_table, match_observations_clustering)
+
