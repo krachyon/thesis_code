@@ -16,6 +16,7 @@ from astropy.table import Table, Row
 from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
 
+from photometry import do_photometry_basic
 # TODO Try out cluster algorithms to avoid shifting stars too far if they don't exist in all photometry
 #  why did the filter for length of result not eliminate all outliers?
 # TODO Disable detector saturation to see if high fluxes get better
@@ -178,54 +179,6 @@ def fit_gaussian_to_psf(psf: np.ndarray, plot=False) -> np.ndarray:
 
     return popt
 
-
-def do_photometry(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
-    """
-    Find stars in an image
-
-    :param image: The image data you want to find stars in
-    :param σ_psf: expected deviation of PSF
-    :return: tuple result table, residual image
-    """
-    from photutils.detection import IRAFStarFinder
-    from photutils.psf import DAOGroup
-    from photutils.psf import IntegratedGaussianPRF
-    from photutils.background import MMMBackground
-    from photutils.background import MADStdBackgroundRMS
-    from photutils.psf import BasicPSFPhotometry
-
-    from astropy.modeling.fitting import LevMarLSQFitter
-    from astropy.stats import gaussian_sigma_to_fwhm
-
-    bkgrms = MADStdBackgroundRMS()
-
-    std = bkgrms(image)
-
-    iraffind = IRAFStarFinder(threshold=3 * std, sigma_radius=σ_psf,
-                              fwhm=σ_psf * gaussian_sigma_to_fwhm,
-                              minsep_fwhm=2, roundhi=5.0, roundlo=-5.0,
-                              sharplo=0.0, sharphi=2.0)
-    daogroup = DAOGroup(0.1 * σ_psf * gaussian_sigma_to_fwhm)
-
-    mmm_bkg = MMMBackground()
-
-    # my_psf = AiryDisk2D(x_0=0., y_0=0.,radius=airy_minimum)
-    # psf_model = prepare_psf_model(my_psf, xname='x_0', yname='y_0', fluxname='amplitude',renormalize_psf=False)
-    psf_model = IntegratedGaussianPRF(sigma=σ_psf)
-    # psf_model = AiryDisk2D(radius = airy_minimum)#prepare_psf_model(AiryDisk2D,xname ="x_0",yname="y_0")
-    # psf_model = Moffat2D([amplitude, x_0, y_0, gamma, alpha])
-
-    # photometry = IterativelySubtractedPSFPhotometry(finder=iraffind, group_maker=daogroup,
-    #                                                bkg_estimator=mmm_bkg, psf_model=psf_model,
-    #                                                fitter=LevMarLSQFitter(),
-    #                                                niters=2, fitshape=(11,11))
-    photometry = BasicPSFPhotometry(finder=iraffind, group_maker=daogroup,
-                                    bkg_estimator=mmm_bkg, psf_model=psf_model,
-                                    fitter=LevMarLSQFitter(), aperture_radius=11.0,
-                                    fitshape=(11, 11))
-
-    result_table = photometry.do_photometry(image)
-    return result_table, photometry.get_residual_image()
 
 
 def write_ds9_regionfile(x_y_data: np.ndarray, filename: str) -> None:
@@ -409,7 +362,7 @@ def observation_and_photometry(astronomical_object: scopesim.Source, seed: int) 
     observed_image = detector.readout()[0][1].data
 
     _, _, σ = fit_gaussian_to_psf(detector[psf_name].data)
-    photometry_result, residual_image = do_photometry(observed_image, σ)
+    photometry_result, residual_image = do_photometry_basic(observed_image, σ)
 
     # photometry_result = match_observation_to_source(astronomical_object, photometry_result)
 
