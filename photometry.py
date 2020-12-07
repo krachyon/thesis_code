@@ -5,7 +5,7 @@ import numpy as np
 import photutils
 import astropy
 
-from photutils.detection import IRAFStarFinder, find_peaks
+from photutils.detection import IRAFStarFinder, find_peaks, DAOStarFinder
 from photutils.background import MMMBackground, MADStdBackgroundRMS
 from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, IntegratedGaussianPRF
 from photutils import EPSFBuilder
@@ -15,6 +15,7 @@ from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.nddata import NDData
 from astropy.table import Table
 
+from scipy.spatial import cKDTree
 
 
 
@@ -61,8 +62,26 @@ def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.nda
 #  - find the best star candidates that are isolated for the PSF estimation?
 #  - Guess the FWHM for the starfinder that is used in the Photometry pipeline? Do we need that if we have a custom PSF?
 
-def isolate_stars():
-    pass
+def cut_edges(peak_table: Table, box_size: int, image_size: int) -> Table:
+    half = box_size/2
+    x = peak_table['x']
+    y = peak_table['y']
+    mask = ((x > half) & (x < (image_size - half)) & (y > half) & (y < (image_size - half)))
+    return peak_table[mask]
+
+
+def cut_close_stars(peak_table: Table, cutoff_dist: float) -> Table:
+    peak_table['nearest'] = 0.
+    x_y = np.array((peak_table['x'], peak_table['y'])).T
+    lookup_tree = cKDTree(x_y)
+    for row in peak_table:
+        # find the second nearest neighbour, first one will be the star itself...
+        dist, _ = lookup_tree.query((row['x'], row['y']), k=[2])
+        row['nearest'] = dist[0]
+
+    peak_table = peak_table[peak_table['nearest'] > cutoff_dist]
+    return peak_table
+
 
 
 def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
@@ -91,33 +110,52 @@ def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
     return gauss_out.x_fwhm/psf.oversampling[0]
 
 
+def epsf_just_combine_candidates(stars):
+    # quick and dirty:
+    import functools
+    combined = functools.reduce(lambda x, y: x + y, (star.data for star in stars))
+
+    # with offset/
+
+    from image_registration.fft_tools import upsample_image
+    avg_center = functools.reduce(lambda x, y: x+y, [np.array(st.cutout_center) for st in stars])/len(stars)
+
+    combined_better = functools.reduce(lambda x,y: x+y,
+    (upsample_image(star.data, upsample_factor=4,
+                    xshift=star.cutout_center[0]-avg_center[0],
+                    yshift=star.cutout_center[1]-avg_center[1]
+                    )
+     for star in stars))
+
+    return combined_better
+
+
 def make_epsf(image: np.ndarray) -> photutils.psf.EPSFModel:
 
     ###
     # magic parameters
     clip_sigma = 3.0
-    threshold_factor = 5.
+    threshold_factor = 3.
     box_size = 10
-    cutout_size = 40  # TODO PSF is pretty huge, right?
-    oversampling = 6
-    epsfbuilder_iters = 3
+    cutout_size = 50  # TODO PSF is pretty huge, right?
+    oversampling = 4
+    epsfbuilder_iters = 5
+    fwhm_guess = 2.5
     ###
     # background_rms = MADStdBackgroundRMS(sigma_clip=SigmaClip(3))(image)
     mean, median, std = sigma_clipped_stats(image, sigma=clip_sigma)
     threshold = median + (threshold_factor * std)
-    peaks_tbl = find_peaks(image, threshold, box_size=cutout_size)
+
+    # The idea here is to run a "greedy" starfinder that finds a lot more candidates than we need and then
+    # to filter out the bright and isolated stars
+    peaks_tbl = DAOStarFinder(threshold, fwhm_guess)(image)
+    peaks_tbl.rename_columns(['xcentroid', 'ycentroid'], ['x', 'y'])
+
+    peaks_tbl = cut_edges(peaks_tbl, cutout_size, image.shape[0])
+    #stars_tbl = cut_close_stars(peaks_tbl, cutoff_dist=3)
+    stars_tbl = peaks_tbl
 
     image_no_background = image - median
-
-    half = cutout_size/2
-    x = peaks_tbl['x_peak']
-    y = peaks_tbl['y_peak']
-    mask = ((x > half) & (x < (image.shape[1] - 1 - half)) & (y > half) & (y < (image.shape[0] - 1 - half)))
-
-    stars_tbl = Table()
-    stars_tbl['x'] = x[mask]
-    stars_tbl['y'] = y[mask]
-
     stars = extract_stars(NDData(image_no_background), stars_tbl, size=cutout_size)
 
     epsf, fitted_stars = EPSFBuilder(oversampling=oversampling, maxiters=epsfbuilder_iters, progress_bar=True)(stars)
