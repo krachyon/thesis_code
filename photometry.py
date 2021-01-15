@@ -15,6 +15,8 @@ from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, Integrate
 from scipy.spatial import cKDTree
 import astropy
 
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
     """
@@ -63,8 +65,8 @@ box_size = 10
 cutout_size = 50  # TODO PSF is pretty huge, right?
 fwhm_guess = 2.5
 oversampling = 4
-epsfbuilder_iters = 2
-separation_factor = 0.5
+epsfbuilder_iters = 3
+separation_factor = 1.  # TODO adapt to sensible value
 
 ###
 
@@ -153,18 +155,33 @@ def make_epsf_combine(image: np.ndarray) -> photutils.psf.EPSFModel:
                                                 ).real
                                  for star in stars], axis=0)
 
+    # TODO What we return here needs to actually use the image in it's __call__ operator to work as a model
     # type: ignore
     return photutils.psf.EPSFModel(combined, flux=None, oversampling=upsample_factor)  # flux=None should force normalization
 
 
+
 def make_epsf_fit(image: np.ndarray) -> photutils.psf.EPSFModel:
+    # TODO
+    #  how does the psf class interpolate/smooth the data internaly? Jay+Anderson2016 says to use a x^4 polynomial
+    #  Also evaluating epsf(x,y) shows the high order noise, but if you only evaluate at the sample points it
+    #  does look halfway decent so maybe the fit just creates garbage where it's not constrained by smoothing
     stars = make_stars_guess(image)
-    epsf, fitted_stars = EPSFBuilder(oversampling=oversampling, maxiters=epsfbuilder_iters, progress_bar=True)(stars)
+    x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
+    d = np.sqrt(x * x + y * y)
+    sigma, mu = 1.0, 0.0
+    gauss_kernel = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
+
+    epsf, fitted_stars = EPSFBuilder(oversampling=oversampling,
+                                     maxiters=epsfbuilder_iters,
+                                     progress_bar=True,
+                                     smoothing_kernel=gauss_kernel/np.sum(gauss_kernel))(stars)
+                                     #smoothing_kernel='quadratic')(stars)
     return epsf
 
 
-def do_photometry_epsf(image: np.ndarray) -> Table:
-    epsf = make_epsf_combine(image)
+def do_photometry_epsf(epsf: photutils.psf.EPSFModel, image: np.ndarray) -> Table:
+
     epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)  # renormalize is super slow...
     # TODO
     #  Okay, somehow this seems to be the issue: CompoundModel._map_parameters somehow gets screwed up by the way
@@ -177,7 +194,7 @@ def do_photometry_epsf(image: np.ndarray) -> Table:
 
     background_rms = MADStdBackgroundRMS()
 
-    _, img_median , img_stddev = sigma_clipped_stats(image, sigma=clip_sigma)
+    _, img_median, img_stddev = sigma_clipped_stats(image, sigma=clip_sigma)
     threshold = img_median + (threshold_factor * img_stddev)
     fwhm_guess = FWHM_estimate(epsf)
     star_finder = DAOStarFinder(threshold, fwhm_guess)
@@ -210,11 +227,42 @@ def do_photometry_epsf(image: np.ndarray) -> Table:
     return photometry(image)
 
 
+def verify_methods_with_grid(filename='output_files/grid_16.fits'):
+    img = fits.open(filename)[0].data
+
+    epsf_fit = make_epsf_fit(img)
+    epsf_combine = make_epsf_combine(img)
+
+    table_fit = do_photometry_epsf(epsf_fit, img)
+    table_combine = do_photometry_epsf(epsf_combine, img)
+
+    plt.figure()
+    plt.title('EPSF from fit')
+    plt.imshow(epsf_fit.data+0.01, norm=LogNorm())
+
+    plt.figure()
+    plt.title('EPSF from image combination')
+    plt.imshow(epsf_combine.data+0.01, norm=LogNorm())
+
+    plt.figure()
+    plt.title('EPSF internal fit')
+    plt.imshow(img, norm=LogNorm())
+    plt.plot(table_fit['x_fit'], table_fit['y_fit'], 'r.', alpha=0.7)
+
+    plt.figure()
+    plt.title('EPSF image combine')
+    plt.imshow(img, norm=LogNorm())
+    plt.plot(table_combine['x_fit'], table_combine['y_fit'], 'r.', alpha=0.7)
+
+    return epsf_fit, epsf_combine, table_fit, table_combine
+
 
 if __name__ == '__main__':
     from astropy.io import fits
 
-    img = fits.open('output_files/observed_00.fits')[0].data
-    # epsf = make_epsf_fit(img)
-    table_psf = do_photometry_epsf(img)
-    #table_basic = do_photometry_basic(img,3)
+    # Original
+    img = fits.open('output_files/grid_15.fits')[0].data
+    #epsf = make_epsf_combine(img)
+    epsf = make_epsf_fit(img)
+    table_psf = do_photometry_epsf(epsf, img)
+    # table_basic = do_photometry_basic(img,3)

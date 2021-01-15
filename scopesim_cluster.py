@@ -460,59 +460,59 @@ def plot_deviation(photometry_table: Table, match_method: Callable[[Table], Tabl
     rms = np.sqrt(np.mean(matched['offset'] ** 2))
     print(f'Total RMS of offset between values: {rms}')
 
+if __name__ == '__main__':
+    download()
 
-download()
+    cluster = make_simcado_cluster()
+    # cluster = make_scopesim_cluster()
+    stars_in_cluster = len(cluster.fields[0]['x'])  # TODO again, stupid way of looking this information up...
 
-cluster = make_simcado_cluster()
-# cluster = make_scopesim_cluster()
-stars_in_cluster = len(cluster.fields[0]['x'])  # TODO again, stupid way of looking this information up...
+    micado = setup_optical_train()  # this can't be pickled and not be used in multiprocessing, so create independently
+    if verbose:
+        micado.effects.pprint(max_lines=100, max_width=300)
+    psf_effect = micado[psf_name]
 
-micado = setup_optical_train()  # this can't be pickled and not be used in multiprocessing, so create independently
-if verbose:
-    micado.effects.pprint(max_lines=100, max_width=300)
-psf_effect = micado[psf_name]
+    # Weird lockup when cluster is shared between processes...
+    args = [(copy.deepcopy(cluster), i) for i in range(N_simulation)]
 
-# Weird lockup when cluster is shared between processes...
-args = [(copy.deepcopy(cluster), i) for i in range(N_simulation)]
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        results = pool.starmap(observation_and_photometry, args)
 
-with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
-    results = pool.starmap(observation_and_photometry, args)
-
-# debuggable version
-# import itertools
-# results = list(itertools.starmap(observation_and_photometry, args))
-
-
-
-photometry_results = [photometry_result for observed_image, residual_image, photometry_result, sigma in results]
-# make sure we can disentangle results later
-for i, table in enumerate(photometry_results):
-    table['run_id'] = i
-
-photometry_table = astropy.table.vstack(photometry_results)
+    # debuggable version
+    # import itertools
+    # results = list(itertools.starmap(observation_and_photometry, args))
 
 
-if output:
-    if not os.path.exists(output_folder):
-        os.mkdir(output_folder)
-    PrimaryHDU(psf_effect.data).writeto(f'{output_folder}/psf.fits', overwrite=True)
 
-    fit_gaussian_to_psf(psf_effect.data, plot=True)
-    plt.savefig(f'{output_folder}/psf_fit.png')
+    photometry_results = [photometry_result for observed_image, residual_image, photometry_result, sigma in results]
+    # make sure we can disentangle results later
+    for i, table in enumerate(photometry_results):
+        table['run_id'] = i
 
-    plt.figure()
-    plt.imshow(psf_effect.data, norm=LogNorm(), vmax=1E5)
-    plt.colorbar()
-    plt.title('PSF')
-    plt.savefig(f'{output_folder}/psf.png')
+    photometry_table = astropy.table.vstack(photometry_results)
 
-    plt.close('all')
-    plot_images(results)
-    plt.close('all')
 
-    plot_source_vs_photometry(results[0][0], photometry_table, cluster)
+    if output:
+        if not os.path.exists(output_folder):
+            os.mkdir(output_folder)
+        PrimaryHDU(psf_effect.data).writeto(f'{output_folder}/psf.fits', overwrite=True)
 
-    plt.close('all')
-    plot_deviation(photometry_table, match_observations_nearest)
-    plot_deviation(photometry_table, match_observations_clustering)
+        fit_gaussian_to_psf(psf_effect.data, plot=True)
+        plt.savefig(f'{output_folder}/psf_fit.png')
+
+        plt.figure()
+        plt.imshow(psf_effect.data, norm=LogNorm(), vmax=1E5)
+        plt.colorbar()
+        plt.title('PSF')
+        plt.savefig(f'{output_folder}/psf.png')
+
+        plt.close('all')
+        plot_images(results)
+        plt.close('all')
+
+        plot_source_vs_photometry(results[0][0], photometry_table, cluster)
+
+        plt.close('all')
+        plot_deviation(photometry_table, match_observations_nearest)
+        plot_deviation(photometry_table, match_observations_clustering)
 
