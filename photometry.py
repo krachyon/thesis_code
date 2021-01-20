@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import photutils
@@ -142,6 +142,10 @@ def make_stars_guess(image: np.ndarray) -> photutils.psf.EPSFStars:
 
 
 def make_epsf_combine(image: np.ndarray) -> photutils.psf.EPSFModel:
+    # TODO to make this more useful maybe
+    #  - normalize image
+    #  - add iterations where the star positions are re-determined with the epsf and
+
     upsample_factor = 4  # see Jay Anderson, 2016 but for HST so this may not be optimal here...
 
     stars = make_stars_guess(image)
@@ -161,22 +165,18 @@ def make_epsf_combine(image: np.ndarray) -> photutils.psf.EPSFModel:
 
 
 
-def make_epsf_fit(image: np.ndarray) -> photutils.psf.EPSFModel:
+def make_epsf_fit(image: np.ndarray, iters: int = epsfbuilder_iters,
+                  smoothing_kernel: Union[str, np.ndarray] = 'quartic') -> photutils.psf.EPSFModel:
     # TODO
     #  how does the psf class interpolate/smooth the data internaly? Jay+Anderson2016 says to use a x^4 polynomial
     #  Also evaluating epsf(x,y) shows the high order noise, but if you only evaluate at the sample points it
     #  does look halfway decent so maybe the fit just creates garbage where it's not constrained by smoothing
     stars = make_stars_guess(image)
-    x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
-    d = np.sqrt(x * x + y * y)
-    sigma, mu = 1.0, 0.0
-    gauss_kernel = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
 
     epsf, fitted_stars = EPSFBuilder(oversampling=oversampling,
-                                     maxiters=epsfbuilder_iters,
+                                     maxiters=iters,
                                      progress_bar=True,
-                                     smoothing_kernel=gauss_kernel/np.sum(gauss_kernel))(stars)
-                                     #smoothing_kernel='quadratic')(stars)
+                                     smoothing_kernel=smoothing_kernel)(stars)
     return epsf
 
 
@@ -257,12 +257,20 @@ def verify_methods_with_grid(filename='output_files/grid_16.fits'):
     return epsf_fit, epsf_combine, table_fit, table_combine
 
 
+def make_gauss_kernel(sigma=1.0):
+    x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
+    d = np.sqrt(x * x + y * y)
+    mu = 0.0
+    gauss_kernel = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
+    return gauss_kernel/np.sum(gauss_kernel)
+
+
 if __name__ == '__main__':
     from astropy.io import fits
 
     # Original
-    img = fits.open('output_files/grid_15.fits')[0].data
+    img = fits.open('output_files/grid_16.fits')[0].data
     #epsf = make_epsf_combine(img)
     epsf = make_epsf_fit(img)
-    table_psf = do_photometry_epsf(epsf, img)
+    # table_psf = do_photometry_epsf(epsf, img)
     # table_basic = do_photometry_basic(img,3)
