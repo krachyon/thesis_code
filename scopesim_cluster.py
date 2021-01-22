@@ -26,26 +26,17 @@ from photometry import do_photometry_basic
 plt.ion()
 
 # globals/configuration
-pixel_scale = 0.004  # TODO get this from scopesim?
-psf_name = 'anisocado_psf'
+
 N_simulation = 8
-output_folder = 'output_files'
+
 verbose = True
 output = True
-
-scopesim_lock = multiprocessing.Lock()
 
 
 def get_spectral_types() -> List[Row]:
     pickles_lib = pyckles.SpectralLibrary('pickles', return_style='synphot')
     return list(pickles_lib.table['name'])
 
-
-def make_scopesim_cluster(seed: int = 9999) -> scopesim.Source:
-    return scopesim_templates.basic.stars.cluster(mass=1000,  # Msun
-                                                  distance=50000,  # parsec
-                                                  core_radius=0.3,  # parsec
-                                                  seed=seed)
 
 
 @np.vectorize
@@ -65,88 +56,10 @@ def flux_to_magnitude(flux):
     return -2.5 * np.log10(flux)
 
 
-def make_simcado_cluster(seed: int = 9999) -> scopesim.Source:
-    """
-    Emulates custom cluster creation from initial script
-    :param seed:
-    :return:
-    """
-    np.random.seed(seed)
-    N = 1000
-    x = np.random.normal(0, 1, N)
-    y = np.random.normal(0, 1, N)
-    m = np.random.normal(19, 2, N)
-    x_in_px = x / pixel_scale + 512 + 1
-    y_in_px = y / pixel_scale + 512 + 1
-
-    mask = (m > 14) * (0 < x_in_px) * (x_in_px < 1024) * (0 < y_in_px) * (y_in_px < 1024)
-    x = x[mask]
-    y = y[mask]
-    m = m[mask]
-
-    assert (len(x) == len(y) and len(m) == len(x))
-    Nprime = len(x)
-    filter_name = 'MICADO/filters/TC_filter_K-cont.dat'  # TODO: how to make system find this?
-
-    ## TODO: random spectral types, adapt this to a realistic cluster distribution or maybe just use
-    ## scopesim_templates.basic.stars.cluster
-    # random_spectral_types = np.random.choice(get_spectral_types(), Nprime)
-
-    # That's what scopesim seemed to use for all stars.
-    spectral_types = ['A0V'] * Nprime
-
-    return scopesim_templates.basic.stars.stars(filter_name=filter_name,
-                                                amplitudes=m,
-                                                spec_types=spectral_types,
-                                                x=x, y=y)
 
 
-def download() -> None:
-    """
-    get scopesim file if not present
-    :return:
-    """
-    if not os.path.exists('MICADO'):
-        # TODO is it really necessary to always throw shit into the current wdir?
-        print('''Simcado Data missing. Do you want to download?
-        Attention: Will write into current working dir!''')
-        choice = input('[y/N] ')
-        if choice == 'y' or choice == 'Y':
-            scopesim.download_package(["locations/Armazones",
-                                       "telescopes/ELT",
-                                       "instruments/MICADO"])
-        else:
-            exit(-1)
 
 
-# noinspection PyPep8Naming
-def make_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: int = 512) -> scopesim.effects.Effect:
-    """
-    create a psf effect for scopesim to be as close as possible to how an anisocado PSF is used in simcado
-    :param psf_wavelength:
-    :param shift:
-    :param N: ? Size of kernel?
-    :return: effect object you can plug into OpticalTrain
-    """
-    hdus = anisocado.misc.make_simcado_psf_file(
-        [shift], [psf_wavelength], pixelSize=pixel_scale, N=N)
-    image = hdus[2]
-    image.data = np.squeeze(image.data)  # remove leading dimension, we're only looking at a single picture, not a stack
-    filename = tempfile.NamedTemporaryFile('w', suffix='.fits').name
-    image.writeto(filename)
-
-    # noinspection PyTypeChecker
-    tmp_psf = anisocado.AnalyticalScaoPsf(N=N, wavelength=psf_wavelength)
-    strehl = tmp_psf.strehl_ratio
-
-    # Todo: passing a filename that does not end in .fits causes a weird parsing error
-    return scopesim.effects.FieldConstantPSF(
-        name=psf_name,
-        filename=filename,
-        wavelength=psf_wavelength,
-        psf_side_length=N,
-        strehl_ratio=strehl, )
-    # convolve_mode=''
 
 
 def gauss(x, a, x0, σ):
@@ -199,45 +112,6 @@ def write_ds9_regionfile(x_y_data: np.ndarray, filename: str) -> None:
             # +1 for ds9 one-based indexing...
             f.write(f"image;circle( {row[0] + 1:f}, {row[1] + 1:f}, 1.5)\n")
         f.close()
-
-
-def setup_optical_train() -> scopesim.OpticalTrain:
-    """
-    Create a Micado optical train with custom PSF
-    :return: OpticalTrain object
-    """
-    psf_effect = make_psf()
-
-    # TODO Multiprocessing sometimes seems to cause some issues in scopesim, probably due to shared connection object
-    # #  File "ScopeSim/scopesim/effects/ter_curves.py", line 247, in query_server
-    # #     tbl.columns[i].name = colname
-    # #  UnboundLocalError: local variable 'tbl' referenced before assignment
-    # mutexing this line seems to solve it...
-    with scopesim_lock:
-        micado = scopesim.OpticalTrain('MICADO')
-
-    # the previous psf had that optical element so put it in the same spot.
-    # Todo This way of looking up the index is pretty stupid. Is there a better way?
-    element_idx = [element.meta['name'] for element in micado.optics_manager.optical_elements].index('default_ro')
-
-    micado.optics_manager.add_effect(psf_effect, ext=element_idx)
-
-    # disable old psf
-    # TODO - why is there no remove_effect with a similar interface? Why do I need to go through a dictionary attached to
-    # TODO   a different class?
-    # TODO - would be nice if Effect Objects where frozen, e.g. with the dataclass decorator. Used ".included" first and
-    # TODO   was annoyed that it wasn't working...
-    micado['relay_psf'].include = False
-    micado['micado_ncpas_psf'].include = False
-
-    # TODO Apparently atmospheric dispersion is messed up. Ignore both dispersion and correction for now
-    micado['armazones_atmo_dispersion'].include = False
-    micado['micado_adc_3D_shift'].include = False
-
-    # TODO does this also apply to the custom PSF?
-    micado.cmds["!SIM.sub_pixel.flag"] = True
-
-    return micado
 
 
 # TODO: This does not work, there's a constant shift between the object and the image

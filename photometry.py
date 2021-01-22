@@ -142,8 +142,9 @@ def make_stars_guess(image: np.ndarray) -> photutils.psf.EPSFStars:
 
 
 def make_epsf_combine(image: np.ndarray) -> photutils.psf.EPSFModel:
-    # TODO to make this more useful maybe
-    #  - normalize image
+    # TODO to make this more useful
+    #  - maybe normalize image before combination? Now median just picks typical
+    #    value so we're restricted to most common stars
     #  - add iterations where the star positions are re-determined with the epsf and
 
     upsample_factor = 4  # see Jay Anderson, 2016 but for HST so this may not be optimal here...
@@ -159,9 +160,13 @@ def make_epsf_combine(image: np.ndarray) -> photutils.psf.EPSFModel:
                                                 ).real
                                  for star in stars], axis=0)
 
+    origin = np.array(combined.shape)/2/upsample_factor
     # TODO What we return here needs to actually use the image in it's __call__ operator to work as a model
     # type: ignore
-    return photutils.psf.EPSFModel(combined, flux=None, oversampling=upsample_factor)  # flux=None should force normalization
+    return photutils.psf.EPSFModel(combined, flux=None,
+                                   origin=origin,
+                                   oversampling=upsample_factor,
+                                   normalize=False)
 
 
 
@@ -265,12 +270,36 @@ def make_gauss_kernel(sigma=1.0):
     return gauss_kernel/np.sum(gauss_kernel)
 
 
+def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
+    assert len(set(star.shape for star in stars)) == 1  # all stars need same shape
+    N = int(np.ceil(np.sqrt(len(stars))))
+    shape = stars[0].shape
+    out = np.zeros(np.array(shape, dtype=int)*N)
+
+    from itertools import product
+
+    for row, col in product(range(N), range(N)):
+        if (row+N*col) >= len(stars):
+            continue
+        xstart = row*shape[0]
+        ystart = col*shape[1]
+
+        xend = xstart + shape[0]
+        yend = ystart + shape[1]
+        i = row+N*col
+        out[xstart:xend, ystart:yend] = stars[i].data
+    return out
+
+
 if __name__ == '__main__':
     from astropy.io import fits
 
     # Original
-    img = fits.open('output_files/grid_16.fits')[0].data
+    img = fits.open('output_files/observed_00.fits')[0].data
+    #img = fits.open('output_files/grid_16_pertubation_1.2.fits')[0].data
     #epsf = make_epsf_combine(img)
-    epsf = make_epsf_fit(img)
+    epsf = make_epsf_fit(img, iters=5)
+    plt.imshow(epsf.data, norm=LogNorm())
+    plt.show()
     # table_psf = do_photometry_epsf(epsf, img)
     # table_basic = do_photometry_basic(img,3)
