@@ -1,4 +1,12 @@
 import numpy as np
+import photutils
+from astropy.table import Table
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+from typing import Optional
+from config import Config
+
+
 
 def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
     assert len(set(star.shape for star in stars)) == 1  # all stars need same shape
@@ -21,31 +29,17 @@ def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
     return out
 
 
-def verify_methods_with_grid(filename='output_files/grid_16.fits'):
-    img = fits.open(filename)[0].data
-
-    epsf_fit = make_epsf_fit(img)
-    epsf_combine = make_epsf_combine(img)
-
-    table_fit = do_photometry_epsf(epsf_fit, img)
-    table_combine = do_photometry_epsf(epsf_combine, img)
-
+def plot_inputtable_vs_resulttable(image: np.ndarray, input_table: Table, result_table: Table,
+                                   output_path: Optional[str] = None):
     plt.figure()
-    plt.title('EPSF from fit')
-    plt.imshow(epsf_fit.data+0.01, norm=LogNorm())
+    plt.imshow(image, norm=LogNorm())
 
-    plt.figure()
-    plt.title('EPSF from image combination')
-    plt.imshow(epsf_combine.data+0.01, norm=LogNorm())
+    plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none',
+             markeredgewidth=1, markeredgecolor='red', label='reference')
+    plt.plot(result_table['x_fit'], result_table['y_fit'], '^', fillstyle='none',
+             markeredgewidth=1, markeredgecolor='orange', label='photometry')
+    plt.legend()
 
-    plt.figure()
-    plt.title('EPSF internal fit')
-    plt.imshow(img, norm=LogNorm())
-    plt.plot(table_fit['x_fit'], table_fit['y_fit'], 'r.', alpha=0.7)
+    if output_path:
+        plt.savefig(output_path, dpi=300)
 
-    plt.figure()
-    plt.title('EPSF image combine')
-    plt.imshow(img, norm=LogNorm())
-    plt.plot(table_combine['x_fit'], table_combine['y_fit'], 'r.', alpha=0.7)
-
-    return epsf_fit, epsf_combine, table_fit, table_combine

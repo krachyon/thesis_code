@@ -1,6 +1,6 @@
 # Global values and names
 import dataclasses
-
+import matplotlib.pyplot as plt
 
 class ClassRepr(type):
     """
@@ -14,6 +14,9 @@ class ClassRepr(type):
         item_string = ', '.join([" = ".join(item) for item in items])
         return f'{cls.__name__}({item_string})'
 
+
+plt.rcParams['figure.figsize'] = (8.3, 5.8)  # A5 paper
+plt.rcParams['figure.dpi'] = 200
 
 @dataclasses.dataclass(repr=True, eq=False, order=False)
 class Config(metaclass=ClassRepr):

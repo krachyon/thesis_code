@@ -24,8 +24,7 @@ def to_pixel_scale(pos):
     :return:
     """
 
-    # TODO the +1 here was probably wrong...
-    return pos / pixel_scale + 512
+    return pos / pixel_scale + 512 + 1
 
 
 # noinspection PyPep8Naming

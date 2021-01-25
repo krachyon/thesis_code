@@ -2,15 +2,27 @@ import numpy as np
 
 import scopesim_templates
 
+from astropy.io import fits
 from astropy.io.fits import PrimaryHDU
+from astropy.table import Table
 
 from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name
 from astropy.convolution import AiryDisk2DKernel, Gaussian2DKernel, Kernel2D, convolve_fft
 
+from os.path import exists, join
+
 from config import Config
+from typing import Callable, Tuple
 
+from scopesim_helper import to_pixel_scale
 
-def scopesim_grid(N1d: int, seed: int = 1000, border=64, perturbation: float = 0, output=False) -> np.ndarray:
+# all generators defined here should return a source table with the following columns
+# x,y are in pixel scale
+# TODO maybe enforce with astropy.units
+names = ('x', 'y', 'm')
+
+def scopesim_grid(N1d: int = 16, seed: int = 1000, border=64, perturbation: float = 0.) \
+        -> Tuple[np.ndarray, Table]:
     np.random.seed(seed)
 
     N = N1d**2
@@ -32,14 +44,12 @@ def scopesim_grid(N1d: int, seed: int = 1000, border=64, perturbation: float = 0
     detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
 
-    if output:
-        fname = \
-            f'{Config.output_folder}/scopesim_grid_{N1d:d}_perturbation_{perturbation:.1f}_seed_{seed}.fits'
-        PrimaryHDU(observed_image).writeto(fname, overwrite=True)
-    return observed_image
+    table = Table((to_pixel_scale(x), to_pixel_scale(y), m), names=names)
+    return observed_image, table
 
 
-def gaussian_cluster(seed: int = 9999, output=False) -> np.ndarray:
+def gaussian_cluster(N: int = 1000, seed: int = 9999) \
+        -> Tuple[np.ndarray, Table]:
     """
     Emulates custom cluster creation from initial script
     :param seed:
@@ -51,8 +61,8 @@ def gaussian_cluster(seed: int = 9999, output=False) -> np.ndarray:
     x = np.random.normal(0, 1, N)
     y = np.random.normal(0, 1, N)
     m = np.random.normal(19, 2, N)
-    x_in_px = x / pixel_scale + 512 + 1
-    y_in_px = y / pixel_scale + 512 + 1
+    x_in_px = to_pixel_scale(x)
+    y_in_px = to_pixel_scale(y)
 
     mask = (m > 14) * (0 < x_in_px) * (x_in_px < 1024) * (0 < y_in_px) * (y_in_px < 1024)
     x = x[mask]
@@ -80,14 +90,11 @@ def gaussian_cluster(seed: int = 9999, output=False) -> np.ndarray:
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    if output:
-        fname = \
-            f'{Config.output_folder}/scopesim_gausscluster_seed_{seed}.fits'
-        PrimaryHDU(observed_image).writeto(fname, overwrite=True)
-    return observed_image
+    table = Table((to_pixel_scale(x), to_pixel_scale(y), m), names=names)
+    return observed_image, table
 
 
-def scopesim_cluster(seed: int = 9999, output=False) -> np.ndarray:
+def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
     source = scopesim_templates.basic.stars.cluster(mass=1000,  # Msun
                                                     distance=50000,  # parsec
                                                     core_radius=0.3,  # parsec
@@ -97,19 +104,19 @@ def scopesim_cluster(seed: int = 9999, output=False) -> np.ndarray:
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    if output:
-        fname = \
-            f'{Config.output_folder}/scopesim_gausscluster_seed_{seed}.fits'
-        PrimaryHDU(observed_image).writeto(fname, overwrite=True)
-    return observed_image
+    table = source.fields
+    table['x'] = to_pixel_scale(table['x'])
+    table['y'] = to_pixel_scale(table['y'])
 
 
-def convolved_grid(N1d:int ,
+    return observed_image, table
+
+
+def convolved_grid(N1d: int = 16,
                    border: int = 64,
                    kernel: Kernel2D = Gaussian2DKernel(x_stddev=1),
                    perturbation: float = 0.,
-                   seed: int = 1000,
-                   output=False) -> np.ndarray:
+                   seed: int = 1000) -> Tuple[np.ndarray, Table]:
 
     np.random.seed(seed)
 
@@ -133,8 +140,33 @@ def convolved_grid(N1d:int ,
     # type: ignore
     data = convolve_fft(data, kernel)
     data = data/np.max(data) + 0.001  # normalize and add tiny offset to have no zeros in data
-    if output:
-        fname = \
-            f'{Config.output_folder}/scopesim_gausscluster_seed_{seed}.fits'
-        PrimaryHDU(data).writeto(fname, overwrite=True)
-    return data
+
+    table = Table((x, y, np.ones(len(x))), names=names)
+    return data, table
+
+
+# name : generator Callable[[], Tuple[np.ndarray, Table]]
+images = {
+    'gauss_cluster_N1000': lambda: gaussian_cluster(N=1000),
+    'scopesim_cluster': lambda: scopesim_cluster()
+          }
+
+
+def read_or_generate(filename: str,):
+    try:
+        generator = images[filename]
+    except KeyError:
+        print(f'No generator for {filename} defined')
+        raise
+    image_name = join(Config.output_folder, filename + '.fits')
+    table_name = join(Config.output_folder, filename + '.dat')
+
+    if exists(image_name) and exists(table_name):
+        img = fits.open(image_name)[0].data
+        table = Table.read(table_name, format='ascii')
+    else:
+        img, table = generator()
+        PrimaryHDU(img).writeto(image_name, overwrite=True)
+        table.write(table_name, format='ascii')
+
+    return img, table
