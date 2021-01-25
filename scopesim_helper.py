@@ -16,6 +16,17 @@ filter_name = 'MICADO/filters/TC_filter_K-cont.dat'
 # generators should be able to run in parallel but scopesim tends to lock up on the initialization
 scopesim_lock = multiprocessing.Lock()
 
+@np.vectorize
+def to_pixel_scale(pos):
+    """
+    convert position of objects from arcseconds to pixel coordinates
+    :param pos:
+    :return:
+    """
+
+    # TODO the +1 here was probably wrong...
+    return pos / pixel_scale + 512
+
 
 # noinspection PyPep8Naming
 def make_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: int = 512) -> scopesim.effects.Effect:

@@ -1,8 +1,9 @@
 import numpy as np
+
 import scopesim_templates
 
 from astropy.io.fits import PrimaryHDU
-import scopesim
+
 from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name
 from astropy.convolution import AiryDisk2DKernel, Gaussian2DKernel, Kernel2D, convolve_fft
 
@@ -28,7 +29,7 @@ def scopesim_grid(N1d: int, seed: int = 1000, border=64, perturbation: float = 0
                                                   x=x.ravel(), y=y.ravel())
     detector = setup_optical_train()
 
-    detector.observe(source, random_seed=seed, update=True)
+    detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
 
     if output:

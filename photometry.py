@@ -12,11 +12,14 @@ from photutils.background import MMMBackground, MADStdBackgroundRMS
 from photutils.detection import IRAFStarFinder, DAOStarFinder
 from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, IntegratedGaussianPRF,\
     IterativelySubtractedPSFPhotometry
-from scipy.spatial import cKDTree
+
 import astropy
+
+from config import Config
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+
 
 def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
     """
@@ -57,22 +60,11 @@ def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.nda
     return result_table, photometry.get_residual_image()
 
 
-###
-# magic parameters
-clip_sigma = 3.0
-threshold_factor = 3.
-box_size = 10
-cutout_size = 50  # TODO PSF is pretty huge, right?
-fwhm_guess = 2.5
-oversampling = 4
-epsfbuilder_iters = 3
-separation_factor = 1.  # TODO adapt to sensible value
-
-###
 
 # TODO how to
 #  - find the best star candidates that are isolated for the PSF estimation?
 #  - Guess the FWHM for the starfinder that is used in the Photometry pipeline? Do we need that if we have a custom PSF?
+
 
 def cut_edges(peak_table: Table, box_size: int, image_size: int) -> Table:
     half = box_size / 2
@@ -80,19 +72,6 @@ def cut_edges(peak_table: Table, box_size: int, image_size: int) -> Table:
     y = peak_table['y']
     mask = ((x > half) & (x < (image_size - half)) & (y > half) & (y < (image_size - half)))
     return peak_table[mask]
-
-
-def cut_close_stars(peak_table: Table, cutoff_dist: float) -> Table:
-    peak_table['nearest'] = 0.
-    x_y = np.array((peak_table['x'], peak_table['y'])).T
-    lookup_tree = cKDTree(x_y)
-    for row in peak_table:
-        # find the second nearest neighbour, first one will be the star itself...
-        dist, _ = lookup_tree.query((row['x'], row['y']), k=[2])
-        row['nearest'] = dist[0]
-
-    peak_table = peak_table[peak_table['nearest'] > cutoff_dist]
-    return peak_table
 
 
 def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
@@ -121,8 +100,12 @@ def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
     return gauss_out.x_fwhm / psf.psfmodel.oversampling[0]
 
 
-def make_stars_guess(image: np.ndarray) -> photutils.psf.EPSFStars:
-    # background_rms = MADStdBackgroundRMS(sigma_clip=SigmaClip(3))(image)
+def make_stars_guess(image: np.ndarray,
+                     threshold_factor: float = Config.threshold_factor,
+                     clip_sigma: float = Config.clip_sigma,
+                     fwhm_guess: float = Config.fwhm_guess,
+                     cutout_size: int = Config.cutout_size) -> photutils.psf.EPSFStars:
+
     mean, median, std = sigma_clipped_stats(image, sigma=clip_sigma)
     threshold = median + (threshold_factor * std)
 
@@ -141,42 +124,39 @@ def make_stars_guess(image: np.ndarray) -> photutils.psf.EPSFStars:
     return stars
 
 
-def make_epsf_combine(image: np.ndarray) -> photutils.psf.EPSFModel:
+def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = Config.oversampling) -> photutils.psf.EPSFModel:
     # TODO to make this more useful
     #  - maybe normalize image before combination? Now median just picks typical
     #    value so we're restricted to most common stars
     #  - add iterations where the star positions are re-determined with the epsf and
 
-    upsample_factor = 4  # see Jay Anderson, 2016 but for HST so this may not be optimal here...
-
-    stars = make_stars_guess(image)
-
     avg_center = np.sum([np.array(st.cutout_center) for st in stars], axis=0) / len(stars)
 
     # upsample_image should scale and shift/resample an image with a FFT, aligning the cutouts more precisely
-    combined = np.median([upsample_image(star.data, upsample_factor=upsample_factor,
+    combined = np.median([upsample_image(star.data, upsample_factor=oversampling,
                                                 xshift=star.cutout_center[0] - avg_center[0],
                                                 yshift=star.cutout_center[1] - avg_center[1]
                                                 ).real
                                  for star in stars], axis=0)
 
-    origin = np.array(combined.shape)/2/upsample_factor
+    origin = np.array(combined.shape)/2/oversampling
     # TODO What we return here needs to actually use the image in it's __call__ operator to work as a model
     # type: ignore
     return photutils.psf.EPSFModel(combined, flux=None,
                                    origin=origin,
-                                   oversampling=upsample_factor,
+                                   oversampling=oversampling,
                                    normalize=False)
 
 
 
-def make_epsf_fit(image: np.ndarray, iters: int = epsfbuilder_iters,
+def make_epsf_fit(stars: photutils.psf.EPSFStars,
+                  iters: int = Config.epsfbuilder_iters,
+                  oversampling: int = Config.oversampling,
                   smoothing_kernel: Union[str, np.ndarray] = 'quartic') -> photutils.psf.EPSFModel:
     # TODO
     #  how does the psf class interpolate/smooth the data internaly? Jay+Anderson2016 says to use a x^4 polynomial
     #  Also evaluating epsf(x,y) shows the high order noise, but if you only evaluate at the sample points it
     #  does look halfway decent so maybe the fit just creates garbage where it's not constrained by smoothing
-    stars = make_stars_guess(image)
 
     epsf, fitted_stars = EPSFBuilder(oversampling=oversampling,
                                      maxiters=iters,
@@ -185,7 +165,12 @@ def make_epsf_fit(image: np.ndarray, iters: int = epsfbuilder_iters,
     return epsf
 
 
-def do_photometry_epsf(epsf: photutils.psf.EPSFModel, image: np.ndarray) -> Table:
+def do_photometry_epsf(image: np.ndarray,
+                       epsf: photutils.psf.EPSFModel,
+                       threshold_factor: float = Config.threshold_factor,
+                       separation_factor: float = Config.separation_factor,
+                       clip_sigma: float = Config.clip_sigma,
+                       photometry_iterations: int = Config.photometry_iterations) -> Table:
 
     epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)  # renormalize is super slow...
     # TODO
@@ -210,85 +195,17 @@ def do_photometry_epsf(epsf: photutils.psf.EPSFModel, image: np.ndarray) -> Tabl
 
     epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
     epsf.fwhm.value = fwhm_guess
-    # photometry = IterativelySubtractedPSFPhotometry(
-    #     finder=star_finder,
-    #     group_maker=grouper,
-    #     bkg_estimator=background_rms,
-    #     psf_model=epsf,
-    #     fitter=LevMarLSQFitter(),
-    #     niters=3,
-    #     fitshape=shape
-    # )
-    photometry = BasicPSFPhotometry(
+    photometry = IterativelySubtractedPSFPhotometry(
         finder=star_finder,
         group_maker=grouper,
         bkg_estimator=background_rms,
         psf_model=epsf,
         fitter=LevMarLSQFitter(),
+        niters=3,
         fitshape=shape
     )
 
-
     return photometry(image)
-
-
-def verify_methods_with_grid(filename='output_files/grid_16.fits'):
-    img = fits.open(filename)[0].data
-
-    epsf_fit = make_epsf_fit(img)
-    epsf_combine = make_epsf_combine(img)
-
-    table_fit = do_photometry_epsf(epsf_fit, img)
-    table_combine = do_photometry_epsf(epsf_combine, img)
-
-    plt.figure()
-    plt.title('EPSF from fit')
-    plt.imshow(epsf_fit.data+0.01, norm=LogNorm())
-
-    plt.figure()
-    plt.title('EPSF from image combination')
-    plt.imshow(epsf_combine.data+0.01, norm=LogNorm())
-
-    plt.figure()
-    plt.title('EPSF internal fit')
-    plt.imshow(img, norm=LogNorm())
-    plt.plot(table_fit['x_fit'], table_fit['y_fit'], 'r.', alpha=0.7)
-
-    plt.figure()
-    plt.title('EPSF image combine')
-    plt.imshow(img, norm=LogNorm())
-    plt.plot(table_combine['x_fit'], table_combine['y_fit'], 'r.', alpha=0.7)
-
-    return epsf_fit, epsf_combine, table_fit, table_combine
-
-
-def make_gauss_kernel(sigma=1.0):
-    x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
-    d = np.sqrt(x * x + y * y)
-    mu = 0.0
-    gauss_kernel = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
-    return gauss_kernel/np.sum(gauss_kernel)
-
-
-def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
-    assert len(set(star.shape for star in stars)) == 1  # all stars need same shape
-    N = int(np.ceil(np.sqrt(len(stars))))
-    shape = stars[0].shape
-    out = np.zeros(np.array(shape, dtype=int)*N)
-
-    from itertools import product
-
-    for row, col in product(range(N), range(N)):
-        if (row+N*col) >= len(stars):
-            continue
-        xstart = row*shape[0]
-        ystart = col*shape[1]
-
-        xend = xstart + shape[0]
-        yend = ystart + shape[1]
-        i = row+N*col
-        out[xstart:xend, ystart:yend] = stars[i].data
-    return out
 
 
 if __name__ == '__main__':
