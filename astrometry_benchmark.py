@@ -1,5 +1,6 @@
 from photometry import make_epsf_fit
 from testdata_generators import read_or_generate, gaussian_cluster
+import testdata_generators
 
 from config import Config
 
@@ -11,6 +12,8 @@ from plots_and_sanitycheck import plot_inputtable_vs_resulttable
 from scopesim_helper import download
 import os
 import matplotlib.pyplot as plt
+import multiprocessing as mp
+
 
 def photometry_full(filename='gauss_cluster_N1000'):
     image, input_table = read_or_generate(filename)
@@ -35,9 +38,16 @@ def photometry_full(filename='gauss_cluster_N1000'):
     plt.imshow(epsf.data)
     plt.savefig(os.path.join(Config.output_folder, filename+'_epsf.pdf'))
 
+    # TODO can't return star_guesses directly because they're not pickleable
+    return image, result_table, epsf
+
 
 
 if __name__ == '__main__':
     download()
-    photometry_full()
+    test_images = testdata_generators.images.keys()
+    photometry_full('airy_grid_17_radius5_perturb_2')
+    #with mp.Pool(mp.cpu_count()) as pool:
+    #    results = list(map(photometry_full, test_images))
+
     plt.show()

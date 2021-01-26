@@ -35,9 +35,9 @@ def plot_inputtable_vs_resulttable(image: np.ndarray, input_table: Table, result
     plt.imshow(image, norm=LogNorm())
 
     plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none',
-             markeredgewidth=1, markeredgecolor='red', label='reference')
-    plt.plot(result_table['x_fit'], result_table['y_fit'], '^', fillstyle='none',
-             markeredgewidth=1, markeredgecolor='orange', label='photometry')
+             markeredgewidth=0.5, markeredgecolor='red', label='reference')
+    plt.plot(result_table['x_fit'], result_table['y_fit'], '.', fillstyle='full',
+             markersize=0.2, markerfacecolor='orange', label='photometry')
     plt.legend()
 
     if output_path:

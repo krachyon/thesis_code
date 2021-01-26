@@ -6,15 +6,15 @@ from astropy.io import fits
 from astropy.io.fits import PrimaryHDU
 from astropy.table import Table
 
-from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name
+from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale
 from astropy.convolution import AiryDisk2DKernel, Gaussian2DKernel, Kernel2D, convolve_fft
 
 from os.path import exists, join
 
 from config import Config
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Union
 
-from scopesim_helper import to_pixel_scale
+import anisocado
 
 # all generators defined here should return a source table with the following columns
 # x,y are in pixel scale
@@ -44,7 +44,7 @@ def scopesim_grid(N1d: int = 16, seed: int = 1000, border=64, perturbation: floa
     detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x), to_pixel_scale(y), m), names=names)
+    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
     return observed_image, table
 
 
@@ -90,7 +90,7 @@ def gaussian_cluster(N: int = 1000, seed: int = 9999) \
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x), to_pixel_scale(y), m), names=names)
+    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
     return observed_image, table
 
 
@@ -104,9 +104,9 @@ def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = source.fields
-    table['x'] = to_pixel_scale(table['x'])
-    table['y'] = to_pixel_scale(table['y'])
+    table = source.fields[0]
+    table['x'] = to_pixel_scale(table['x']).ravel()
+    table['y'] = to_pixel_scale(table['y']).ravel()
 
 
     return observed_image, table
@@ -114,7 +114,7 @@ def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
 
 def convolved_grid(N1d: int = 16,
                    border: int = 64,
-                   kernel: Kernel2D = Gaussian2DKernel(x_stddev=1),
+                   kernel: Union[Kernel2D, np.ndarray] = Gaussian2DKernel(x_stddev=1, x_size=pixel_count, y_size=pixel_count),
                    perturbation: float = 0.,
                    seed: int = 1000) -> Tuple[np.ndarray, Table]:
 
@@ -141,14 +141,42 @@ def convolved_grid(N1d: int = 16,
     data = convolve_fft(data, kernel)
     data = data/np.max(data) + 0.001  # normalize and add tiny offset to have no zeros in data
 
-    table = Table((x, y, np.ones(len(x))), names=names)
+    table = Table((x.ravel(), y.ravel(), np.ones(x.size)), names=names)
     return data, table
+
+
+def make_anisocado_kernel(shift=(0, 14), wavelength=2.15):
+    hdus = anisocado.misc.make_simcado_psf_file(
+        [shift], [wavelength], pixelSize=0.004, N=pixel_count)
+    image = hdus[2]
+    kernel = np.squeeze(image.data)
+    return kernel
 
 
 # name : generator Callable[[], Tuple[np.ndarray, Table]]
 images = {
     'gauss_cluster_N1000': lambda: gaussian_cluster(N=1000),
-    'scopesim_cluster': lambda: scopesim_cluster()
+    'scopesim_cluster': lambda: scopesim_cluster(),
+    'gauss_grid_17_sigma1_perturb_0': lambda: convolved_grid(N1d=17),
+    'gauss_grid_17_sigma1_perturb_2': lambda: convolved_grid(N1d=17, perturbation=2.),
+    'gauss_grid_17_sigma5_perturb_2':
+        lambda: convolved_grid(N1d=17, perturbation=2.,
+                               kernel=Gaussian2DKernel(x_stddev=5, x_size=pixel_count, y_size=pixel_count)),
+    'airy_grid_17_radius1_perturb_0':
+        lambda: convolved_grid(N1d=17, perturbation=0.,
+                               kernel=AiryDisk2DKernel(radius=1, x_size=pixel_count, y_size=pixel_count)),
+    'airy_grid_17_radius1_perturb_2':
+        lambda: convolved_grid(N1d=17, perturbation=2.,
+                               kernel=AiryDisk2DKernel(radius=1, x_size=pixel_count, y_size=pixel_count)),
+    'airy_grid_17_radius5_perturb_2':
+        lambda: convolved_grid(N1d=17, perturbation=2.,
+                               kernel=AiryDisk2DKernel(radius=5, x_size=pixel_count, y_size=pixel_count)),
+    'anisocado_grid_17_perturb_0':
+        lambda: convolved_grid(N1d=17, perturbation=0.,
+                               kernel=make_anisocado_kernel()),
+    'anisocado_grid_17_perturb_2':
+        lambda: convolved_grid(N1d=17, perturbation=2.,
+                               kernel=make_anisocado_kernel())
           }
 
 
@@ -163,10 +191,10 @@ def read_or_generate(filename: str,):
 
     if exists(image_name) and exists(table_name):
         img = fits.open(image_name)[0].data
-        table = Table.read(table_name, format='ascii')
+        table = Table.read(table_name, format='ascii.ecsv')
     else:
         img, table = generator()
         PrimaryHDU(img).writeto(image_name, overwrite=True)
-        table.write(table_name, format='ascii')
+        table.write(table_name, format='ascii.ecsv')
 
     return img, table

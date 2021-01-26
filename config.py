@@ -15,8 +15,8 @@ class ClassRepr(type):
         return f'{cls.__name__}({item_string})'
 
 
-plt.rcParams['figure.figsize'] = (8.3, 5.8)  # A5 paper
-plt.rcParams['figure.dpi'] = 200
+plt.rcParams['figure.figsize'] = (8.3*2, 5.8*2)  # A4 paper
+plt.rcParams['figure.dpi'] = 300
 
 @dataclasses.dataclass(repr=True, eq=False, order=False)
 class Config(metaclass=ClassRepr):
