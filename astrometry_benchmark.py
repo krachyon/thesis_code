@@ -18,38 +18,37 @@ import util
 
 def photometry_full(filename='gauss_cluster_N1000'):
 
-    try:
-        image, input_table = read_or_generate(filename)
 
-        star_guesses = make_stars_guess(image,
-                                        threshold_factor=Config.threshold_factor,
-                                        clip_sigma=Config.clip_sigma,
-                                        fwhm_guess=Config.fwhm_guess,
-                                        cutout_size=Config.cutout_size)
+    image, input_table = read_or_generate(filename)
 
-        epsf = make_epsf_fit(star_guesses,
-                             iters=Config.epsfbuilder_iters,
-                             oversampling=Config.oversampling,
-                             smoothing_kernel=Config.smoothing)
+    star_guesses = make_stars_guess(image,
+                                    threshold_factor=Config.threshold_factor,
+                                    clip_sigma=Config.clip_sigma,
+                                    fwhm_guess=Config.fwhm_guess,
+                                    cutout_size=Config.cutout_size)
 
-        result_table = do_photometry_epsf(image, epsf)
+    epsf = make_epsf_fit(star_guesses,
+                         iters=Config.epsfbuilder_iters,
+                         oversampling=Config.oversampling,
+                         smoothing_kernel=Config.smoothing)
 
-        plot_filename = os.path.join(Config.output_folder, filename+'_photometry_vs_sources.pdf')
-        plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
+    result_table = do_photometry_epsf(image, epsf)
 
+    plot_filename = os.path.join(Config.output_folder, filename+'_photometry_vs_sources.pdf')
+    plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
+
+    if len(result_table) != 0:
         plot_filename = os.path.join(Config.output_folder, filename + '_measurement_offset.pdf')
         plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+    else:
+        print(f"No sources found for {filename} with {Config}")
 
-        plt.figure()
-        plt.imshow(epsf.data)
-        plt.savefig(os.path.join(Config.output_folder, filename+'_epsf.pdf'))
+    plt.figure()
+    plt.imshow(epsf.data)
+    plt.savefig(os.path.join(Config.output_folder, filename+'_epsf.pdf'))
 
-        # TODO can't return star_guesses directly because they're not pickle-able
-        return image, input_table, result_table, epsf
-    except:
-        print(Config)
-        print('argument to photometry_full: ', filename)
-        raise
+    # TODO can't return star_guesses directly because they're not pickle-able
+    return image, input_table, result_table, epsf
 
 
 if __name__ == '__main__':
@@ -68,8 +67,6 @@ if __name__ == '__main__':
 
     with mp.Pool(mp.cpu_count()) as pool:
         results_gauss = list(pool.map(photometry_full, test_images))
-
-    #image, input_table, result_table, epsf = photometry_full('scopesim_grid_16_perturb0')
 
 
     plt.show()
