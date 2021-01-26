@@ -6,5 +6,5 @@ Paranal
 .idea
 *.fits
 *.reg
-output_files/*
+output_files*/*
 *.txt
