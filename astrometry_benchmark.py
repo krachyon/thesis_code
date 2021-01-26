@@ -17,8 +17,8 @@ import util
 
 
 def photometry_full(filename='gauss_cluster_N1000'):
-
-
+    # TODO refactor config so it can be passed to this as parameter -> single map call -> faster
+    #  Pseudo singleton with a instance() method
     image, input_table = read_or_generate(filename)
 
     star_guesses = make_stars_guess(image,

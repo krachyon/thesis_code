@@ -23,7 +23,8 @@ def to_pixel_scale(pos):
     :param pos:
     :return:
     """
-
+    # TODO I'm pretty sure this is correct like this, see scopesim_placement for trying it out
+    #  but the distortion seems to be exactly one pixel towards the edges so that seems fishy
     return pos / pixel_scale + 512
 
 
