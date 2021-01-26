@@ -11,8 +11,11 @@ class ClassRepr(type):
 
     def __repr__(cls):
         items = [item for item in cls.__dict__.items() if not item[0].startswith('__')]
-        item_string = ', '.join([" = ".join(item) for item in items])
+        item_string = ', '.join([f'{item[0]} = {item[1]}' for item in items])
         return f'{cls.__name__}({item_string})'
+
+    def __str__(cls):
+        return repr(cls)
 
 
 plt.rcParams['figure.figsize'] = (8.3*2, 5.8*2)  # A4 paper
@@ -34,6 +37,7 @@ class Config(metaclass=ClassRepr):
     cutout_size: int = 50  # TODO PSF is pretty huge, right?
     oversampling: int = 4
     epsfbuilder_iters: int = 5
+    smoothing = 'quartic'
 
     # photometry
     photometry_iterations: int = 3

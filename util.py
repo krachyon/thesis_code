@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-
+from astropy.table import Table
 
 def gauss(x, a, x0, σ):
     return a * np.exp(-(x - x0) ** 2 / (2 * σ ** 2))
@@ -65,3 +65,29 @@ def write_ds9_regionfile(x_y_data: np.ndarray, filename: str) -> None:
             # +1 for ds9 one-based indexing...
             f.write(f"image;circle( {row[0] + 1:f}, {row[1] + 1:f}, 1.5)\n")
         f.close()
+
+
+def match_observation_to_source(reference_catalog: Table, photometry_result: Table) \
+        -> Table:
+    from scipy.spatial import cKDTree
+
+    x_y_pixel = np.array((reference_catalog['x'], reference_catalog['y'])).T
+    lookup_tree = cKDTree(x_y_pixel)
+
+    photometry_result = photometry_result.copy()
+    photometry_result['x_orig'] = np.nan
+    photometry_result['y_orig'] = np.nan
+    photometry_result['offset'] = np.nan
+
+    seen_indices = set()
+    for row in photometry_result:
+
+        dist, index = lookup_tree.query((row['x_fit'], row['y_fit']))
+        # if index in seen_indices:
+        #     print('Warning: multiple match for source')  # TODO make this message more useful/use warning module
+        seen_indices.add(index)
+        row['x_orig'] = x_y_pixel[index, 0]
+        row['y_orig'] = x_y_pixel[index, 1]
+        row['offset'] = dist
+
+    return photometry_result

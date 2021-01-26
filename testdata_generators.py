@@ -114,19 +114,20 @@ def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
 
 def convolved_grid(N1d: int = 16,
                    border: int = 64,
-                   kernel: Union[Kernel2D, np.ndarray] = Gaussian2DKernel(x_stddev=1, x_size=pixel_count, y_size=pixel_count),
+                   kernel: Union[Kernel2D, np.ndarray, None] = Gaussian2DKernel(x_stddev=1, x_size=201, y_size=201),
                    perturbation: float = 0.,
                    seed: int = 1000) -> Tuple[np.ndarray, Table]:
 
+    # Kernel should always be an odd image or else we introduce some shift in the image
     np.random.seed(seed)
 
     size = 1024
     data = np.zeros((size,  size))
 
     idx_float = np.linspace(0+border, size-border, N1d)
-    x_float = np.tile(idx_float, reps=(N1d,1))
+    x_float = np.tile(idx_float, reps=(N1d, 1))
     y_float = x_float.T
-    x_float += np.random.uniform(0,perturbation, x_float.shape)
+    x_float += np.random.uniform(0, perturbation, x_float.shape)
     y_float += np.random.uniform(0, perturbation, y_float.shape)
 
     x, x_frac = np.divmod(x_float, 1)
@@ -137,46 +138,54 @@ def convolved_grid(N1d: int = 16,
     data[x, y+1]   = (1-x_frac) * (y_frac)
     data[x+1, y+1] = y_frac     * x_frac
 
-    # type: ignore
-    data = convolve_fft(data, kernel)
+    if kernel is not None:
+        # type: ignore
+        data = convolve_fft(data, kernel)
     data = data/np.max(data) + 0.001  # normalize and add tiny offset to have no zeros in data
 
-    table = Table((x.ravel(), y.ravel(), np.ones(x.size)), names=names)
+    table = Table((x_float.ravel(), y_float.ravel(), np.ones(x.size)), names=names)
     return data, table
 
 
 def make_anisocado_kernel(shift=(0, 14), wavelength=2.15):
+    count = pixel_count + 1 if pixel_count%2==0 else pixel_count
     hdus = anisocado.misc.make_simcado_psf_file(
         [shift], [wavelength], pixelSize=0.004, N=pixel_count)
     image = hdus[2]
     kernel = np.squeeze(image.data)
     return kernel
 
-
+kernel_size = 201  # this should be enough
 # name : generator Callable[[], Tuple[np.ndarray, Table]]
 images = {
     'gauss_cluster_N1000': lambda: gaussian_cluster(N=1000),
     'scopesim_cluster': lambda: scopesim_cluster(),
-    'gauss_grid_17_sigma1_perturb_0': lambda: convolved_grid(N1d=17),
-    'gauss_grid_17_sigma1_perturb_2': lambda: convolved_grid(N1d=17, perturbation=2.),
-    'gauss_grid_17_sigma5_perturb_2':
-        lambda: convolved_grid(N1d=17, perturbation=2.,
-                               kernel=Gaussian2DKernel(x_stddev=5, x_size=pixel_count, y_size=pixel_count)),
-    'airy_grid_17_radius1_perturb_0':
-        lambda: convolved_grid(N1d=17, perturbation=0.,
-                               kernel=AiryDisk2DKernel(radius=1, x_size=pixel_count, y_size=pixel_count)),
-    'airy_grid_17_radius1_perturb_2':
-        lambda: convolved_grid(N1d=17, perturbation=2.,
-                               kernel=AiryDisk2DKernel(radius=1, x_size=pixel_count, y_size=pixel_count)),
-    'airy_grid_17_radius5_perturb_2':
-        lambda: convolved_grid(N1d=17, perturbation=2.,
-                               kernel=AiryDisk2DKernel(radius=5, x_size=pixel_count, y_size=pixel_count)),
-    'anisocado_grid_17_perturb_0':
-        lambda: convolved_grid(N1d=17, perturbation=0.,
+    'gauss_grid_16_sigma1_perturb_0': lambda: convolved_grid(N1d=16),
+    'gauss_grid_16_sigma1_perturb_2': lambda: convolved_grid(N1d=16, perturbation=2.),
+    'gauss_grid_16_sigma5_perturb_2':
+        lambda: convolved_grid(N1d=16, perturbation=2.,
+                               kernel=Gaussian2DKernel(x_stddev=5, x_size=kernel_size, y_size=kernel_size)),
+    'airy_grid_16_radius1_perturb_0':
+        lambda: convolved_grid(N1d=16, perturbation=0.,
+                               kernel=AiryDisk2DKernel(radius=1, x_size=kernel_size, y_size=kernel_size)),
+    'airy_grid_16_radius1_perturb_2':
+        lambda: convolved_grid(N1d=16, perturbation=2.,
+                               kernel=AiryDisk2DKernel(radius=1, x_size=kernel_size, y_size=kernel_size)),
+    'airy_grid_16_radius5_perturb_2':
+        lambda: convolved_grid(N1d=16, perturbation=2.,
+                               kernel=AiryDisk2DKernel(radius=5, x_size=kernel_size, y_size=kernel_size)),
+    'anisocado_grid_16_perturb_0':
+        lambda: convolved_grid(N1d=16, perturbation=0.,
                                kernel=make_anisocado_kernel()),
-    'anisocado_grid_17_perturb_2':
-        lambda: convolved_grid(N1d=17, perturbation=2.,
-                               kernel=make_anisocado_kernel())
+    'anisocado_grid_16_perturb_2':
+        lambda: convolved_grid(N1d=16, perturbation=2.,
+                               kernel=make_anisocado_kernel()),
+    'grid_16_no_convolve_perturb2':
+        lambda: convolved_grid(N1d=16, perturbation=2., kernel=None),
+    'scopesim_grid_16_perturb0':
+        lambda: scopesim_grid(N1d=16, perturbation=0.),
+    'scopesim_grid_16_perturb2':
+        lambda: scopesim_grid(N1d=16, perturbation=2.),
           }
 
 

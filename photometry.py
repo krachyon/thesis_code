@@ -207,16 +207,3 @@ def do_photometry_epsf(image: np.ndarray,
 
     return photometry(image)
 
-
-if __name__ == '__main__':
-    from astropy.io import fits
-
-    # Original
-    img = fits.open('output_files/observed_00.fits')[0].data
-    #img = fits.open('output_files/grid_16_pertubation_1.2.fits')[0].data
-    #epsf = make_epsf_combine(img)
-    epsf = make_epsf_fit(img, iters=5)
-    plt.imshow(epsf.data, norm=LogNorm())
-    plt.show()
-    # table_psf = do_photometry_epsf(epsf, img)
-    # table_basic = do_photometry_basic(img,3)
