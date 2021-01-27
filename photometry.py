@@ -16,6 +16,7 @@ from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, Integrate
 import astropy
 
 from config import Config
+config = Config.instance()
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -101,10 +102,10 @@ def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
 
 
 def make_stars_guess(image: np.ndarray,
-                     threshold_factor: float = Config.threshold_factor,
-                     clip_sigma: float = Config.clip_sigma,
-                     fwhm_guess: float = Config.fwhm_guess,
-                     cutout_size: int = Config.cutout_size) -> photutils.psf.EPSFStars:
+                     threshold_factor: float = config.threshold_factor,
+                     clip_sigma: float = config.clip_sigma,
+                     fwhm_guess: float = config.fwhm_guess,
+                     cutout_size: int = config.cutout_size) -> photutils.psf.EPSFStars:
 
     mean, median, std = sigma_clipped_stats(image, sigma=clip_sigma)
     threshold = median + (threshold_factor * std)
@@ -124,7 +125,7 @@ def make_stars_guess(image: np.ndarray,
     return stars
 
 
-def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = Config.oversampling) -> photutils.psf.EPSFModel:
+def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = config.oversampling) -> photutils.psf.EPSFModel:
     # TODO to make this more useful
     #  - maybe normalize image before combination? Now median just picks typical
     #    value so we're restricted to most common stars
@@ -150,8 +151,8 @@ def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = Config
 
 
 def make_epsf_fit(stars: photutils.psf.EPSFStars,
-                  iters: int = Config.epsfbuilder_iters,
-                  oversampling: int = Config.oversampling,
+                  iters: int = config.epsfbuilder_iters,
+                  oversampling: int = config.oversampling,
                   smoothing_kernel: Union[str, np.ndarray] = 'quartic') -> photutils.psf.EPSFModel:
     # TODO
     #  how does the psf class interpolate/smooth the data internaly? Jay+Anderson2016 says to use a x^4 polynomial
@@ -167,10 +168,10 @@ def make_epsf_fit(stars: photutils.psf.EPSFStars,
 
 def do_photometry_epsf(image: np.ndarray,
                        epsf: photutils.psf.EPSFModel,
-                       threshold_factor: float = Config.threshold_factor,
-                       separation_factor: float = Config.separation_factor,
-                       clip_sigma: float = Config.clip_sigma,
-                       photometry_iterations: int = Config.photometry_iterations) -> Table:
+                       threshold_factor: float = config.threshold_factor,
+                       separation_factor: float = config.separation_factor,
+                       clip_sigma: float = config.clip_sigma,
+                       photometry_iterations: int = config.photometry_iterations) -> Table:
 
     epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)  # renormalize is super slow...
     # TODO
@@ -201,7 +202,7 @@ def do_photometry_epsf(image: np.ndarray,
         bkg_estimator=background_rms,
         psf_model=epsf,
         fitter=LevMarLSQFitter(),
-        niters=3,
+        niters=photometry_iterations,
         fitshape=shape
     )
 

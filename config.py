@@ -2,6 +2,7 @@
 import dataclasses
 import matplotlib.pyplot as plt
 
+
 class ClassRepr(type):
     """
     Use this as a metaclass to make a class (and not just an instance of it) print its contents
@@ -18,11 +19,22 @@ class ClassRepr(type):
         return repr(cls)
 
 
-plt.rcParams['figure.figsize'] = (8.3*2, 5.8*2)  # A4 paper
-plt.rcParams['figure.dpi'] = 300
+plt.rcParams['figure.figsize'] = (8.3, 5.8)  # A4 paper
+plt.rcParams['figure.dpi'] = 200
+plt.rcParams['axes.labelsize'] = 'small'
+plt.rcParams['figure.autolayout'] = True
 
-@dataclasses.dataclass(repr=True, eq=False, order=False)
+
+@dataclasses.dataclass(init=True, repr=True, eq=False, order=False)
 class Config(metaclass=ClassRepr):
+    _instance = None
+
+    @classmethod
+    def instance(cls):
+        if not cls._instance:
+            cls._instance = cls()
+        return cls._instance
+
     # names
     psf_name: str = 'anisocado_psf'
     output_folder: str = 'output_files'

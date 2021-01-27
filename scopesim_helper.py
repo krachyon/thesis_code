@@ -6,7 +6,9 @@ from typing import Tuple
 import multiprocessing
 from typing import Optional
 import os
+
 from config import Config
+config = Config.instance()
 
 # globals
 pixel_scale = 0.004  # TODO get these from scopesim?
@@ -50,7 +52,7 @@ def make_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: int =
 
     # Todo: passing a filename that does not end in .fits causes a weird parsing error
     return scopesim.effects.FieldConstantPSF(
-        name=Config.psf_name,
+        name=config.psf_name,
         filename=filename,
         wavelength=psf_wavelength,
         psf_side_length=N,

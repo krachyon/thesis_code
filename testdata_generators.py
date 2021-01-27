@@ -189,14 +189,14 @@ images = {
           }
 
 
-def read_or_generate(filename: str,):
+def read_or_generate(filename: str, config=Config.instance()):
     try:
         generator = images[filename]
     except KeyError:
         print(f'No generator for {filename} defined')
         raise
-    image_name = join(Config.output_folder, filename + '.fits')
-    table_name = join(Config.output_folder, filename + '.dat')
+    image_name = join(config.output_folder, filename + '.fits')
+    table_name = join(config.output_folder, filename + '.dat')
 
     if exists(image_name) and exists(table_name):
         img = fits.open(image_name)[0].data

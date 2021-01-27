@@ -6,6 +6,14 @@ from matplotlib.colors import LogNorm
 from typing import Optional
 from config import Config
 from util import match_observation_to_source
+import pickle
+import matplotlib
+
+
+def save(filename_base: str, figure: matplotlib.pyplot.figure):
+    figure.savefig(filename_base+'.png')
+    with open(filename_base+'.mplf', 'wb') as outfile:
+        pickle.dump(figure, outfile)
 
 
 def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
@@ -30,10 +38,9 @@ def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
 
 
 def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, result_table: Table,
-                                        output_path: Optional[str] = None):
+                                        output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
     plt.figure()
     plt.imshow(image, norm=LogNorm())
-
 
     plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none',
              markeredgewidth=0.5, markeredgecolor='red', label='reference')
@@ -42,11 +49,12 @@ def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, r
     plt.legend()
 
     if output_path:
-        plt.savefig(output_path, dpi=300)
+        save(output_path, plt.gcf())
+    return plt.gcf()
 
 
 def plot_input_vs_photometry_positions(input_table: Table, result_table: Table,
-                                       output_path: Optional[str] = None):
+                                       output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
 
     plt.figure()
 
@@ -59,4 +67,5 @@ def plot_input_vs_photometry_positions(input_table: Table, result_table: Table,
              , markersize=2, markeredgecolor='orange')
 
     if output_path:
-        plt.savefig(output_path, dpi=300)
+        save(output_path, plt.gcf())
+    return plt.gcf()
