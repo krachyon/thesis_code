@@ -43,7 +43,7 @@ def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
 
     plt.figure()
     plt.imshow(epsf.data)
-    save(os.path.join(config.output_folder, filename+'_epsf'))
+    save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
 
     # TODO can't return star_guesses directly because they're not pickle-able
     return image, input_table, result_table, epsf

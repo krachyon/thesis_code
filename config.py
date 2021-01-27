@@ -21,7 +21,7 @@ class ClassRepr(type):
 
 plt.rcParams['figure.figsize'] = (8.3, 5.8)  # A4 paper
 plt.rcParams['figure.dpi'] = 200
-plt.rcParams['axes.labelsize'] = 'small'
+plt.rcParams['font.size'] = 9
 plt.rcParams['figure.autolayout'] = True
 
 
