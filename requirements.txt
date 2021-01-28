@@ -1,0 +1,5 @@
+anisocado
+astropy
+git+git://github.com/krachyon/photutils.git#egg=photutils
+scopesim
+scopesim_templates

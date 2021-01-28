@@ -8,3 +8,4 @@ Paranal
 *.reg
 output_files*/*
 *.txt
+!requirements.txt
