@@ -108,13 +108,12 @@ def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
     table['x'] = to_pixel_scale(table['x']).ravel()
     table['y'] = to_pixel_scale(table['y']).ravel()
 
-
     return observed_image, table
 
 
 def convolved_grid(N1d: int = 16,
                    border: int = 64,
-                   kernel: Union[Kernel2D, np.ndarray, None] = Gaussian2DKernel(x_stddev=1, x_size=201, y_size=201),
+                   kernel: Union[Kernel2D, None] = Gaussian2DKernel(x_stddev=1, x_size=201, y_size=201),
                    perturbation: float = 0.,
                    seed: int = 1000) -> Tuple[np.ndarray, Table]:
 
@@ -153,7 +152,8 @@ def make_anisocado_kernel(shift=(0, 14), wavelength=2.15):
         [shift], [wavelength], pixelSize=0.004, N=pixel_count)
     image = hdus[2]
     kernel = np.squeeze(image.data)
-    return kernel
+    return Kernel2D(array=kernel)
+
 
 kernel_size = 201  # this should be enough
 # name : generator Callable[[], Tuple[np.ndarray, Table]]
@@ -165,12 +165,12 @@ images = {
     'gauss_grid_16_sigma5_perturb_2':
         lambda: convolved_grid(N1d=16, perturbation=2.,
                                kernel=Gaussian2DKernel(x_stddev=5, x_size=kernel_size, y_size=kernel_size)),
-    'airy_grid_16_radius1_perturb_0':
+    'airy_grid_16_radius2_perturb_0':
         lambda: convolved_grid(N1d=16, perturbation=0.,
-                               kernel=AiryDisk2DKernel(radius=1, x_size=kernel_size, y_size=kernel_size)),
-    'airy_grid_16_radius1_perturb_2':
+                               kernel=AiryDisk2DKernel(radius=2, x_size=kernel_size, y_size=kernel_size)),
+    'airy_grid_16_radius2_perturb_2':
         lambda: convolved_grid(N1d=16, perturbation=2.,
-                               kernel=AiryDisk2DKernel(radius=1, x_size=kernel_size, y_size=kernel_size)),
+                               kernel=AiryDisk2DKernel(radius=2, x_size=kernel_size, y_size=kernel_size)),
     'airy_grid_16_radius5_perturb_2':
         lambda: convolved_grid(N1d=16, perturbation=2.,
                                kernel=AiryDisk2DKernel(radius=5, x_size=kernel_size, y_size=kernel_size)),
