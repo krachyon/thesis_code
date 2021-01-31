@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 
 class ClassRepr(type):
     """
-    Use this as a metaclass to make a class (and not just an instance of it) print its contents
+    Use this as a metaclass to make a class (and not just an instance of it) print its contents.
+    Kinda hacky and doesn't really consider edge-cases
     """
     def __new__(mcs, *args, **kwargs):
         return super().__new__(mcs, *args, **kwargs)
@@ -19,14 +20,11 @@ class ClassRepr(type):
         return repr(cls)
 
 
-plt.rcParams['figure.figsize'] = (8.3, 5.8)  # A4 paper
-plt.rcParams['figure.dpi'] = 200
-plt.rcParams['font.size'] = 9
-plt.rcParams['figure.autolayout'] = True
-
-
 @dataclasses.dataclass(init=True, repr=True, eq=False, order=False)
 class Config(metaclass=ClassRepr):
+    """
+    Container for all parameters for the EPSF photometry pipeline.
+    """
     _instance = None
 
     @classmethod
@@ -55,3 +53,8 @@ class Config(metaclass=ClassRepr):
     photometry_iterations: int = 3
 
 
+# matplotlib
+plt.rcParams['figure.figsize'] = (8.3, 5.8)  # A5 paper. Friggin inches...
+plt.rcParams['figure.dpi'] = 200
+plt.rcParams['font.size'] = 8
+plt.rcParams['figure.autolayout'] = True

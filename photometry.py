@@ -24,7 +24,7 @@ from matplotlib.colors import LogNorm
 
 def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
     """
-    Find stars in an image
+    Find stars in an image with IRAFStarFinder
 
     :param image: The image data you want to find stars in
     :param σ_psf: expected deviation of PSF
@@ -67,8 +67,16 @@ def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.nda
 #  - Guess the FWHM for the starfinder that is used in the Photometry pipeline? Do we need that if we have a custom PSF?
 
 
-def cut_edges(peak_table: Table, box_size: int, image_size: int) -> Table:
-    half = box_size / 2
+def cut_edges(peak_table: Table, cutout_size: int, image_size: int) -> Table:
+    """
+    Exclude sources from peak_table which are too close to the borders of the image to fully
+    produce a cutout
+    :param peak_table: Table containing sources as 'x' and 'y' columns
+    :param cutout_size: how big of a cutout we want around every star
+    :param image_size:  how big the image is
+    :return:
+    """
+    half = cutout_size / 2
     x = peak_table['x']
     y = peak_table['y']
     mask = ((x > half) & (x < (image_size - half)) & (y > half) & (y < (image_size - half)))
@@ -77,7 +85,7 @@ def cut_edges(peak_table: Table, box_size: int, image_size: int) -> Table:
 
 def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
     """
-    Use a 2D symmetric gaussian fit to estimate the FWHM of a empirical psf
+    Use a 2D symmetric gaussian fit to estimate the FWHM of an empirical psf
     :param model: EPSFModel instance that was derived
     :return: FWHM in pixel coordinates, takes into account oversampling parameter of EPSF
     """
@@ -106,6 +114,15 @@ def make_stars_guess(image: np.ndarray,
                      clip_sigma: float = config.clip_sigma,
                      fwhm_guess: float = config.fwhm_guess,
                      cutout_size: int = config.cutout_size) -> photutils.psf.EPSFStars:
+    """
+    Given an image, extract stars as EPSFStars for psf fitting
+    :param image: yes
+    :param threshold_factor: how many σ does a star need to be above background?
+    :param clip_sigma: how much to cut for calculating image statistics?
+    :param fwhm_guess: in pixels
+    :param cutout_size: how big should the regions around each star used for fitting be?
+    :return: instance of exctracted EPSFStars
+    """
 
     mean, median, std = sigma_clipped_stats(image, sigma=clip_sigma)
     threshold = median + (threshold_factor * std)
@@ -126,6 +143,12 @@ def make_stars_guess(image: np.ndarray,
 
 
 def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = config.oversampling) -> photutils.psf.EPSFModel:
+    """
+    Alternative way of deriving an EPSF. Use median after resampling/scaling to just overlay images
+    :param stars: candidate stars as EPSFStars
+    :param oversampling: How much to scale
+    :return: epsf model
+    """
     # TODO to make this more useful
     #  - maybe normalize image before combination? Now median just picks typical
     #    value so we're restricted to most common stars
@@ -154,10 +177,9 @@ def make_epsf_fit(stars: photutils.psf.EPSFStars,
                   iters: int = config.epsfbuilder_iters,
                   oversampling: int = config.oversampling,
                   smoothing_kernel: Union[str, np.ndarray] = 'quartic') -> photutils.psf.EPSFModel:
-    # TODO
-    #  how does the psf class interpolate/smooth the data internaly? Jay+Anderson2016 says to use a x^4 polynomial
-    #  Also evaluating epsf(x,y) shows the high order noise, but if you only evaluate at the sample points it
-    #  does look halfway decent so maybe the fit just creates garbage where it's not constrained by smoothing
+    """
+    wrapper around EPSFBuilder
+    """
 
     epsf, fitted_stars = EPSFBuilder(oversampling=oversampling,
                                      maxiters=iters,
@@ -172,6 +194,16 @@ def do_photometry_epsf(image: np.ndarray,
                        separation_factor: float = config.separation_factor,
                        clip_sigma: float = config.clip_sigma,
                        photometry_iterations: int = config.photometry_iterations) -> Table:
+    """
+    Given an image an a epsf model, perform photometry and return star positions (and more) in table
+    :param image: input image
+    :param epsf: EPSF model to use in photometry
+    :param threshold_factor: how many σ does a star need to be above background?
+    :param separation_factor: How close do stars need to be to be considered a group?
+    :param clip_sigma: for image parameter estimation
+    :param photometry_iterations: How many subtraction steps in the photometry part?
+    :return: Table with results
+    """
 
     epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)  # renormalize is super slow...
     # TODO

@@ -1,3 +1,6 @@
+""" Stuff that was in other files before and is not used right now"""
+
+
 from scipy.spatial import cKDTree
 from astropy.table import Table, Row
 import numpy as np

@@ -1,5 +1,7 @@
 anisocado
 astropy
+matplotlib
+numpy
 git+git://github.com/krachyon/photutils.git#egg=photutils
 scopesim
 scopesim_templates

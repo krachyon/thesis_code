@@ -7,16 +7,28 @@ from config import Config
 from photometry import make_stars_guess, make_epsf_fit, do_photometry_epsf
 # show how epsf looks for given image/parameters
 
-from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, save
+from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
+    save, concat_star_images
 
 from scopesim_helper import download
 import os
 import matplotlib.pyplot as plt
 import multiprocessing as mp
 import util
+from collections import namedtuple
+
+PhotometryResult = namedtuple('PhotometryResult',
+                              ('image', 'input_table', 'result_table', 'epsf', 'star_guesses'))
 
 
 def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
+    """
+    apply EPSF fitting photometry to a testimage
+
+    :param filename: must be found in testdata_generators.images
+    :param config: instance of Config containing all processing parameters
+    :return: PhotometryResult, (image, input_table, result_table, epsf, star_guesses)
+    """
     image, input_table = read_or_generate(filename, config)
 
     star_guesses = make_stars_guess(image,
@@ -45,8 +57,11 @@ def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
     plt.imshow(epsf.data)
     save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
 
-    # TODO can't return star_guesses directly because they're not pickle-able
-    return image, input_table, result_table, epsf, star_guesses
+    plt.figure()
+    plt.imshow(concat_star_images(star_guesses))
+    save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
+
+    return PhotometryResult(image, input_table, result_table, epsf, star_guesses)
 
 
 if __name__ == '__main__':
