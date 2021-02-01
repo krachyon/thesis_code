@@ -21,6 +21,8 @@ PhotometryResult = namedtuple('PhotometryResult',
                               ('image', 'input_table', 'result_table', 'epsf', 'star_guesses'))
 
 
+# would be nicer to already pass the image here instead of the name but that would mean that generation
+# happens in the main process
 def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
     """
     apply EPSF fitting photometry to a testimage
