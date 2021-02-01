@@ -11,12 +11,18 @@ import matplotlib
 
 
 def save(filename_base: str, figure: matplotlib.pyplot.figure):
+    """Save a matplotlib figure as png and a pickle it to a mlpf file"""
     figure.savefig(filename_base+'.png')
     with open(filename_base+'.mplf', 'wb') as outfile:
         pickle.dump(figure, outfile)
 
 
 def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
+    """
+    Create a large single image out of EPSFStars to verify cutouts
+    :param stars:
+    :return: The concatenated image
+    """
     assert len(set(star.shape for star in stars)) == 1  # all stars need same shape
     N = int(np.ceil(np.sqrt(len(stars))))
     shape = stars[0].shape
@@ -39,6 +45,14 @@ def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
 
 def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, result_table: Table,
                                         output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
+    """
+    Plot catalogue and photometry positions on an image
+    :param image:
+    :param input_table: input catalogue for the image (columns 'x', 'y')
+    :param result_table: output from photometry ('x_fit', 'y_fit')
+    :param output_path: optionally save the figure to this base filename
+    :return:
+    """
     plt.figure()
     plt.imshow(image, norm=LogNorm())
 
@@ -55,6 +69,13 @@ def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, r
 
 def plot_input_vs_photometry_positions(input_table: Table, result_table: Table,
                                        output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
+    """
+    Plot the x and y offsets between two catalogues as scatterplot
+    :param input_table: Table with columns 'x' and 'y'
+    :param result_table: Table with columns 'x_fit' and 'y_fit'
+    :param output_path: optionally save plot to this base filename
+    :return:
+    """
 
     plt.figure()
 

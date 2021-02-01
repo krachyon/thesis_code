@@ -102,7 +102,7 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None) ->
 
 def download() -> None:
     """
-    get scopesim file if not present
+    get scopesim files if not present in current directory
     :return:
     """
     if not os.path.exists('MICADO'):

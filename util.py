@@ -4,10 +4,12 @@ from scipy.optimize import curve_fit
 from astropy.table import Table
 
 def gauss(x, a, x0, σ):
+    """just the formula"""
     return a * np.exp(-(x - x0) ** 2 / (2 * σ ** 2))
 
 
 def make_gauss_kernel(σ=1.0):
+    """create a 5x5 gaussian convolution kernel"""
     x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
     d = np.sqrt(x * x + y * y)
 
@@ -69,6 +71,12 @@ def write_ds9_regionfile(x_y_data: np.ndarray, filename: str) -> None:
 
 def match_observation_to_source(reference_catalog: Table, photometry_result: Table) \
         -> Table:
+    """
+    Match the closest points in a photometry catalogue to the input catalogue
+    :param reference_catalog: Table containing input positions in 'x' and 'y' columns
+    :param photometry_result: Table containing measured positions in 'x_fit' and 'y_fit' columns
+    :return: photometry_result updated with 'x_orig', 'y_orig' and 'offset' (euclidean distance) columns
+    """
     from scipy.spatial import cKDTree
 
     x_y_pixel = np.array((reference_catalog['x'], reference_catalog['y'])).T

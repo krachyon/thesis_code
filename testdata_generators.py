@@ -21,8 +21,17 @@ import anisocado
 # TODO maybe enforce with astropy.units
 names = ('x', 'y', 'm')
 
+
 def scopesim_grid(N1d: int = 16, seed: int = 1000, border=64, perturbation: float = 0.) \
         -> Tuple[np.ndarray, Table]:
+    """
+    Use scopesim to create a regular grid of stars
+    :param N1d:  Grid of N1d x N1d Stars will be generated
+    :param seed: initalize RNG for predictable results
+    :param border: how many pixels on the edge to leave empty
+    :param perturbation: perturb each star position with a uniform random pixel offset
+    :return: image and input catalogue
+    """
     np.random.seed(seed)
 
     N = N1d**2
@@ -51,9 +60,10 @@ def scopesim_grid(N1d: int = 16, seed: int = 1000, border=64, perturbation: floa
 def gaussian_cluster(N: int = 1000, seed: int = 9999) \
         -> Tuple[np.ndarray, Table]:
     """
-    Emulates custom cluster creation from initial script
-    :param seed:
-    :return:
+    Emulates custom cluster creation from initial simcado script.
+    Stars with gaussian position and magnitude distribution
+    :param seed: RNG initializer
+    :return: image and input catalogue
     """
     # TODO could use more parameters e.g for magnitudes
     np.random.seed(seed)
@@ -95,6 +105,12 @@ def gaussian_cluster(N: int = 1000, seed: int = 9999) \
 
 
 def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
+    """
+    Use the scopesim_template to create an image of a star cluster that matches the interfaces of the
+    other functions here
+    :param seed: RNG initializer
+    :return: image and input catalogue
+    """
     source = scopesim_templates.basic.stars.cluster(mass=1000,  # Msun
                                                     distance=50000,  # parsec
                                                     core_radius=0.3,  # parsec
@@ -116,7 +132,17 @@ def convolved_grid(N1d: int = 16,
                    kernel: Union[Kernel2D, None] = Gaussian2DKernel(x_stddev=1, x_size=201, y_size=201),
                    perturbation: float = 0.,
                    seed: int = 1000) -> Tuple[np.ndarray, Table]:
+    """
+    Place point sources on a regular image grid and convolve with a kernel to simulate PSF.
+    No noise, distortion etc.
 
+    :param N1d:  Grid of N1d x N1d Stars will be generated
+    :param border: how many pixels on the edge to leave empty
+    :param kernel: What to convolve the point sources with
+    :param perturbation: random uniform offset to star positions
+    :param seed: RNG initializer
+    :return: image, input catalogue
+    """
     # Kernel should always be an odd image or else we introduce some shift in the image
     np.random.seed(seed)
 
@@ -147,6 +173,12 @@ def convolved_grid(N1d: int = 16,
 
 
 def make_anisocado_kernel(shift=(0, 14), wavelength=2.15):
+    """
+    Get a convolvable Kernel from anisocado to approximate field constant MICADO PSF
+    :param shift: how far away from center are we?
+    :param wavelength: PSF for what wavelength?
+    :return: Convolution kernel
+    """
     count = pixel_count + 1 if pixel_count%2==0 else pixel_count
     hdus = anisocado.misc.make_simcado_psf_file(
         [shift], [wavelength], pixelSize=0.004, N=pixel_count)
@@ -190,6 +222,13 @@ images = {
 
 
 def read_or_generate(filename: str, config=Config.instance()):
+    """
+    For the 'recipes' defined in the 'images' dictionary either generate and write the image/catalogue
+    or read existing image/catalogue from disk
+    :param filename: where to write/read the image from/to
+    :param config: Configuration object
+    :return: image, input_catalogue
+    """
     try:
         generator = images[filename]
     except KeyError:
