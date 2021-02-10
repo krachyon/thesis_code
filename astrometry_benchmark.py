@@ -155,6 +155,7 @@ if __name__ == '__main__':
 
     # throw away border pixels to make psf fit into original image
     psf = read_or_generate_helper('anisocado_psf', config)
+    # TODO why is the generated psf not centered?
     psf = util.center_cutout_shift_1(psf, [101, 101])
     psf = psf/psf.max()
 
