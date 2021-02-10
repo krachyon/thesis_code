@@ -14,7 +14,9 @@ from os.path import exists, join
 from config import Config
 from typing import Callable, Tuple, Union
 
+import multiprocessing
 import anisocado
+from collections import defaultdict
 
 # all generators defined here should return a source table with the following columns
 # x,y are in pixel scale
@@ -172,16 +174,17 @@ def convolved_grid(N1d: int = 16,
     return data, table
 
 
-def make_anisocado_kernel(shift=(0, 14), wavelength=2.15):
+def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count = pixel_count):
     """
     Get a convolvable Kernel from anisocado to approximate field constant MICADO PSF
     :param shift: how far away from center are we?
     :param wavelength: PSF for what wavelength?
+    :param pixel_count: How large the side lenght of the image should be
     :return: Convolution kernel
     """
     count = pixel_count + 1 if pixel_count%2==0 else pixel_count
     hdus = anisocado.misc.make_simcado_psf_file(
-        [shift], [wavelength], pixelSize=0.004, N=pixel_count)
+        [shift], [wavelength], pixelSize=0.004, N=count)
     image = hdus[2]
     kernel = np.squeeze(image.data)
     return Kernel2D(array=kernel)
@@ -220,8 +223,35 @@ images = {
         lambda: scopesim_grid(N1d=16, perturbation=2.),
           }
 
+helpers = {
+    'anisocado_psf':
+        lambda: make_anisocado_kernel().array
+}
 
-def read_or_generate(filename: str, config=Config.instance()):
+# make sure concurrent calls with the same filename don't tread on each other's toes.
+# only generate/write file once
+filename_locks = defaultdict(lambda: multiprocessing.Lock())
+
+
+def read_or_generate_helper(filename: str, config=Config.instance()):
+    try:
+        generator = helpers[filename]
+    except KeyError:
+        print(f'No generator for {filename} defined')
+        raise
+
+    image_name = join(config.image_folder, filename + '.fits')
+    with filename_locks[filename]:
+        if exists(image_name):
+            img = fits.open(image_name)[0].data
+        else:
+            img = generator()
+            PrimaryHDU(img).writeto(image_name, overwrite=True)
+
+    return img
+
+
+def read_or_generate_image(filename: str, config=Config.instance()):
     """
     For the 'recipes' defined in the 'images' dictionary either generate and write the image/catalogue
     or read existing image/catalogue from disk
@@ -234,15 +264,16 @@ def read_or_generate(filename: str, config=Config.instance()):
     except KeyError:
         print(f'No generator for {filename} defined')
         raise
-    image_name = join(config.output_folder, filename + '.fits')
-    table_name = join(config.output_folder, filename + '.dat')
+    image_name = join(config.image_folder, filename + '.fits')
+    table_name = join(config.image_folder, filename + '.dat')
 
-    if exists(image_name) and exists(table_name):
-        img = fits.open(image_name)[0].data
-        table = Table.read(table_name, format='ascii.ecsv')
-    else:
-        img, table = generator()
-        PrimaryHDU(img).writeto(image_name, overwrite=True)
-        table.write(table_name, format='ascii.ecsv')
+    with filename_locks[filename]:
+        if exists(image_name) and exists(table_name):
+            img = fits.open(image_name)[0].data
+            table = Table.read(table_name, format='ascii.ecsv')
+        else:
+            img, table = generator()
+            PrimaryHDU(img).writeto(image_name, overwrite=True)
+            table.write(table_name, format='ascii.ecsv')
 
-    return img, table
+        return img, table

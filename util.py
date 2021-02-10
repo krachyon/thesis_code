@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from astropy.table import Table
+from typing import Tuple
+
 
 def gauss(x, a, x0, σ):
     """just the formula"""
@@ -99,3 +101,27 @@ def match_observation_to_source(reference_catalog: Table, photometry_result: Tab
         row['offset'] = dist
 
     return photometry_result
+
+
+def center_cutout(image: np.ndarray, cutout_size: Tuple[int, int]):
+    """cutout a cutout_size[0] x cutout_size[1] section from the center of an image"""
+    shape = image.shape
+    xstart = int(shape[0]/2 - cutout_size[0]/2)
+    xend = int(shape[0]/2 + cutout_size[0]/2)
+
+    ystart = int(shape[0]/2 - cutout_size[0]/2)
+    yend = int(shape[0]/2 + cutout_size[0]/2)
+
+    return image[xstart:xend, ystart:yend]
+
+
+def center_cutout_shift_1(image: np.ndarray, cutout_size: Tuple[int, int]):
+    """cutout a cutout_size[0] x cutout_size[1] section from the center of an image"""
+    shape = image.shape
+    xstart = int(shape[0]/2 - cutout_size[0]/2) + 1
+    xend = int(shape[0]/2 + cutout_size[0]/2) + 1
+
+    ystart = int(shape[0]/2 - cutout_size[0]/2) + 1
+    yend = int(shape[0]/2 + cutout_size[0]/2) + 1
+
+    return image[xstart:xend, ystart:yend]

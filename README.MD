@@ -14,7 +14,7 @@ interactively for a single image.
 
 The generated `.mplf` files contain pickled matplotlib figures, can be viewed with 
 https://github.com/krachyon/matplotlib_viewer like image files or just run something like 
-```
+```python
 import pickle
 import matplotlib.pyplot as plt
 with open('foo.mplf', 'rb') as f:

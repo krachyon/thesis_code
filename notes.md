@@ -22,3 +22,5 @@
   This currently is an issue in photutils as they rely on compound models for fitting star groups.
   As you can't really know easily if a parameters will be called e.g. `x_0_0, x_0_1, x_1_0` or 
   `x_0 x_1 x_2` you have to guess and if you don't guess right you get index errors.
+  
+  

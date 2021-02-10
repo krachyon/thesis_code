@@ -1,5 +1,6 @@
-- Option to save simulated images and run analysis on saved data
-- Some global way to override all/most important analysis parameters?
-- Get EPSF model from known PSF shape done by scopesim
-
+- add a way to start with a decent guess of the PSF in the process
+    * Get EPSF model from known PSF shape done by scopesim
 - Using 'x' and 'x_orig' for the tables is a bit awful as it makes the functions less generic
+- Calculate image stats only once and propagate
+
+- Main issue: How to tune starfinders?

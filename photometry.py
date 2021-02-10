@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Tuple, Union, Type
 
 import numpy as np
 import photutils
@@ -20,6 +20,8 @@ config = Config.instance()
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from photutils.psf import EPSFModel
+from typing import Optional
 
 
 def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
@@ -93,9 +95,9 @@ def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
     from astropy.modeling.functional_models import Gaussian2D
 
     # Not sure if this would work for non-quadratic images
-    assert (psf.psfmodel.data.shape[0] == psf.psfmodel.data.shape[1])
-    assert (psf.psfmodel.oversampling[0] == psf.psfmodel.oversampling[1])
-    dim = psf.psfmodel.data.shape[0]
+    assert (psf.data.shape[0] == psf.data.shape[1])
+    assert (psf.oversampling[0] == psf.oversampling[1])
+    dim = psf.data.shape[0]
     center = int(dim / 2)
     gauss_in = Gaussian2D(x_mean=center, y_mean=center, x_stddev=5, y_stddev=5)
 
@@ -103,33 +105,26 @@ def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
     gauss_in.y_stddev.tied = lambda model: model.x_stddev
 
     x, y = np.mgrid[:dim, :dim]
-    gauss_out = fitting.LevMarLSQFitter()(gauss_in, x, y, psf.psfmodel.data)
+    gauss_out = fitting.LevMarLSQFitter()(gauss_in, x, y, psf.data)
 
     # have to divide by oversampling to get back to original scale
-    return gauss_out.x_fwhm / psf.psfmodel.oversampling[0]
+    return gauss_out.x_fwhm / psf.oversampling[0]
 
 
 def make_stars_guess(image: np.ndarray,
-                     threshold_factor: float = config.threshold_factor,
-                     clip_sigma: float = config.clip_sigma,
-                     fwhm_guess: float = config.fwhm_guess,
+                     star_finder: photutils.StarFinderBase,
                      cutout_size: int = config.cutout_size) -> photutils.psf.EPSFStars:
     """
     Given an image, extract stars as EPSFStars for psf fitting
     :param image: yes
-    :param threshold_factor: how many σ does a star need to be above background?
-    :param clip_sigma: how much to cut for calculating image statistics?
-    :param fwhm_guess: in pixels
     :param cutout_size: how big should the regions around each star used for fitting be?
+    :param star_finder: which starfinder to use?
     :return: instance of exctracted EPSFStars
     """
 
-    mean, median, std = sigma_clipped_stats(image, sigma=clip_sigma)
-    threshold = median + (threshold_factor * std)
-
     # The idea here is to run a "greedy" starfinder that finds a lot more candidates than we need and then
     # to filter out the bright and isolated stars
-    peaks_tbl = DAOStarFinder(threshold, fwhm_guess)(image)
+    peaks_tbl = star_finder(image)
     peaks_tbl.rename_columns(['xcentroid', 'ycentroid'], ['x', 'y'])
 
     peaks_tbl = cut_edges(peaks_tbl, cutout_size, image.shape[0])
@@ -137,7 +132,7 @@ def make_stars_guess(image: np.ndarray,
     # stars_tbl = cut_close_stars(peaks_tbl, cutoff_dist=3)
     stars_tbl = peaks_tbl
 
-    image_no_background = image - median
+    image_no_background = image - np.median(image)
     stars = extract_stars(NDData(image_no_background), stars_tbl, size=cutout_size)
     return stars
 
@@ -152,7 +147,7 @@ def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = config
     # TODO to make this more useful
     #  - maybe normalize image before combination? Now median just picks typical
     #    value so we're restricted to most common stars
-    #  - add iterations where the star positions are re-determined with the epsf and
+    #  - add iterations where the star positions are re-determined with the epsf and overlaying happens again
 
     avg_center = np.sum([np.array(st.cutout_center) for st in stars], axis=0) / len(stars)
 
@@ -176,24 +171,30 @@ def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = config
 def make_epsf_fit(stars: photutils.psf.EPSFStars,
                   iters: int = config.epsfbuilder_iters,
                   oversampling: int = config.oversampling,
-                  smoothing_kernel: Union[str, np.ndarray] = 'quartic') -> photutils.psf.EPSFModel:
+                  smoothing_kernel: Union[str, np.ndarray] = 'quartic',
+                  epsf_guess: Optional[EPSFModel] = None) -> photutils.psf.EPSFModel:
     """
     wrapper around EPSFBuilder
     """
-
-    epsf, fitted_stars = EPSFBuilder(oversampling=oversampling,
-                                     maxiters=iters,
-                                     progress_bar=True,
-                                     smoothing_kernel=smoothing_kernel)(stars)
+    try:
+        epsf, fitted_stars = EPSFBuilder(oversampling=oversampling,
+                                         maxiters=iters,
+                                         progress_bar=True,
+                                         smoothing_kernel=smoothing_kernel).build_epsf(stars, init_epsf=epsf_guess)
+    except ValueError:
+        print('Warning: epsf fit diverged. Some data will not be analyzed')
+        raise
     return epsf
 
 
 def do_photometry_epsf(image: np.ndarray,
                        epsf: photutils.psf.EPSFModel,
+                       star_finder: photutils.StarFinderBase,
                        threshold_factor: float = config.threshold_factor,
                        separation_factor: float = config.separation_factor,
                        clip_sigma: float = config.clip_sigma,
-                       photometry_iterations: int = config.photometry_iterations) -> Table:
+                       photometry_iterations: int = config.photometry_iterations,
+                       ) -> Table:
     """
     Given an image an a epsf model, perform photometry and return star positions (and more) in table
     :param image: input image
@@ -202,6 +203,7 @@ def do_photometry_epsf(image: np.ndarray,
     :param separation_factor: How close do stars need to be to be considered a group?
     :param clip_sigma: for image parameter estimation
     :param photometry_iterations: How many subtraction steps in the photometry part?
+    :param star_finder: which starfinder to use?
     :return: Table with results
     """
 
@@ -219,8 +221,7 @@ def do_photometry_epsf(image: np.ndarray,
 
     _, img_median, img_stddev = sigma_clipped_stats(image, sigma=clip_sigma)
     threshold = img_median + (threshold_factor * img_stddev)
-    fwhm_guess = FWHM_estimate(epsf)
-    star_finder = DAOStarFinder(threshold, fwhm_guess)
+    fwhm_guess = FWHM_estimate(epsf.psfmodel)
 
     grouper = DAOGroup(separation_factor*fwhm_guess)
 

@@ -1,7 +1,8 @@
 # Global values and names
 import dataclasses
 import matplotlib.pyplot as plt
-
+from photutils.psf import EPSFModel
+from typing import Optional
 
 class ClassRepr(type):
     """
@@ -35,6 +36,7 @@ class Config(metaclass=ClassRepr):
 
     # names
     psf_name: str = 'anisocado_psf'
+    image_folder: str = 'test_images'
     output_folder: str = 'output_files'
 
     # magic parameters for Starfinder
@@ -48,6 +50,7 @@ class Config(metaclass=ClassRepr):
     oversampling: int = 4
     epsfbuilder_iters: int = 5
     smoothing = 'quartic'
+    epsf_guess: Optional[EPSFModel] = None
 
     # photometry
     photometry_iterations: int = 3
