@@ -1,3 +1,5 @@
+import pickle
+
 import itertools
 
 from photometry import make_epsf_fit
@@ -10,7 +12,7 @@ from photometry import make_stars_guess, make_epsf_fit, do_photometry_epsf, FWHM
 # show how epsf looks for given image/parameters
 
 from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
-    save, concat_star_images
+    save, concat_star_images, plot_deviation_vs_magnitude
 
 from scopesim_helper import download
 import os
@@ -34,7 +36,7 @@ from astropy.io.fits import PrimaryHDU
 from photutils.psf import DAOGroup, BasicPSFPhotometry
 
 PhotometryResult = namedtuple('PhotometryResult',
-                              ('image', 'input_table', 'result_table', 'epsf', 'star_guesses'))
+                              ('image', 'input_table', 'result_table', 'epsf', 'star_guesses', 'config'))
 
 
 # would be nicer to already pass the image here instead of the name but that would mean that generation
@@ -81,18 +83,23 @@ def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
     if len(result_table) != 0:
         plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
         plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+        plt.close('all')
+        plot_filename = os.path.join(config.output_folder, filename + '_magnitude_v_offset')
+        plot_deviation_vs_magnitude(input_table, result_table, output_path=plot_filename)
+        plt.close('all')
     else:
         print(f"No sources found for {filename} with {config}")
 
     plt.figure()
     plt.imshow(epsf.data)
     save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
-
+    plt.close('all')
     plt.figure()
     plt.imshow(concat_star_images(star_guesses))
     save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
 
-    return PhotometryResult(image, input_table, result_table, epsf, star_guesses)
+
+    return PhotometryResult(image, input_table, result_table, epsf, star_guesses, config)
 
 
 def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
@@ -162,35 +169,8 @@ def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
     #plt.imshow(concat_star_images(star_guesses))
     #save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
 
-    return PhotometryResult(image, input_table, result_table, epsf, None)
+    return PhotometryResult(image, input_table, result_table, epsf, None, config)
 
-
-# if __name__ == '__main__':
-#     download()
-#     config = Config.instance()
-#
-#     # throw away border pixels to make psf fit into original image
-#     psf = read_or_generate_helper('anisocado_psf', config)
-#     # TODO why is the generated psf not centered?
-#     psf = util.center_cutout_shift_1(psf, (101, 101))
-#     psf = psf/psf.max()
-#
-#     test_images = ['scopesim_grid_16_perturb0', 'scopesim_grid_16_perturb2',
-#                    'gauss_cluster_N1000', 'scopesim_cluster']
-#
-#     config.output_folder = 'output_cheating_astrometry'
-#
-#     args = [(image, psf, config) for image in test_images]
-#
-#     if not os.path.exists(config.image_folder):
-#          os.mkdir(config.image_folder)
-#     if not os.path.exists(config.output_folder):
-#         os.mkdir(config.output_folder)
-#
-#     with mp.Pool(mp.cpu_count()) as pool:
-#         result = list(starmap(cheating_astrometry, args))
-#
-#     plt.show()
 
 if __name__ == '__main__':
     download()
@@ -207,21 +187,36 @@ if __name__ == '__main__':
     init_guess_config.use_catalogue_positions = True
     init_guess_config.photometry_iterations = 1  # with known positions we know all stars on first iter
 
-    args = itertools.product(test_images, [normal_config, gauss_config, init_guess_config])
+    cheating_config = Config()
+    cheating_config.output_folder = 'output_cheating_astrometry'
 
-    if not os.path.exists(normal_config.image_folder):
-        os.mkdir(normal_config.image_folder)
-    if not os.path.exists(normal_config.output_folder):
-        os.mkdir(normal_config.output_folder)
-    if not os.path.exists(gauss_config.output_folder):
-        os.mkdir(gauss_config.output_folder)
-    if not os.path.exists(init_guess_config.output_folder):
-        os.mkdir(init_guess_config.output_folder)
+    configs = [normal_config, gauss_config, init_guess_config, cheating_config]
+    for config in configs:
+        if not os.path.exists(config.image_folder):
+            os.mkdir(config.image_folder)
+        if not os.path.exists(config.output_folder):
+            os.mkdir(config.output_folder)
+
+    # throw away border pixels to make psf fit into original image
+    psf = read_or_generate_helper('anisocado_psf', cheating_config)
+    # TODO why is the generated psf not centered?
+    psf = util.center_cutout_shift_1(psf, (101, 101))
+    psf = psf/psf.max()
+
+    cheating_test_images = ['scopesim_grid_16_perturb0', 'scopesim_grid_16_perturb2',
+                   'gauss_cluster_N1000', 'scopesim_cluster']
+
+    args = itertools.product(test_images, [normal_config, gauss_config, init_guess_config])
+    cheat_args = itertools.product(cheating_test_images, [psf], [cheating_config])
 
     with mp.Pool(mp.cpu_count()) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
-        results = list(pool.starmap(photometry_full, args))
+        result1 = pool.starmap(photometry_full, args)
+        result2 = pool.starmap(cheating_astrometry, cheat_args)
 
+        results = result1 + result2
 
     plt.show()
+    with open('all_photometry_results.pickle', 'wb') as f:
+        pickle.dump(results, f)
     pass

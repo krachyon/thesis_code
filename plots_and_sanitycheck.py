@@ -8,6 +8,7 @@ from config import Config
 from util import match_observation_to_source
 import pickle
 import matplotlib
+from util import flux_to_magnitude
 
 
 def save(filename_base: str, figure: matplotlib.pyplot.figure):
@@ -86,6 +87,32 @@ def plot_input_vs_photometry_positions(input_table: Table, result_table: Table,
     plt.ylabel('y offsets')
     plt.plot(offsets['x_fit']-offsets['x_orig'], offsets['y_fit']-offsets['y_orig'], '.'
              , markersize=2, markeredgecolor='orange')
+
+    if output_path:
+        save(output_path, plt.gcf())
+    return plt.gcf()
+
+
+def plot_deviation_vs_magnitude(input_table: Table, result_table: Table,
+                                output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
+    """
+    Plot the absolute deviation between input and photometry as a function of magnitude
+    :param input_table: Table with columns 'x' and 'y'
+    :param result_table: Table with columns 'x_fit' and 'y_fit'
+    :param output_path: optionally save plot to this base filename
+    :return:
+    """
+
+    plt.figure()
+
+    offsets = match_observation_to_source(input_table, result_table)
+    dists = np.sqrt((offsets['x_fit']-offsets['x_orig'])**2 + (offsets['y_fit']-offsets['y_orig'])**2)
+    magnitudes = flux_to_magnitude(offsets['flux_fit'])
+
+    plt.title('Photometry Offset as function of magnitude')
+    plt.xlabel('magnitude')
+    plt.ylabel('distance offset to reference position')
+    plt.plot(magnitudes, dists, 'o', markersize=2, markerfacecolor='orange', markeredgewidth=0)
 
     if output_path:
         save(output_path, plt.gcf())
