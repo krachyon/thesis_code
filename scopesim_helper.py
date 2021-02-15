@@ -30,6 +30,14 @@ def to_pixel_scale(pos):
     return pos / pixel_scale + 512
 
 
+def pixel_to_uas(pixel):
+    import astropy.units as u
+    if not isinstance(pixel, u.Quantity):
+        pixel = pixel*u.pixel
+
+    return (pixel * 4*u.milliarcsecond/u.pixel).to(u.microarcsecond)
+
+
 # noinspection PyPep8Naming
 def make_psf(psf_wavelength: float = 2.15, shift: Tuple[int] = (0, 14), N: int = 512) -> scopesim.effects.Effect:
     """

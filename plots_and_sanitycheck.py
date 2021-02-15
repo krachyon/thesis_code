@@ -57,9 +57,9 @@ def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, r
     plt.imshow(image, norm=LogNorm())
 
     plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none',
-             markeredgewidth=0.5, markeredgecolor='red', label='reference')
+             markeredgewidth=0.5, markeredgecolor='red', label=f'reference N={len(input_table)}')
     plt.plot(result_table['x_fit'], result_table['y_fit'], '.', markersize=1,
-             markeredgecolor='orange', label='photometry')
+             markeredgecolor='orange', label=f'photometry N={len(result_table)}')
     plt.legend()
 
     if output_path:

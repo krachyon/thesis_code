@@ -63,11 +63,9 @@ def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.nda
     return result_table, photometry.get_residual_image()
 
 
-
 # TODO how to
 #  - find the best star candidates that are isolated for the PSF estimation?
 #  - Guess the FWHM for the starfinder that is used in the Photometry pipeline? Do we need that if we have a custom PSF?
-
 
 def cut_edges(peak_table: Table, cutout_size: int, image_size: int) -> Table:
     """
@@ -189,23 +187,25 @@ def make_epsf_fit(stars: photutils.psf.EPSFStars,
 
 def do_photometry_epsf(image: np.ndarray,
                        epsf: photutils.psf.EPSFModel,
-                       star_finder: photutils.StarFinderBase,
-                       threshold_factor: float = config.threshold_factor,
-                       separation_factor: float = config.separation_factor,
-                       clip_sigma: float = config.clip_sigma,
-                       photometry_iterations: int = config.photometry_iterations,
+                       star_finder: Optional[photutils.StarFinderBase],
+                       initial_guess: Optional[Table] = None,
+                       config: Config = Config()
                        ) -> Table:
     """
     Given an image an a epsf model, perform photometry and return star positions (and more) in table
     :param image: input image
     :param epsf: EPSF model to use in photometry
-    :param threshold_factor: how many σ does a star need to be above background?
-    :param separation_factor: How close do stars need to be to be considered a group?
-    :param clip_sigma: for image parameter estimation
-    :param photometry_iterations: How many subtraction steps in the photometry part?
     :param star_finder: which starfinder to use?
+    :param initial_guess: initial estimates for star positions
+    :param config:
+
     :return: Table with results
     """
+
+    threshold_factor = config.threshold_factor
+    separation_factor = config.separation_factor
+    clip_sigma = config.clip_sigma
+    photometry_iterations = config.photometry_iterations
 
     epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)  # renormalize is super slow...
     # TODO
@@ -220,7 +220,6 @@ def do_photometry_epsf(image: np.ndarray,
     background_rms = MADStdBackgroundRMS()
 
     _, img_median, img_stddev = sigma_clipped_stats(image, sigma=clip_sigma)
-    threshold = img_median + (threshold_factor * img_stddev)
     fwhm_guess = FWHM_estimate(epsf.psfmodel)
 
     grouper = DAOGroup(separation_factor*fwhm_guess)
@@ -229,6 +228,7 @@ def do_photometry_epsf(image: np.ndarray,
 
     epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
     epsf.fwhm.value = fwhm_guess
+
     photometry = IterativelySubtractedPSFPhotometry(
         finder=star_finder,
         group_maker=grouper,
@@ -239,5 +239,5 @@ def do_photometry_epsf(image: np.ndarray,
         fitshape=shape
     )
 
-    return photometry(image)
+    return photometry.do_photometry(image, init_guesses=initial_guess)
 

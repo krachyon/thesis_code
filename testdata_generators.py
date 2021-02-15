@@ -190,6 +190,34 @@ def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count = pixel_co
     return Kernel2D(array=kernel)
 
 
+def make_single_star_image(seed: int = 9999) -> Tuple[np.ndarray, Table]:
+    """
+    Emulates custom cluster creation from initial simcado script.
+    Stars with gaussian position and magnitude distribution
+    :param seed: RNG initializer
+    :return: image and input catalogue
+    """
+
+    x = np.array([0.])
+    y = np.array([0.])
+    m = np.array([16.])
+
+    filter_name = 'MICADO/filters/TC_filter_K-cont.dat'  # TODO: how to make system find this?
+    spectral_types = ['A0V']
+
+    source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
+                                                  amplitudes=m,
+                                                  spec_types=spectral_types,
+                                                  x=x, y=y)
+
+    detector = setup_optical_train()
+
+    detector.observe(source, random_seed=seed, update=True)
+    observed_image = detector.readout()[0][1].data
+
+    return observed_image
+
+
 kernel_size = 201  # this should be enough
 # name : generator Callable[[], Tuple[np.ndarray, Table]]
 images = {
@@ -225,7 +253,9 @@ images = {
 
 helpers = {
     'anisocado_psf':
-        lambda: make_anisocado_kernel().array
+        lambda: make_anisocado_kernel().array,
+    'single_star_image':
+        lambda: make_single_star_image()
 }
 
 # make sure concurrent calls with the same filename don't tread on each other's toes.

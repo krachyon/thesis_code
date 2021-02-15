@@ -53,6 +53,8 @@ class Config(metaclass=ClassRepr):
     epsf_guess: Optional[EPSFModel] = None
 
     # photometry
+    # use known star positions from input catalogue as initial guess for photometry?
+    use_catalogue_positions: bool = False
     photometry_iterations: int = 3
 
 
