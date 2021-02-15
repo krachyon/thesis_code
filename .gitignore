@@ -6,6 +6,7 @@ Paranal
 .idea
 *.fits
 *.reg
-output_files*/*
+output*/*
+test_images*/*
 *.txt
 !requirements.txt
