@@ -10,55 +10,61 @@ import multiprocessing
 plt.ion()
 
 
-def foo():
-    config = Config()
-    config.epsfbuilder_iters = 5
-    config.clip_sigma = 2.
-    config.threshold_factor = 1.
-    config.separation_factor = 2.
+#def foo():
+config = Config()
+config.epsfbuilder_iters = 2
+config.clip_sigma = 2.
+config.threshold_factor = 1.
+config.separation_factor = 2.
 
-    image, input_table = read_or_generate_image('scopesim_cluster', config)
-    mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
-    threshold = median + config.threshold_factor * std
+image, input_table = read_or_generate_image('scopesim_cluster', config)
+mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+threshold = median + config.threshold_factor * std
 
-    finder = IRAFStarFinder(threshold=threshold, fwhm=config.fwhm_guess, minsep_fwhm=1)
-    prelim_stars = make_stars_guess(image, finder)
+finder = IRAFStarFinder(threshold=threshold, fwhm=config.fwhm_guess, minsep_fwhm=1)
+prelim_stars = make_stars_guess(image, finder)
 
-    prelim_epsf = make_epsf_combine(prelim_stars)
-    fwhm_guess = FWHM_estimate(prelim_epsf)
+prelim_epsf = make_epsf_combine(prelim_stars)
+fwhm_guess = FWHM_estimate(prelim_epsf)
 
-    finder = IRAFStarFinder(threshold=threshold, fwhm=fwhm_guess, minsep_fwhm=1)
+finder = IRAFStarFinder(threshold=threshold, fwhm=fwhm_guess, minsep_fwhm=1)
 
-    # peaks_tbl = IRAFStarFinder(threshold, fwhm_guess, minsep_fwhm=1)(image)
-    # peaks_tbl = finder(image)
-    # peaks_tbl.rename_columns(['xcentroid', 'ycentroid'], ['x_fit', 'y_fit'])
+# peaks_tbl = IRAFStarFinder(threshold, fwhm_guess, minsep_fwhm=1)(image)
+# peaks_tbl = finder(image)
+# peaks_tbl.rename_columns(['xcentroid', 'ycentroid'], ['x_fit', 'y_fit'])
 
-    # plot_image_with_source_and_measured(image, input_table, peaks_tbl)
+# plot_image_with_source_and_measured(image, input_table, peaks_tbl)
 
-    stars = make_stars_guess(image, cutout_size=51, star_finder=finder)
-    epsf = make_epsf_fit(stars, iters=config.epsfbuilder_iters, smoothing_kernel=make_gauss_kernel())
+stars = make_stars_guess(image, cutout_size=51, star_finder=finder)
+epsf = make_epsf_fit(stars, iters=config.epsfbuilder_iters, smoothing_kernel=make_gauss_kernel())
 
-    epsf_mod = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
+epsf_mod = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
 
-    grouper = DAOGroup(config.separation_factor * fwhm_guess)
+grouper = DAOGroup(config.separation_factor * fwhm_guess)
 
-    shape = (epsf_mod.psfmodel.shape / epsf_mod.psfmodel.oversampling).astype(np.int64)
+shape = (epsf_mod.psfmodel.shape / epsf_mod.psfmodel.oversampling).astype(np.int64)
 
-    epsf_mod.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
-    epsf_mod.fwhm.value = fwhm_guess
+epsf_mod.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
+epsf_mod.fwhm.value = fwhm_guess
 
-    finder = IRAFStarFinder(threshold=0.1 * threshold, fwhm=fwhm_guess, minsep_fwhm=0.1)
+finder = IRAFStarFinder(threshold=0.1 * threshold, fwhm=fwhm_guess, minsep_fwhm=0.1)
 
-    photometry = BasicPSFPhotometry(
-        finder=finder,
-        group_maker=grouper,
-        bkg_estimator=MADStdBackgroundRMS(),
-        psf_model=epsf_mod,
-        fitter=LevMarLSQFitter(),
-        fitshape=shape,
-    )
+init_guesses = finder(image)
+init_guesses.rename_columns(('xcentroid','ycentroid'), ('x_0','y_0'))
+photometry = BasicPSFPhotometry(
+    finder=finder,
+    group_maker=grouper,
+    bkg_estimator=MADStdBackgroundRMS(),
+    psf_model=epsf_mod,
+    fitter=LevMarLSQFitter(),
+    fitshape=shape,
+)
 
-    res = photometry(image)
+res = photometry(image, init_guesses=init_guesses)
+init_guesses.rename_columns(('x_0','y_0'),('x','y'))
+plot_input_vs_photometry_positions(init_guesses, res)
+
+
 
 #plot_image_with_source_and_measured(image, input_table, peaks_tbl)
 
@@ -81,69 +87,69 @@ def bar():
     config.epsfbuilder_iters = 4
 
 #image, input_table, result_table, epsf, star_guesses = photometry_full('gauss_cluster_N1000', config)
+def baz():
+    config = Config.instance()
 
-config = Config.instance()
+    # throw away border pixels to make psf fit into original image
 
-# throw away border pixels to make psf fit into original image
-
-psf = read_or_generate_helper('anisocado_psf', config)
-psf = center_cutout(psf, (51, 51))  # cutout center of psf or else it takes forever to fit
+    psf = read_or_generate_helper('anisocado_psf', config)
+    psf = center_cutout(psf, (51, 51))  # cutout center of psf or else it takes forever to fit
 
 
-config.output_folder = 'output_cheating_astrometry'
-filename = 'scopesim_grid_16_perturb0'
+    config.output_folder = 'output_cheating_astrometry'
+    filename = 'scopesim_grid_16_perturb0'
 
-image, input_table = read_or_generate_image(filename, config)
+    image, input_table = read_or_generate_image(filename, config)
 
-origin = np.array(psf.shape)/2
-# type: ignore
-epsf = photutils.psf.EPSFModel(psf, flux=None, origin=origin, oversampling=1, normalize=False)
-epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
+    origin = np.array(psf.shape)/2
+    # type: ignore
+    epsf = photutils.psf.EPSFModel(psf, flux=None, origin=origin, oversampling=1, normalize=False)
+    epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
 
-image, input_table = read_or_generate_image(filename, config)
+    image, input_table = read_or_generate_image(filename, config)
 
-mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
-threshold = median + config.threshold_factor * std
+    mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+    threshold = median + config.threshold_factor * std
 
-fwhm = FWHM_estimate(epsf.psfmodel)
+    fwhm = FWHM_estimate(epsf.psfmodel)
 
-finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
+    finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
 
-grouper = DAOGroup(config.separation_factor*fwhm)
+    grouper = DAOGroup(config.separation_factor*fwhm)
 
-shape = (epsf.psfmodel.shape/epsf.psfmodel.oversampling).astype(np.int64)
+    shape = (epsf.psfmodel.shape/epsf.psfmodel.oversampling).astype(np.int64)
 
-epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
-epsf.fwhm.value = fwhm
-bkgrms = MADStdBackgroundRMS()
+    epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
+    epsf.fwhm.value = fwhm
+    bkgrms = MADStdBackgroundRMS()
 
-photometry = BasicPSFPhotometry(
-    finder=finder,
-    group_maker=grouper,
-    bkg_estimator=bkgrms,
-    psf_model=epsf,
-    fitter=LevMarLSQFitter(),
-    fitshape=shape
-)
+    photometry = BasicPSFPhotometry(
+        finder=finder,
+        group_maker=grouper,
+        bkg_estimator=bkgrms,
+        psf_model=epsf,
+        fitter=LevMarLSQFitter(),
+        fitshape=shape
+    )
 
-result_table = photometry(image)
-star_guesses = make_stars_guess(image, finder, 51)
+    result_table = photometry(image)
+    star_guesses = make_stars_guess(image, finder, 51)
 
-plot_filename = os.path.join(config.output_folder, filename+'_photometry_vs_sources')
-plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
+    plot_filename = os.path.join(config.output_folder, filename+'_photometry_vs_sources')
+    plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
 
-if len(result_table) != 0:
-    plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
-    plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
-else:
-    print(f"No sources found for {filename} with {config}")
+    if len(result_table) != 0:
+        plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
+        plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+    else:
+        print(f"No sources found for {filename} with {config}")
 
-plt.figure()
-plt.imshow(epsf.psfmodel.data)
-save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
+    plt.figure()
+    plt.imshow(epsf.psfmodel.data)
+    save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
 
-plt.figure()
-plt.imshow(concat_star_images(star_guesses))
-save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
+    plt.figure()
+    plt.imshow(concat_star_images(star_guesses))
+    save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
 
-res = PhotometryResult(image, input_table, result_table, epsf, star_guesses)
+    res = PhotometryResult(image, input_table, result_table, epsf, star_guesses)

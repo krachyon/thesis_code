@@ -96,7 +96,7 @@ def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
 
     origin = np.array(psf.shape)/2
     # type: ignore
-    epsf = photutils.psf.EPSFModel(psf, flux=None, origin=origin, oversampling=1, normalize=False)
+    epsf = photutils.psf.EPSFModel(psf, flux=1, origin=origin, oversampling=1, normalize=False)
     epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
 
     image, input_table = read_or_generate_image(filename, config)
@@ -116,6 +116,9 @@ def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
     epsf.fwhm.value = fwhm
     bkgrms = MADStdBackgroundRMS()
 
+    from photutils.psf import IntegratedGaussianPRF
+    psf_model = IntegratedGaussianPRF(sigma=fwhm)
+
     photometry = BasicPSFPhotometry(
         finder=finder,
         group_maker=grouper,
@@ -125,7 +128,12 @@ def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
         fitshape=shape
     )
 
-    result_table = photometry(image)
+    guess_table = input_table.copy()
+    guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+    # guess_table['x_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['x_0']))
+    # guess_table['y_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['y_0']))
+
+    result_table = photometry(image, guess_table)
     star_guesses = make_stars_guess(image, finder, 51)
 
     plot_filename = os.path.join(config.output_folder, filename+'_photometry_vs_sources')
@@ -156,7 +164,7 @@ if __name__ == '__main__':
     # throw away border pixels to make psf fit into original image
     psf = read_or_generate_helper('anisocado_psf', config)
     # TODO why is the generated psf not centered?
-    psf = util.center_cutout_shift_1(psf, [101, 101])
+    psf = util.center_cutout_shift_1(psf, (101, 101))
     psf = psf/psf.max()
 
     test_images = ['scopesim_grid_16_perturb0', 'scopesim_grid_16_perturb2']
@@ -171,7 +179,7 @@ if __name__ == '__main__':
         os.mkdir(config.output_folder)
 
     with mp.Pool(mp.cpu_count()) as pool:
-        result = list(pool.starmap(cheating_astrometry, args))
+        result = list(starmap(cheating_astrometry, args))
 
     plt.show()
 
