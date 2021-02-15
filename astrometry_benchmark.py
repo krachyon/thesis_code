@@ -41,6 +41,7 @@ PhotometryResult = namedtuple('PhotometryResult',
 
 # would be nicer to already pass the image here instead of the name but that would mean that generation
 # happens in the main process
+# TODO the giant try block. Better way to not cause exception to propagate if run in Pool?
 def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
     """
     apply EPSF fitting photometry to a testimage
@@ -49,57 +50,64 @@ def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
     :param config: instance of Config containing all processing parameters
     :return: PhotometryResult, (image, input_table, result_table, epsf, star_guesses)
     """
-    image, input_table = read_or_generate_image(filename, config)
+    try:
+        image, input_table = read_or_generate_image(filename, config)
 
-    mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
-    threshold = median + config.threshold_factor * std
+        mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+        threshold = median + config.threshold_factor * std
 
-    finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
+        finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
 
-    star_guesses = make_stars_guess(image,
-                                    finder,
-                                    cutout_size=config.cutout_size)
+        star_guesses = make_stars_guess(image,
+                                        finder,
+                                        cutout_size=config.cutout_size)
 
-    epsf = make_epsf_fit(star_guesses,
-                         iters=config.epsfbuilder_iters,
-                         oversampling=config.oversampling,
-                         smoothing_kernel=config.smoothing,
-                         epsf_guess=config.epsf_guess)
+        epsf = make_epsf_fit(star_guesses,
+                             iters=config.epsfbuilder_iters,
+                             oversampling=config.oversampling,
+                             smoothing_kernel=config.smoothing,
+                             epsf_guess=config.epsf_guess)
 
-    if config.use_catalogue_positions:
-        guess_table = input_table.copy()
-        guess_table = cut_edges(guess_table, config.cutout_size, image.shape[0])
-        guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
-    else:
-        guess_table = None
+        if config.use_catalogue_positions:
+            guess_table = input_table.copy()
+            guess_table = cut_edges(guess_table, config.cutout_size, image.shape[0])
+            guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+        else:
+            guess_table = None
 
-    result_table = do_photometry_epsf(image, epsf, finder, initial_guess=guess_table, config=config)
+        result_table = do_photometry_epsf(image, epsf, finder, initial_guess=guess_table, config=config)
 
 
 
-    plot_filename = os.path.join(config.output_folder, filename+'_photometry_vs_sources')
-    plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
+        plot_filename = os.path.join(config.output_folder, filename+'_photometry_vs_sources')
+        plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
 
-    if len(result_table) != 0:
-        plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
-        plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+        if len(result_table) != 0:
+            plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
+            plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+            plt.close('all')
+            plot_filename = os.path.join(config.output_folder, filename + '_magnitude_v_offset')
+            plot_deviation_vs_magnitude(input_table, result_table, output_path=plot_filename)
+            plt.close('all')
+        else:
+            print(f"No sources found for {filename} with {config}")
+
+        plt.figure()
+        plt.imshow(epsf.data)
+        save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
         plt.close('all')
-        plot_filename = os.path.join(config.output_folder, filename + '_magnitude_v_offset')
-        plot_deviation_vs_magnitude(input_table, result_table, output_path=plot_filename)
-        plt.close('all')
-    else:
-        print(f"No sources found for {filename} with {config}")
-
-    plt.figure()
-    plt.imshow(epsf.data)
-    save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
-    plt.close('all')
-    plt.figure()
-    plt.imshow(concat_star_images(star_guesses))
-    save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
+        plt.figure()
+        plt.imshow(concat_star_images(star_guesses))
+        save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
 
 
-    return PhotometryResult(image, input_table, result_table, epsf, star_guesses, config)
+        return PhotometryResult(image, input_table, result_table, epsf, star_guesses, config)
+    except Exception as ex:
+        import traceback
+        print(f'error in photometry_full({filename}, {config})')
+        error = ''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+        print(error)
+        return error
 
 
 def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
@@ -110,66 +118,79 @@ def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
     :param config:
     :return:
     """
-    origin = np.array(psf.shape)/2
-    # type: ignore
-    epsf = photutils.psf.EPSFModel(psf, flux=1, origin=origin, oversampling=1, normalize=False)
-    epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
+    try:
+        origin = np.array(psf.shape)/2
+        # type: ignore
+        epsf = photutils.psf.EPSFModel(psf, flux=1, origin=origin, oversampling=1, normalize=False)
+        epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
 
-    image, input_table = read_or_generate_image(filename, config)
+        image, input_table = read_or_generate_image(filename, config)
 
-    mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
-    threshold = median + config.threshold_factor * std
+        mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+        threshold = median + config.threshold_factor * std
 
-    fwhm = FWHM_estimate(epsf.psfmodel)
+        fwhm = FWHM_estimate(epsf.psfmodel)
 
-    finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
+        finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
 
-    grouper = DAOGroup(config.separation_factor*fwhm)
+        grouper = DAOGroup(config.separation_factor*fwhm)
 
-    shape = (epsf.psfmodel.shape/epsf.psfmodel.oversampling).astype(np.int64)
+        shape = (epsf.psfmodel.shape/epsf.psfmodel.oversampling).astype(np.int64)
 
-    epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
-    epsf.fwhm.value = fwhm
-    bkgrms = MADStdBackgroundRMS()
+        epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
+        epsf.fwhm.value = fwhm
+        bkgrms = MADStdBackgroundRMS()
 
 
-    photometry = BasicPSFPhotometry(
-        finder=finder,
-        group_maker=grouper,
-        bkg_estimator=bkgrms,
-        psf_model=epsf,
-        fitter=LevMarLSQFitter(),
-        fitshape=shape
-    )
+        photometry = BasicPSFPhotometry(
+            finder=finder,
+            group_maker=grouper,
+            bkg_estimator=bkgrms,
+            psf_model=epsf,
+            fitter=LevMarLSQFitter(),
+            fitshape=shape
+        )
 
-    guess_table = input_table.copy()
-    guess_table = cut_edges(guess_table, 101, image.shape[0])
-    guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+        guess_table = input_table.copy()
+        guess_table = cut_edges(guess_table, 101, image.shape[0])
+        guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
 
-    # guess_table['x_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['x_0']))
-    # guess_table['y_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['y_0']))
+        # guess_table['x_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['x_0']))
+        # guess_table['y_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['y_0']))
 
-    result_table = photometry(image, guess_table)
+        result_table = photometry(image, guess_table)
 
-    plot_filename = os.path.join(config.output_folder, filename+'_photometry_vs_sources')
-    plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
+        plot_filename = os.path.join(config.output_folder, filename+'_photometry_vs_sources')
+        plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
+        plt.close('all')
 
-    if len(result_table) != 0:
-        plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
-        plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
-    else:
-        print(f"No sources found for {filename} with {config}")
+        if len(result_table) != 0:
+            plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
+            plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+            plt.close('all')
+            plot_filename = os.path.join(config.output_folder, filename + '_magnitude_v_offset')
+            plot_deviation_vs_magnitude(input_table, result_table, output_path=plot_filename)
+            plt.close('all')
+        else:
+            print(f"No sources found for {filename} with {config}")
 
-    plt.figure()
-    plt.imshow(epsf.psfmodel.data)
-    save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
+        plt.figure()
+        plt.imshow(epsf.psfmodel.data)
+        save(os.path.join(config.output_folder, filename+'_epsf'), plt.gcf())
+        plt.close('all')
 
-    #star_guesses = make_stars_guess(image, finder, 51)
-    #plt.figure()
-    #plt.imshow(concat_star_images(star_guesses))
-    #save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
+        #star_guesses = make_stars_guess(image, finder, 51)
+        #plt.figure()
+        #plt.imshow(concat_star_images(star_guesses))
+        #save(os.path.join(config.output_folder, filename+'_star_guesses'), plt.gcf())
 
-    return PhotometryResult(image, input_table, result_table, epsf, None, config)
+        return PhotometryResult(image, input_table, result_table, epsf, None, config)
+    except Exception as ex:
+        import traceback
+        print(f'error in cheating_astrometry({filename}, {psf}, {config})')
+        error = ''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+        print(error)
+        return error
 
 
 if __name__ == '__main__':
@@ -204,19 +225,20 @@ if __name__ == '__main__':
     psf = psf/psf.max()
 
     cheating_test_images = ['scopesim_grid_16_perturb0', 'scopesim_grid_16_perturb2',
-                   'gauss_cluster_N1000', 'scopesim_cluster']
+                            'gauss_grid_16_sigma5_perturb_2', 'anisocado_grid_16_perturb_2',
+                            'gauss_cluster_N1000']
 
     args = itertools.product(test_images, [normal_config, gauss_config, init_guess_config])
     cheat_args = itertools.product(cheating_test_images, [psf], [cheating_config])
 
     with mp.Pool(mp.cpu_count()) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
-        result1 = pool.starmap(photometry_full, args)
-        result2 = pool.starmap(cheating_astrometry, cheat_args)
+        future1 = pool.starmap_async(photometry_full, args)
+        future2 = pool.starmap_async(cheating_astrometry, cheat_args)
 
-        results = result1 + result2
+        results = list(future1.get()) + list(future2.get())
 
-    plt.show()
     with open('all_photometry_results.pickle', 'wb') as f:
         pickle.dump(results, f)
+    plt.close('all')
     pass
