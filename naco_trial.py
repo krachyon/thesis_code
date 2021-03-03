@@ -8,6 +8,7 @@ import itertools
 from astropy.stats import sigma_clipped_stats
 import multiprocessing as mp
 
+# TODO forget source selection, just go off of the reference data an check fit quality
 
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
