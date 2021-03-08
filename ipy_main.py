@@ -6,6 +6,8 @@ from util import *
 from testdata_generators import *
 from photutils.detection import IRAFStarFinder, DAOStarFinder
 import multiprocessing
+from astropy.modeling.functional_models import Gaussian2D, Ellipse2D
+from scipy.signal import fftconvolve
 
 plt.ion()
 
@@ -158,10 +160,13 @@ def baz():
     res = PhotometryResult(image, input_table, result_table, epsf, star_guesses)
 
 
+lowpass_config = Config()
+lowpass_config.smoothing = util.make_gauss_kernel()
+lowpass_config.output_folder = 'output_files_lowpass'
+lowpass_config.use_catalogue_positions = True
+lowpass_config.photometry_iterations = 1  # with known positions we know all stars on first iter
+if not os.path.exists(lowpass_config.output_folder):
+    os.mkdir(lowpass_config.output_folder)
 
-config = Config()
-config.use_catalogue_positions = True
-config.photometry_iterations = 1
-config.smoothing = make_gauss_kernel()
-config.epsfbuilder_iters = 1
-photometry_full('gauss_cluster_N1000', config)
+lowpass_args = itertools.product(testdata_generators.lowpass_images.keys(), [lowpass_config])
+res = list(starmap(photometry_full, lowpass_args))

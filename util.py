@@ -125,3 +125,17 @@ def center_cutout_shift_1(image: np.ndarray, cutout_size: Tuple[int, int]):
     yend = int(shape[0]/2 + cutout_size[0]/2) + 1
 
     return image[xstart:xend, ystart:yend]
+
+
+def linspace_grid(start: float, stop: float, num: int):
+    """
+    Construct a 2D meshgrid analog to np.mgrid, but use linspace syntax instead of indexing
+    """
+    # complex step: use number of steps instead
+    return np.mgrid[start:stop:1j*num, start:stop:1j*num]
+
+
+
+
+
+

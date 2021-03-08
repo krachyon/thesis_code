@@ -58,9 +58,10 @@ def photometry_full(filename='gauss_cluster_N1000', config=Config.instance()):
 
         finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
 
-        star_guesses = make_stars_guess(image,
+        # TODO does not work with just the brackets
+        star_guesses = photutils.EPSFStars(make_stars_guess(image,
                                         finder,
-                                        cutout_size=config.cutout_size)
+                                        cutout_size=config.cutout_size)[:200])
 
         epsf = make_epsf_fit(star_guesses,
                              iters=config.epsfbuilder_iters,
@@ -195,7 +196,7 @@ def cheating_astrometry(filename: str, psf: np.ndarray, config: Config):
 
 if __name__ == '__main__':
     download()
-    test_images = testdata_generators.images.keys()
+    test_images = testdata_generators.normal_images.keys()
     normal_config = Config.instance()
 
     gauss_config = Config()
@@ -211,7 +212,13 @@ if __name__ == '__main__':
     cheating_config = Config()
     cheating_config.output_folder = 'output_cheating_astrometry'
 
-    configs = [normal_config, gauss_config, init_guess_config, cheating_config]
+    lowpass_config = Config()
+    lowpass_config.smoothing = util.make_gauss_kernel()
+    lowpass_config.output_folder = 'output_files_lowpass'
+    lowpass_config.use_catalogue_positions = True
+    lowpass_config.photometry_iterations = 1  # with known positions we know all stars on first iter
+
+    configs = [normal_config, gauss_config, init_guess_config, cheating_config, lowpass_config]
     for config in configs:
         if not os.path.exists(config.image_folder):
             os.mkdir(config.image_folder)
@@ -230,13 +237,14 @@ if __name__ == '__main__':
 
     args = itertools.product(test_images, [normal_config, gauss_config, init_guess_config])
     cheat_args = itertools.product(cheating_test_images, [psf], [cheating_config])
+    lowpass_args = itertools.product(testdata_generators.lowpass_images.keys(), [lowpass_config])
 
     with mp.Pool(mp.cpu_count()) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
         future1 = pool.starmap_async(photometry_full, args)
         future2 = pool.starmap_async(cheating_astrometry, cheat_args)
-
-        results = list(future1.get()) + list(future2.get())
+        future3 = pool.starmap_async(photometry_full, lowpass_args)
+        results = list(future1.get()) + list(future2.get()) + list(future3.get())
 
     with open('all_photometry_results.pickle', 'wb') as f:
         pickle.dump(results, f)

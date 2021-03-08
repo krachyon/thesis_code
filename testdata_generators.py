@@ -5,8 +5,9 @@ import scopesim_templates
 from astropy.io import fits
 from astropy.io.fits import PrimaryHDU
 from astropy.table import Table
+from astropy.modeling.functional_models import Gaussian2D
 
-from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale
+from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale, make_psf
 from astropy.convolution import AiryDisk2DKernel, Gaussian2DKernel, Kernel2D, convolve_fft
 
 from os.path import exists, join
@@ -24,7 +25,12 @@ from collections import defaultdict
 names = ('x', 'y', 'm')
 
 
-def scopesim_grid(N1d: int = 16, seed: int = 1000, border=64, perturbation: float = 0.) \
+def scopesim_grid(N1d: int = 16,
+                  seed: int = 1000,
+                  border=64,
+                  perturbation: float = 0.,
+                  magnitude = lambda N: N*[18],
+                  psf_transform=lambda x:x) \
         -> Tuple[np.ndarray, Table]:
     """
     Use scopesim to create a regular grid of stars
@@ -44,13 +50,13 @@ def scopesim_grid(N1d: int = 16, seed: int = 1000, border=64, perturbation: floa
     x += np.random.uniform(0, perturbation*pixel_scale, x.shape)
     y += np.random.uniform(0, perturbation*pixel_scale, y.shape)
 
-    m = np.array(N*[18])
+    m = np.array(magnitude(N))
 
     source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
                                                   amplitudes=m,
                                                   spec_types=spectral_types,
                                                   x=x.ravel(), y=y.ravel())
-    detector = setup_optical_train()
+    detector = setup_optical_train(make_psf(transform=psf_transform))
 
     detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
@@ -59,12 +65,14 @@ def scopesim_grid(N1d: int = 16, seed: int = 1000, border=64, perturbation: floa
     return observed_image, table
 
 
-def gaussian_cluster(N: int = 1000, seed: int = 9999) \
+def gaussian_cluster(N: int = 1000, seed: int = 9999, psf_transform=lambda x: x) \
         -> Tuple[np.ndarray, Table]:
     """
     Emulates custom cluster creation from initial simcado script.
     Stars with gaussian position and magnitude distribution
+    :param N: how many stars
     :param seed: RNG initializer
+    :param psf_transform: function modifying the psf array
     :return: image and input catalogue
     """
     # TODO could use more parameters e.g for magnitudes
@@ -72,7 +80,7 @@ def gaussian_cluster(N: int = 1000, seed: int = 9999) \
     N = 1000
     x = np.random.normal(0, 1, N)
     y = np.random.normal(0, 1, N)
-    m = np.random.normal(19, 2, N)
+    m = np.random.normal(21, 2, N)
     x_in_px = to_pixel_scale(x)
     y_in_px = to_pixel_scale(y)
 
@@ -97,7 +105,7 @@ def gaussian_cluster(N: int = 1000, seed: int = 9999) \
                                                 spec_types=spectral_types,
                                                 x=x, y=y)
 
-    detector = setup_optical_train()
+    detector = setup_optical_train(make_psf(transform=psf_transform))
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -218,10 +226,66 @@ def make_single_star_image(seed: int = 9999) -> Tuple[np.ndarray, Table]:
     return observed_image
 
 
+def scopesim_groups(N1d: int = 16,
+                    seed: int = 1000,
+                    border=64,
+                    jitter=0.,
+                    magnitude=lambda N: N*[18],
+                    group_size=2,
+                    group_radius=5,
+                    psf_transform=lambda x: x) \
+        -> Tuple[np.ndarray, Table]:
+    np.random.seed(seed)
+
+    N = N1d ** 2
+    spectral_types = ['A0V'] * N * group_size
+
+    x_center, y_center = (np.mgrid[border:pixel_count-border:N1d*1j,
+                    border:pixel_count-border:N1d*1j] - pixel_count/2) * pixel_scale
+
+    x, y = [], []
+
+    θ = np.linspace(0, 2*np.pi, group_size, endpoint=False) + np.random.uniform(0, 2*np.pi)
+
+    for x_c, y_c in zip(x_center.ravel(), y_center.ravel()):
+        x_angle_offset = np.cos(θ)*group_radius
+        y_angle_offset = np.sin(θ)*group_radius
+        x_jitter = np.random.uniform(-jitter/2, jitter/2, len(θ))
+        y_jitter = np.random.uniform(-jitter/2, jitter/2, len(θ))
+        x += list(x_c + (x_angle_offset + x_jitter)*pixel_scale)
+        y += list(y_c + (y_angle_offset + y_jitter)*pixel_scale)
+
+    m = np.array(magnitude(N*group_size))
+
+    source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
+                                                  amplitudes=m,
+                                                  spec_types=spectral_types,
+                                                  x=x, y=y)
+    detector = setup_optical_train(make_psf(transform=psf_transform))
+
+    detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
+    observed_image = detector.readout()[0][1].data
+
+    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
+    return observed_image, table
+
+
+def lowpass(std=5):
+    def transform(data):
+        x, y = data.shape
+        # psf array is offset by one, hence need the -1 after coordinates
+        return data*Gaussian2D(x_stddev=std, y_stddev=std)(*np.mgrid[-x/2:x/2:x*1j, -y/2:y/2:y*1j]-1)
+    return transform
+
+
+# TODO I no longer like this at this size and it should not be defined here
+#  replace with memoization and automatic parameter->name function
 kernel_size = 201  # this should be enough
 # name : generator Callable[[], Tuple[np.ndarray, Table]]
-images = {
+
+normal_images = {
     'gauss_cluster_N1000': lambda: gaussian_cluster(N=1000),
+    'gauss_cluster_N1000_low': lambda: gaussian_cluster(N=1000, psf_transform=lowpass()),
     'scopesim_cluster': lambda: scopesim_cluster(),
     'gauss_grid_16_sigma1_perturb_0': lambda: convolved_grid(N1d=16),
     'gauss_grid_16_sigma1_perturb_2': lambda: convolved_grid(N1d=16, perturbation=2.),
@@ -250,6 +314,27 @@ images = {
     'scopesim_grid_16_perturb2':
         lambda: scopesim_grid(N1d=16, perturbation=2.),
           }
+
+lowpass_images = {
+    'scopesim_grid_16_perturb2_low':
+        lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass()),
+    'scopesim_grid_16_perturb2_low_mag20':
+        lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [20]),
+    'scopesim_grid_30_perturb2_low_mag22':
+        lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [22]),
+    'scopesim_grid_30_perturb2_low_mag20':
+        lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [20]),
+    'scopesim_grid_30_perturb2_low_mag18-24':
+        lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(),
+                              magnitude=lambda N: np.random.uniform(18, 24, N)),
+    'scopesim_groups_16_perturb_2_low_radius_7':
+        lambda: scopesim_groups(N1d=16, jitter=2., psf_transform=lowpass(), magnitude=lambda N: N * [20],
+                                group_radius=7, group_size=2),
+    'scopesim_groups_16_perturb_2_low_radius_10':
+        lambda: scopesim_groups(N1d=16, jitter=2., psf_transform=lowpass(), magnitude=lambda N: N * [20],
+                                group_radius=10, group_size=5)
+}
+images = normal_images | lowpass_images
 
 helpers = {
     'anisocado_psf':
@@ -307,3 +392,12 @@ def read_or_generate_image(filename: str, config=Config.instance()):
             table.write(table_name, format='ascii.ecsv')
 
         return img, table
+
+
+# TODO how to account for e.g. Gaussian2D as parameter? will look mucho ugly and not be unique due to memory address
+def read_or_generate_future(function: Callable[..., Tuple[np.ndarray, Table]], config=Config.instance(), **kwargs):
+    base_name = '_'.join([f'{str(item[0])}={str(item[1])}' for item in kwargs.items()])
+    image_name = join(config.image_folder, base_name + '.fits')
+    table_name = join(config.image_folder, base_name + '.dat')
+
+    function(**kwargs)
