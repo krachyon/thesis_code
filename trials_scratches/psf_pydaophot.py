@@ -3,8 +3,12 @@ from astwro.pydaophot import Daophot, Allstar
 from astwro.starlist.ds9 import write_ds9_regions
 import shutil
 import os
+from astropy.io import fits
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 frame = fits_image()
+#frame='/home/basti/gaus32.fits'
 dp = Daophot(image=frame)
 al = Allstar(dir=dp.dir)
 res = dp.FInd(frames_av=1, frames_sum=1)
@@ -15,6 +19,7 @@ sorted_stars.renumber()
 dp.write_starlist(sorted_stars, 'i.ap')
 pick_res = dp.PIck(faintest_mag=20, number_of_stars_to_pick=40)
 dp.set_options('VARIABLE PSF', 2)
+#psf_res = dp.PSf()
 psf_res = dp.PSf()
 alls_res = al.ALlstar(image_file=frame, stars=psf_res.nei_file, subtracted_image_file='is.fits')
 
@@ -32,8 +37,14 @@ print("Final:       Allstar chi: {}".format(alls_res.als_stars.chi.mean()))
 dp.image = os.path.join(dp.dir, 'is.fits')
 psf_res=dp.PSf()
 # how to point this at more stars?
-alls_res = al.ALlstar(image_file=frame, stars=psf_res.nei_file, subtracted_image_file='is.fits')
-shutil.copy(os.path.join(dp.dir,'i.als'), 'i.als')
-shutil.copy(os.path.join(dp.dir,'is.fits'), 'is.fits')
+alls_res = al.ALlstar(image_file=frame, stars='i.ap', subtracted_image_file='is.fits')
+#shutil.copy(os.path.join(dp.dir,'i.als'), 'i.als')
+#shutil.copy(os.path.join(dp.dir,'is.fits'), 'is.fits')
 shutil.copy(os.path.join(dp.dir,'i.psf'), 'i.psf')
-shutil.copy(frame, 'i.fits')
+#shutil.copy(frame, 'i.fits')
+
+#img = fits.getdata(frame)
+img = fits.getdata(os.path.join(dp.dir, 'is.fits'))
+plt.imshow(img, norm=LogNorm())
+plt.plot(alls_res.als_stars['x']-1, alls_res.als_stars['y']-1, 'ro')
+plt.show()
