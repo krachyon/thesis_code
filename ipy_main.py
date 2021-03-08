@@ -169,4 +169,6 @@ if not os.path.exists(lowpass_config.output_folder):
     os.mkdir(lowpass_config.output_folder)
 
 lowpass_args = itertools.product(testdata_generators.lowpass_images.keys(), [lowpass_config])
-res = list(starmap(photometry_full, lowpass_args))
+import multiprocessing as mp
+with mp.Pool() as p:
+    res = list(p.starmap(photometry_full, lowpass_args))

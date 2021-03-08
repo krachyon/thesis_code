@@ -245,11 +245,12 @@ def scopesim_groups(N1d: int = 16,
 
     x, y = [], []
 
-    θ = np.linspace(0, 2*np.pi, group_size, endpoint=False) + np.random.uniform(0, 2*np.pi)
+    θ = np.linspace(0, 2*np.pi, group_size, endpoint=False)
 
     for x_c, y_c in zip(x_center.ravel(), y_center.ravel()):
-        x_angle_offset = np.cos(θ)*group_radius
-        y_angle_offset = np.sin(θ)*group_radius
+        θ_perturbed = θ + np.random.uniform(0, 2 * np.pi)
+        x_angle_offset = np.cos(θ_perturbed)*group_radius
+        y_angle_offset = np.sin(θ_perturbed)*group_radius
         x_jitter = np.random.uniform(-jitter/2, jitter/2, len(θ))
         y_jitter = np.random.uniform(-jitter/2, jitter/2, len(θ))
         x += list(x_c + (x_angle_offset + x_jitter)*pixel_scale)

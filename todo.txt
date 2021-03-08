@@ -1,3 +1,6 @@
+- make photometry_benchmark able to run a subset (command line switch?)
+- histogram plot for x-y and mag deviation
+
 - add a way to start with a decent guess of the PSF in the process
     * Get EPSF model from known PSF shape done by scopesim
 - Using 'x' and 'x_orig' for the tables is a bit awful as it makes the functions less generic
