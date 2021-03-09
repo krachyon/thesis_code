@@ -46,6 +46,7 @@ class Config(metaclass=ClassRepr):
     separation_factor: float = 1.       # How far do stars need to be apart to be considered?
 
     # magic parameters for EPSFBuilder
+    stars_to_keep: int = 200
     cutout_size: int = 50  # TODO PSF is pretty huge, right?
     oversampling: int = 4
     epsfbuilder_iters: int = 5

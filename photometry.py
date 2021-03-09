@@ -23,6 +23,10 @@ from matplotlib.colors import LogNorm
 from photutils.psf import EPSFModel
 from typing import Optional
 
+from collections import namedtuple
+
+PhotometryResult = namedtuple('PhotometryResult',
+                              ('image', 'input_table', 'result_table', 'epsf', 'star_guesses', 'config', 'image_name'))
 
 def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
     """
@@ -241,3 +245,106 @@ def do_photometry_epsf(image: np.ndarray,
 
     return photometry.do_photometry(image, init_guesses=initial_guess)
 
+
+def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?', config: Config = Config.instance()):
+    """
+    Evaluate the maximum achievable precision of the EPSF fitting approach by using a hand-defined psf
+    :param filename:
+    :param psf:
+    :param config:
+    :return:
+    """
+    try:
+        print(f'starting job on image {filename} with {config}')
+        origin = np.array(psf.shape)/2
+        # type: ignore
+        epsf = photutils.psf.EPSFModel(psf, flux=1, origin=origin, oversampling=1, normalize=False)
+        epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
+
+        mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+        threshold = median + config.threshold_factor * std
+
+        fwhm = FWHM_estimate(epsf.psfmodel)
+
+        finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
+
+        grouper = DAOGroup(config.separation_factor*fwhm)
+
+        shape = (epsf.psfmodel.shape/epsf.psfmodel.oversampling).astype(np.int64)
+
+        epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
+        epsf.fwhm.value = fwhm
+        bkgrms = MADStdBackgroundRMS()
+
+
+        photometry = BasicPSFPhotometry(
+            finder=finder,
+            group_maker=grouper,
+            bkg_estimator=bkgrms,
+            psf_model=epsf,
+            fitter=LevMarLSQFitter(),
+            fitshape=shape
+        )
+
+        guess_table = input_table.copy()
+        guess_table = cut_edges(guess_table, 101, image.shape[0])
+        guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+
+        # guess_table['x_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['x_0']))
+        # guess_table['y_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['y_0']))
+
+        result_table = photometry(image, guess_table)
+
+        return PhotometryResult(image, input_table, result_table, epsf, None, config, filename)
+    except Exception as ex:
+        import traceback
+        print(f'error in cheating_astrometry({filename}, {psf}, {config})')
+        error = ''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+        print(error)
+        return error
+
+
+# TODO the giant try block. Better way to not cause exception to propagate if run in Pool?
+def run_photometry(image, input_table, filename='?', config=Config.instance()) -> Union[PhotometryResult, str]:
+    """
+    apply EPSF fitting photometry to a testimage
+
+    :param filename: must be found in testdata_generators.images
+    :param config: instance of Config containing all processing parameters
+    :return: PhotometryResult, (image, input_table, result_table, epsf, star_guesses)
+    """
+    try:
+        print(f'starting job on image {filename} with {config}')
+
+        mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+        threshold = median + config.threshold_factor * std
+
+        finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
+
+        # TODO does not work with just the brackets
+        star_guesses = photutils.EPSFStars(make_stars_guess(image,
+                                                            finder,
+                                                            cutout_size=config.cutout_size)[:config.stars_to_keep])
+
+        epsf = make_epsf_fit(star_guesses,
+                             iters=config.epsfbuilder_iters,
+                             oversampling=config.oversampling,
+                             smoothing_kernel=config.smoothing,
+                             epsf_guess=config.epsf_guess)
+
+        if config.use_catalogue_positions:
+            guess_table = input_table.copy()
+            guess_table = cut_edges(guess_table, config.cutout_size, image.shape[0])
+            guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+        else:
+            guess_table = None
+
+        result_table = do_photometry_epsf(image, epsf, finder, initial_guess=guess_table, config=config)
+
+        return PhotometryResult(image, input_table, result_table, epsf, star_guesses, config, filename)
+    except Exception as ex:
+        import traceback
+        print(f'error in photometry_full({filename}, {config})')
+        error = ''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+        print(error)
+        return error

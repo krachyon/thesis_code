@@ -83,10 +83,13 @@ def plot_input_vs_photometry_positions(input_table: Table, result_table: Table,
     offsets = match_observation_to_source(input_table, result_table)
 
     plt.title('offset between measured and input')
-    plt.xlabel('x offsets')
-    plt.ylabel('y offsets')
-    plt.plot(offsets['x_fit']-offsets['x_orig'], offsets['y_fit']-offsets['y_orig'], '.'
-             , markersize=2, markeredgecolor='orange')
+    plt.xlabel('x offsets [pixel]')
+    plt.ylabel('y offsets [pixel]')
+    xs = offsets['x_fit']-offsets['x_orig']
+    ys = offsets['y_fit']-offsets['y_orig']
+    plt.plot(xs, ys, '.', markersize=2, markeredgecolor='orange')
+    text = f'$σ_x={np.std(xs):.3f}$\n$σ_y={np.std(ys):.3f}$'
+    plt.annotate(text, xy=(0, 0.7),  xycoords='axes fraction')
 
     if output_path:
         save(output_path, plt.gcf())
@@ -111,8 +114,10 @@ def plot_deviation_vs_magnitude(input_table: Table, result_table: Table,
 
     plt.title('Photometry Offset as function of magnitude')
     plt.xlabel('magnitude')
-    plt.ylabel('distance offset to reference position')
-    plt.plot(magnitudes, dists, 'o', markersize=2, markerfacecolor='orange', markeredgewidth=0)
+    plt.ylabel('distance offset to reference position [pixel]')
+    plt.plot(magnitudes, dists, 'o', markersize=2, markerfacecolor='orange', markeredgewidth=0,
+             label=f'$σ={np.std(dists):.3f}$')
+    plt.legend()
 
     if output_path:
         save(output_path, plt.gcf())
