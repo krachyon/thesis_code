@@ -1,13 +1,14 @@
-import scopesim
-import anisocado
-import tempfile
-import numpy as np
-from typing import Callable, Optional, Tuple
 import multiprocessing
-from typing import Optional
 import os
+import tempfile
+from typing import Callable, Tuple, Optional
+
+import anisocado
+import numpy as np
+import scopesim
 
 from config import Config
+
 config = Config.instance()
 
 # globals
@@ -17,6 +18,7 @@ filter_name = 'MICADO/filters/TC_filter_K-cont.dat'
 
 # generators should be able to run in parallel but scopesim tends to lock up on the initialization
 scopesim_lock = multiprocessing.Lock()
+
 
 @np.vectorize
 def to_pixel_scale(pos):
@@ -33,9 +35,9 @@ def to_pixel_scale(pos):
 def pixel_to_uas(pixel):
     import astropy.units as u
     if not isinstance(pixel, u.Quantity):
-        pixel = pixel*u.pixel
+        pixel = pixel * u.pixel
 
-    return (pixel * 4*u.milliarcsecond/u.pixel).to(u.microarcsecond)
+    return (pixel * 4 * u.milliarcsecond / u.pixel).to(u.microarcsecond)
 
 
 # noinspection PyPep8Naming
@@ -97,8 +99,8 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None) ->
     micado.optics_manager.add_effect(psf_effect, ext=element_idx)
 
     # disable old psf
-    # TODO - why is there no remove_effect with a similar interface? Why do I need to go through a dictionary attached to
-    # TODO   a different class?
+    # TODO - why is there no remove_effect with a similar interface?
+    #  Why do I need to go through a dictionary attached to a different class?
     # TODO - would be nice if Effect Objects where frozen, e.g. with the dataclass decorator. Used ".included" first and
     # TODO   was annoyed that it wasn't working...
     micado['relay_psf'].include = False

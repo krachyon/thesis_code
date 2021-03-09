@@ -1,23 +1,19 @@
+import multiprocessing
+from collections import defaultdict
+from os.path import exists, join
+from typing import Callable, Tuple, Union
+
+import anisocado
 import numpy as np
-
 import scopesim_templates
-
+from astropy.convolution import AiryDisk2DKernel, Gaussian2DKernel, Kernel2D, convolve_fft
 from astropy.io import fits
 from astropy.io.fits import PrimaryHDU
-from astropy.table import Table
 from astropy.modeling.functional_models import Gaussian2D
-
-from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale, make_psf
-from astropy.convolution import AiryDisk2DKernel, Gaussian2DKernel, Kernel2D, convolve_fft
-
-from os.path import exists, join
+from astropy.table import Table
 
 from config import Config
-from typing import Callable, Tuple, Union, Optional
-
-import multiprocessing
-import anisocado
-from collections import defaultdict, namedtuple
+from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale, make_psf
 
 # all generators defined here should return a source table with the following columns
 # x,y are in pixel scale
@@ -29,8 +25,8 @@ def scopesim_grid(N1d: int = 16,
                   seed: int = 1000,
                   border=64,
                   perturbation: float = 0.,
-                  magnitude = lambda N: N*[18],
-                  psf_transform=lambda x:x) \
+                  magnitude=lambda N: N * [18],
+                  psf_transform=lambda x: x) \
         -> Tuple[np.ndarray, Table]:
     """
     Use scopesim to create a regular grid of stars
@@ -42,13 +38,13 @@ def scopesim_grid(N1d: int = 16,
     """
     np.random.seed(seed)
 
-    N = N1d**2
+    N = N1d ** 2
     spectral_types = ['A0V'] * N
 
-    y = (np.tile(np.linspace(border, pixel_count-border, N1d), reps=(N1d, 1)) - pixel_count/2) * pixel_scale
+    y = (np.tile(np.linspace(border, pixel_count - border, N1d), reps=(N1d, 1)) - pixel_count / 2) * pixel_scale
     x = y.T
-    x += np.random.uniform(0, perturbation*pixel_scale, x.shape)
-    y += np.random.uniform(0, perturbation*pixel_scale, y.shape)
+    x += np.random.uniform(0, perturbation * pixel_scale, x.shape)
+    y += np.random.uniform(0, perturbation * pixel_scale, y.shape)
 
     m = np.array(magnitude(N))
 
@@ -77,7 +73,6 @@ def gaussian_cluster(N: int = 1000, seed: int = 9999, psf_transform=lambda x: x)
     """
     # TODO could use more parameters e.g for magnitudes
     np.random.seed(seed)
-    N = 1000
     x = np.random.normal(0, 1, N)
     y = np.random.normal(0, 1, N)
     m = np.random.normal(21, 2, N)
@@ -101,9 +96,9 @@ def gaussian_cluster(N: int = 1000, seed: int = 9999, psf_transform=lambda x: x)
     spectral_types = ['A0V'] * Nprime
 
     source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
-                                                amplitudes=m,
-                                                spec_types=spectral_types,
-                                                x=x, y=y)
+                                                  amplitudes=m,
+                                                  spec_types=spectral_types,
+                                                  x=x, y=y)
 
     detector = setup_optical_train(make_psf(transform=psf_transform))
 
@@ -157,9 +152,9 @@ def convolved_grid(N1d: int = 16,
     np.random.seed(seed)
 
     size = 1024
-    data = np.zeros((size,  size))
+    data = np.zeros((size, size))
 
-    idx_float = np.linspace(0+border, size-border, N1d)
+    idx_float = np.linspace(0 + border, size - border, N1d)
     x_float = np.tile(idx_float, reps=(N1d, 1))
     y_float = x_float.T
     x_float += np.random.uniform(0, perturbation, x_float.shape)
@@ -168,21 +163,24 @@ def convolved_grid(N1d: int = 16,
     x, x_frac = np.divmod(x_float, 1)
     y, y_frac = np.divmod(y_float, 1)
     x, y = x.astype(int), y.astype(int)
-    data[x, y]     = (1-x_frac) * (1-y_frac)
-    data[x+1, y]   = (x_frac)   * (1-y_frac)
-    data[x, y+1]   = (1-x_frac) * (y_frac)
-    data[x+1, y+1] = y_frac     * x_frac
+    # Y U so ugly sometimes PEP8?
+    data[x, y] = (1 - x_frac) * (1 - y_frac)
+    # noinspection PyRedundantParentheses
+    data[x + 1, y] = (x_frac) * (1 - y_frac)
+    # noinspection PyRedundantParentheses
+    data[x, y + 1] = (1 - x_frac) * (y_frac)
+    data[x + 1, y + 1] = y_frac * x_frac
 
     if kernel is not None:
-        # type: ignore
+        # noinspection PyTypeChecker
         data = convolve_fft(data, kernel)
-    data = data/np.max(data) + 0.001  # normalize and add tiny offset to have no zeros in data
+    data = data / np.max(data) + 0.001  # normalize and add tiny offset to have no zeros in data
 
     table = Table((x_float.ravel(), y_float.ravel(), np.ones(x.size)), names=names)
     return data, table
 
 
-def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count = pixel_count):
+def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=pixel_count):
     """
     Get a convolvable Kernel from anisocado to approximate field constant MICADO PSF
     :param shift: how far away from center are we?
@@ -190,7 +188,7 @@ def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count = pixel_co
     :param pixel_count: How large the side lenght of the image should be
     :return: Convolution kernel
     """
-    count = pixel_count + 1 if pixel_count%2==0 else pixel_count
+    count = pixel_count + 1 if pixel_count % 2 == 0 else pixel_count
     hdus = anisocado.misc.make_simcado_psf_file(
         [shift], [wavelength], pixelSize=0.004, N=count)
     image = hdus[2]
@@ -230,7 +228,7 @@ def scopesim_groups(N1d: int = 16,
                     seed: int = 1000,
                     border=64,
                     jitter=0.,
-                    magnitude=lambda N: N*[18],
+                    magnitude=lambda N: N * [18],
                     group_size=2,
                     group_radius=5,
                     psf_transform=lambda x: x) \
@@ -240,23 +238,23 @@ def scopesim_groups(N1d: int = 16,
     N = N1d ** 2
     spectral_types = ['A0V'] * N * group_size
 
-    x_center, y_center = (np.mgrid[border:pixel_count-border:N1d*1j,
-                    border:pixel_count-border:N1d*1j] - pixel_count/2) * pixel_scale
+    x_center, y_center = (np.mgrid[border:pixel_count - border:N1d * 1j,
+                          border:pixel_count - border:N1d * 1j] - pixel_count / 2) * pixel_scale
 
     x, y = [], []
 
-    θ = np.linspace(0, 2*np.pi, group_size, endpoint=False)
+    θ = np.linspace(0, 2 * np.pi, group_size, endpoint=False)
 
     for x_c, y_c in zip(x_center.ravel(), y_center.ravel()):
         θ_perturbed = θ + np.random.uniform(0, 2 * np.pi)
-        x_angle_offset = np.cos(θ_perturbed)*group_radius
-        y_angle_offset = np.sin(θ_perturbed)*group_radius
-        x_jitter = np.random.uniform(-jitter/2, jitter/2, len(θ))
-        y_jitter = np.random.uniform(-jitter/2, jitter/2, len(θ))
-        x += list(x_c + (x_angle_offset + x_jitter)*pixel_scale)
-        y += list(y_c + (y_angle_offset + y_jitter)*pixel_scale)
+        x_angle_offset = np.cos(θ_perturbed) * group_radius
+        y_angle_offset = np.sin(θ_perturbed) * group_radius
+        x_jitter = np.random.uniform(-jitter / 2, jitter / 2, len(θ))
+        y_jitter = np.random.uniform(-jitter / 2, jitter / 2, len(θ))
+        x += list(x_c + (x_angle_offset + x_jitter) * pixel_scale)
+        y += list(y_c + (y_angle_offset + y_jitter) * pixel_scale)
 
-    m = np.array(magnitude(N*group_size))
+    m = np.array(magnitude(N * group_size))
 
     source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
                                                   amplitudes=m,
@@ -275,7 +273,8 @@ def lowpass(std=5):
     def transform(data):
         x, y = data.shape
         # psf array is offset by one, hence need the -1 after coordinates
-        return data*Gaussian2D(x_stddev=std, y_stddev=std)(*np.mgrid[-x/2:x/2:x*1j, -y/2:y/2:y*1j]-1)
+        return data * Gaussian2D(x_stddev=std, y_stddev=std)(*np.mgrid[-x / 2:x / 2:x * 1j, -y / 2:y / 2:y * 1j] - 1)
+
     return transform
 
 
@@ -361,7 +360,7 @@ misc_images = {
         lambda: scopesim_grid(N1d=16, perturbation=0.),
     'scopesim_grid_16_perturb2':
         lambda: scopesim_grid(N1d=16, perturbation=2.),
-          }
+}
 
 lowpass_images = {
     'scopesim_grid_16_perturb2_low':

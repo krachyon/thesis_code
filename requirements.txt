@@ -6,6 +6,7 @@ git+git://github.com/krachyon/photutils.git#egg=photutils
 scipy>=1.6.1
 scopesim>=0.1.0
 scopesim_templates
+image_registration
 
 pytest>=6.2.2
 pyckles>=0.1.3

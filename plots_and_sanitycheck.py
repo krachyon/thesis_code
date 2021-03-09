@@ -1,20 +1,21 @@
-import numpy as np
-import photutils
-from astropy.table import Table
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from typing import Optional
-from config import Config
-from util import match_observation_to_source
 import pickle
+from typing import Optional
+
 import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from astropy.table import Table
+from matplotlib.colors import LogNorm
+
+import photutils
 from util import flux_to_magnitude
+from util import match_observation_to_source
 
 
 def save(filename_base: str, figure: matplotlib.pyplot.figure):
     """Save a matplotlib figure as png and a pickle it to a mlpf file"""
-    figure.savefig(filename_base+'.png')
-    with open(filename_base+'.mplf', 'wb') as outfile:
+    figure.savefig(filename_base + '.png')
+    with open(filename_base + '.mplf', 'wb') as outfile:
         pickle.dump(figure, outfile)
 
 
@@ -27,19 +28,19 @@ def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
     assert len(set(star.shape for star in stars)) == 1  # all stars need same shape
     N = int(np.ceil(np.sqrt(len(stars))))
     shape = stars[0].shape
-    out = np.zeros(np.array(shape, dtype=int)*N)
+    out = np.zeros(np.array(shape, dtype=int) * N)
 
     from itertools import product
 
     for row, col in product(range(N), range(N)):
-        if (row+N*col) >= len(stars):
+        if (row + N * col) >= len(stars):
             continue
-        xstart = row*shape[0]
-        ystart = col*shape[1]
+        xstart = row * shape[0]
+        ystart = col * shape[1]
 
         xend = xstart + shape[0]
         yend = ystart + shape[1]
-        i = row+N*col
+        i = row + N * col
         out[xstart:xend, ystart:yend] = stars[i].data
     return out
 
@@ -85,11 +86,11 @@ def plot_input_vs_photometry_positions(input_table: Table, result_table: Table,
     plt.title('offset between measured and input')
     plt.xlabel('x offsets [pixel]')
     plt.ylabel('y offsets [pixel]')
-    xs = offsets['x_fit']-offsets['x_orig']
-    ys = offsets['y_fit']-offsets['y_orig']
+    xs = offsets['x_fit'] - offsets['x_orig']
+    ys = offsets['y_fit'] - offsets['y_orig']
     plt.plot(xs, ys, '.', markersize=2, markeredgecolor='orange')
     text = f'$σ_x={np.std(xs):.3f}$\n$σ_y={np.std(ys):.3f}$'
-    plt.annotate(text, xy=(0, 0.7),  xycoords='axes fraction')
+    plt.annotate(text, xy=(0, 0.7), xycoords='axes fraction')
 
     if output_path:
         save(output_path, plt.gcf())
@@ -109,7 +110,7 @@ def plot_deviation_vs_magnitude(input_table: Table, result_table: Table,
     plt.figure()
 
     offsets = match_observation_to_source(input_table, result_table)
-    dists = np.sqrt((offsets['x_fit']-offsets['x_orig'])**2 + (offsets['y_fit']-offsets['y_orig'])**2)
+    dists = np.sqrt((offsets['x_fit'] - offsets['x_orig']) ** 2 + (offsets['y_fit'] - offsets['y_orig']) ** 2)
     magnitudes = flux_to_magnitude(offsets['flux_fit'])
 
     plt.title('Photometry Offset as function of magnitude')

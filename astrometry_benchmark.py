@@ -1,30 +1,25 @@
+import os
 import pickle
 from typing import Union, Callable, Tuple
-import numpy as np
-import itertools
-from astropy.table import Table
-from testdata_generators import read_or_generate_image, read_or_generate_helper
-import testdata_generators
 
-from config import Config
-
-from photometry import run_photometry, PhotometryResult, cheating_astrometry
-
-from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
-    save, concat_star_images, plot_deviation_vs_magnitude
-
-from scopesim_helper import download
-import os
 import matplotlib.pyplot as plt
 import multiprocess as mp  # not multiprocessing, this can pickle lambdas
-import util
+import numpy as np
+from astropy.table import Table
 
-from itertools import starmap
+import testdata_generators
+import util
+from config import Config
+from photometry import run_photometry, PhotometryResult, cheating_astrometry
+from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
+    save, concat_star_images, plot_deviation_vs_magnitude
+from scopesim_helper import download
+from testdata_generators import read_or_generate_image, read_or_generate_helper
 
 
 def run_plots(photometry_result: PhotometryResult):
     image, input_table, result_table, epsf, star_guesses, config, filename = photometry_result
-    
+
     plot_filename = os.path.join(config.output_folder, filename + '_photometry_vs_sources')
     plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
 
@@ -65,7 +60,6 @@ def cheating_astrometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, 
                                    image_name: str,
                                    psf: np.ndarray,
                                    config=Config.instance()) -> Union[PhotometryResult, str]:
-
     image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
     result = cheating_astrometry(image, input_table, psf, image_name, config)
     run_plots(result)
@@ -107,7 +101,7 @@ if __name__ == '__main__':
         testdata_generators.helpers['anisocado_psf'], 'anisocado_psf', normal_config.image_folder)
     # TODO why is the generated psf not centered?
     psf = util.center_cutout_shift_1(psf, (101, 101))
-    psf = psf/psf.max()
+    psf = psf / psf.max()
 
     cheating_test_images = ['scopesim_grid_16_perturb0', 'scopesim_grid_16_perturb2',
                             'gauss_grid_16_sigma5_perturb_2', 'anisocado_grid_16_perturb_2',

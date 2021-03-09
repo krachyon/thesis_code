@@ -1,14 +1,18 @@
 # Global values and names
 import dataclasses
-import matplotlib.pyplot as plt
-from photutils.psf import EPSFModel
 from typing import Optional
+
+import matplotlib.pyplot as plt
+
+from photutils.psf import EPSFModel
+
 
 class ClassRepr(type):
     """
     Use this as a metaclass to make a class (and not just an instance of it) print its contents.
     Kinda hacky and doesn't really consider edge-cases
     """
+
     def __new__(mcs, *args, **kwargs):
         return super().__new__(mcs, *args, **kwargs)
 
@@ -40,10 +44,10 @@ class Config(metaclass=ClassRepr):
     output_folder: str = 'output_files'
 
     # magic parameters for Starfinder
-    clip_sigma: float = 3.0             # sigma_clipping to apply for star guessing
-    threshold_factor: float = 3.        # how many stds brighter than image for star to be detected?
-    fwhm_guess: float = 2.5             # estimate of PSF fwhm
-    separation_factor: float = 1.       # How far do stars need to be apart to be considered?
+    clip_sigma: float = 3.0  # sigma_clipping to apply for star guessing
+    threshold_factor: float = 3.  # how many stds brighter than image for star to be detected?
+    fwhm_guess: float = 2.5  # estimate of PSF fwhm
+    separation_factor: float = 1.  # How far do stars need to be apart to be considered?
 
     # magic parameters for EPSFBuilder
     stars_to_keep: int = 200

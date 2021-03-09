@@ -1,32 +1,29 @@
-from typing import Tuple, Union, Type
-
+from typing import Tuple, Union, Optional
+from collections import namedtuple
 import numpy as np
-import photutils
+
+import astropy
 from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.nddata import NDData
 from astropy.stats import sigma_clipped_stats, gaussian_sigma_to_fwhm
 from astropy.table import Table
 from image_registration.fft_tools import upsample_image
+
+import photutils
 from photutils import EPSFBuilder
 from photutils.background import MMMBackground, MADStdBackgroundRMS
 from photutils.detection import IRAFStarFinder, DAOStarFinder
-from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, IntegratedGaussianPRF,\
+from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, IntegratedGaussianPRF, \
     IterativelySubtractedPSFPhotometry
-
-import astropy
+from photutils.psf import EPSFModel
 
 from config import Config
 config = Config.instance()
 
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from photutils.psf import EPSFModel
-from typing import Optional
-
-from collections import namedtuple
 
 PhotometryResult = namedtuple('PhotometryResult',
                               ('image', 'input_table', 'result_table', 'epsf', 'star_guesses', 'config', 'image_name'))
+
 
 def do_photometry_basic(image: np.ndarray, σ_psf: float) -> Tuple[Table, np.ndarray]:
     """
@@ -90,7 +87,7 @@ def cut_edges(peak_table: Table, cutout_size: int, image_size: int) -> Table:
 def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
     """
     Use a 2D symmetric gaussian fit to estimate the FWHM of an empirical psf
-    :param model: EPSFModel instance that was derived
+    :param psf: psfmodel to estimate
     :return: FWHM in pixel coordinates, takes into account oversampling parameter of EPSF
     """
     from astropy.modeling import fitting
@@ -139,7 +136,8 @@ def make_stars_guess(image: np.ndarray,
     return stars
 
 
-def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = config.oversampling) -> photutils.psf.EPSFModel:
+def make_epsf_combine(stars: photutils.psf.EPSFStars,
+                      oversampling: int = config.oversampling) -> photutils.psf.EPSFModel:
     """
     Alternative way of deriving an EPSF. Use median after resampling/scaling to just overlay images
     :param stars: candidate stars as EPSFStars
@@ -155,19 +153,18 @@ def make_epsf_combine(stars: photutils.psf.EPSFStars, oversampling: int = config
 
     # upsample_image should scale and shift/resample an image with a FFT, aligning the cutouts more precisely
     combined = np.median([upsample_image(star.data, upsample_factor=oversampling,
-                                                xshift=star.cutout_center[0] - avg_center[0],
-                                                yshift=star.cutout_center[1] - avg_center[1]
-                                                ).real
-                                 for star in stars], axis=0)
+                                         xshift=star.cutout_center[0] - avg_center[0],
+                                         yshift=star.cutout_center[1] - avg_center[1]
+                                         ).real
+                          for star in stars], axis=0)
 
-    origin = np.array(combined.shape)/2/oversampling
+    origin = np.array(combined.shape) / 2 / oversampling
     # TODO What we return here needs to actually use the image in it's __call__ operator to work as a model
     # type: ignore
     return photutils.psf.EPSFModel(combined, flux=None,
                                    origin=origin,
                                    oversampling=oversampling,
                                    normalize=False)
-
 
 
 def make_epsf_fit(stars: photutils.psf.EPSFStars,
@@ -206,7 +203,6 @@ def do_photometry_epsf(image: np.ndarray,
     :return: Table with results
     """
 
-    threshold_factor = config.threshold_factor
     separation_factor = config.separation_factor
     clip_sigma = config.clip_sigma
     photometry_iterations = config.photometry_iterations
@@ -226,9 +222,9 @@ def do_photometry_epsf(image: np.ndarray,
     _, img_median, img_stddev = sigma_clipped_stats(image, sigma=clip_sigma)
     fwhm_guess = FWHM_estimate(epsf.psfmodel)
 
-    grouper = DAOGroup(separation_factor*fwhm_guess)
+    grouper = DAOGroup(separation_factor * fwhm_guess)
 
-    shape = (epsf.psfmodel.shape/epsf.psfmodel.oversampling).astype(np.int64)
+    shape = (epsf.psfmodel.shape / epsf.psfmodel.oversampling).astype(np.int64)
 
     epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
     epsf.fwhm.value = fwhm_guess
@@ -249,6 +245,8 @@ def do_photometry_epsf(image: np.ndarray,
 def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?', config: Config = Config.instance()):
     """
     Evaluate the maximum achievable precision of the EPSF fitting approach by using a hand-defined psf
+    :param input_table:
+    :param image:
     :param filename:
     :param psf:
     :param config:
@@ -256,7 +254,7 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
     """
     try:
         print(f'starting job on image {filename} with {config}')
-        origin = np.array(psf.shape)/2
+        origin = np.array(psf.shape) / 2
         # type: ignore
         epsf = photutils.psf.EPSFModel(psf, flux=1, origin=origin, oversampling=1, normalize=False)
         epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
@@ -268,14 +266,13 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
 
         finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
 
-        grouper = DAOGroup(config.separation_factor*fwhm)
+        grouper = DAOGroup(config.separation_factor * fwhm)
 
-        shape = (epsf.psfmodel.shape/epsf.psfmodel.oversampling).astype(np.int64)
+        shape = (epsf.psfmodel.shape / epsf.psfmodel.oversampling).astype(np.int64)
 
         epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
         epsf.fwhm.value = fwhm
         bkgrms = MADStdBackgroundRMS()
-
 
         photometry = BasicPSFPhotometry(
             finder=finder,
@@ -309,6 +306,8 @@ def run_photometry(image, input_table, filename='?', config=Config.instance()) -
     """
     apply EPSF fitting photometry to a testimage
 
+    :param input_table:
+    :param image:
     :param filename:
     :param config: instance of Config containing all processing parameters
     :return: PhotometryResult, (image, input_table, result_table, epsf, star_guesses)
