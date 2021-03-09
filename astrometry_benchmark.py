@@ -1,9 +1,9 @@
 import pickle
-from typing import Union
-
+from typing import Union, Callable, Tuple
+import numpy as np
 import itertools
-
-from testdata_generators import read_or_generate_image, gaussian_cluster, read_or_generate_helper
+from astropy.table import Table
+from testdata_generators import read_or_generate_image, read_or_generate_helper
 import testdata_generators
 
 from config import Config
@@ -16,7 +16,7 @@ from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_inpu
 from scopesim_helper import download
 import os
 import matplotlib.pyplot as plt
-import multiprocessing as mp
+import multiprocess as mp  # not multiprocessing, this can pickle lambdas
 import util
 
 from itertools import starmap
@@ -45,30 +45,35 @@ def run_plots(photometry_result: PhotometryResult):
     plt.close('all')
 
 
-def photometry_with_plots(filename='gauss_cluster_N1000', config=Config.instance()) -> Union[PhotometryResult, str]:
+def photometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, Table]],
+                          image_name: str,
+                          config=Config.instance()) -> Union[PhotometryResult, str]:
     """
     apply EPSF fitting photometry to a testimage
-
-    :param filename: must be found in testdata_generators.images
+    :param image_recipe: function to generate test image
+    :param image_name: name to cache image and print status/errors
     :param config: instance of Config containing all processing parameters
-    :return: PhotometryResult, (image, input_table, result_table, epsf, star_guesses)
+    :return: PhotometryResult
     """
-    image, input_table = read_or_generate_image(filename, config)
-    result = run_photometry(image, input_table, filename, config)
+    image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
+    result = run_photometry(image, input_table, image_name, config)
     run_plots(result)
     return result
 
 
-def cheating_astrometry_with_plots(filename, psf, config):
-    image, input_table = read_or_generate_image(filename, config)
-    result = cheating_astrometry(image, input_table, psf, config)
+def cheating_astrometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, Table]],
+                                   image_name: str,
+                                   psf: np.ndarray,
+                                   config=Config.instance()) -> Union[PhotometryResult, str]:
+
+    image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
+    result = cheating_astrometry(image, input_table, psf, image_name, config)
     run_plots(result)
     return result
 
 
 if __name__ == '__main__':
     download()
-    test_images = testdata_generators.normal_images.keys()
     normal_config = Config.instance()
 
     gauss_config = Config()
@@ -98,7 +103,8 @@ if __name__ == '__main__':
             os.mkdir(config.output_folder)
 
     # throw away border pixels to make psf fit into original image
-    psf = read_or_generate_helper('anisocado_psf', cheating_config)
+    psf = read_or_generate_helper(
+        testdata_generators.helpers['anisocado_psf'], 'anisocado_psf', normal_config.image_folder)
     # TODO why is the generated psf not centered?
     psf = util.center_cutout_shift_1(psf, (101, 101))
     psf = psf/psf.max()
@@ -107,13 +113,19 @@ if __name__ == '__main__':
                             'gauss_grid_16_sigma5_perturb_2', 'anisocado_grid_16_perturb_2',
                             'gauss_cluster_N1000']
 
-    args = itertools.product(test_images, [normal_config, gauss_config, init_guess_config])
-    cheat_args = itertools.product(cheating_test_images, [psf], [cheating_config])
-    lowpass_args = itertools.product(testdata_generators.lowpass_images.keys(), [lowpass_config])
+    misc_args = [(recipe, name, c)
+                 for name, recipe in testdata_generators.misc_images.items()
+                 for c in (normal_config, gauss_config, init_guess_config)]
+    cheat_args = [(testdata_generators.misc_images[name], name, psf, cheating_config)
+                  for name in cheating_test_images]
+    lowpass_args = [(recipe, name, c)
+                    for name, recipe in testdata_generators.lowpass_images.items()
+                    for c in (lowpass_config,)]
 
+    # Honestly you'll have to change this yourself for your machine. Too much and you won't have enough memory
     with mp.Pool(10) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
-        future1 = pool.starmap_async(photometry_with_plots, args)
+        future1 = pool.starmap_async(photometry_with_plots, misc_args)
         future2 = pool.starmap_async(cheating_astrometry_with_plots, cheat_args)
         future3 = pool.starmap_async(photometry_with_plots, lowpass_args)
         results = list(future1.get()) + list(future2.get()) + list(future3.get())

@@ -309,7 +309,7 @@ def run_photometry(image, input_table, filename='?', config=Config.instance()) -
     """
     apply EPSF fitting photometry to a testimage
 
-    :param filename: must be found in testdata_generators.images
+    :param filename:
     :param config: instance of Config containing all processing parameters
     :return: PhotometryResult, (image, input_table, result_table, epsf, star_guesses)
     """

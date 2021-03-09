@@ -13,11 +13,11 @@ from astropy.convolution import AiryDisk2DKernel, Gaussian2DKernel, Kernel2D, co
 from os.path import exists, join
 
 from config import Config
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, Optional
 
 import multiprocessing
 import anisocado
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 # all generators defined here should return a source table with the following columns
 # x,y are in pixel scale
@@ -279,12 +279,59 @@ def lowpass(std=5):
     return transform
 
 
-# TODO I no longer like this at this size and it should not be defined here
-#  replace with memoization and automatic parameter->name function
-kernel_size = 201  # this should be enough
-# name : generator Callable[[], Tuple[np.ndarray, Table]]
+# make sure concurrent calls with the same filename don't tread on each other's toes.
+# only generate/write file once
+filename_locks = defaultdict(lambda: multiprocessing.Lock())
 
-normal_images = {
+
+def read_or_generate_image(recipe: Callable[[], Tuple[np.ndarray, Table]],
+                           filename_base: str,
+                           directory: str = Config.instance().image_folder):
+    """
+    For the 'recipe' either generate and write the image+catalogue or read existing output from disk
+    :param directory: where to put/read data
+    :param filename_base: what the files are called, minus extension
+    :param recipe: function generating your image and catalogue
+    :return: image, input_catalogue
+    """
+    image_name = join(directory, filename_base + '.fits')
+    table_name = join(directory, filename_base + '.dat')
+    with filename_locks[filename_base]:
+        if exists(image_name) and exists(table_name):
+            img = fits.open(image_name)[0].data
+            table = Table.read(table_name, format='ascii.ecsv')
+        else:
+            img, table = recipe()
+            PrimaryHDU(img).writeto(image_name, overwrite=True)
+            table.write(table_name, format='ascii.ecsv')
+
+    return img, table
+
+
+def read_or_generate_helper(recipe: Callable[[], Tuple[np.ndarray, Table]],
+                            filename_base: str,
+                            directory: str = Config.instance().image_folder):
+    """
+    For the 'recipe' either generate and write the image+catalogue or read existing output from disk
+    :param directory: where to put/read data
+    :param filename_base: what the files are called, minus extension
+    :param recipe: function generating your image and catalogue
+    :return: image, input_catalogue
+    """
+    image_name = join(directory, filename_base + '.fits')
+    with filename_locks[filename_base]:
+        if exists(image_name):
+            img = fits.open(image_name)[0].data
+        else:
+            img = recipe()
+            PrimaryHDU(img).writeto(image_name, overwrite=True)
+
+    return img
+
+
+# predefined recipes
+kernel_size = 201  # should be enough for getting reasonable results
+misc_images = {
     'gauss_cluster_N1000': lambda: gaussian_cluster(N=1000),
     'gauss_cluster_N1000_low': lambda: gaussian_cluster(N=1000, psf_transform=lowpass()),
     'scopesim_cluster': lambda: scopesim_cluster(),
@@ -335,7 +382,6 @@ lowpass_images = {
         lambda: scopesim_groups(N1d=16, jitter=2., psf_transform=lowpass(), magnitude=lambda N: N * [20],
                                 group_radius=10, group_size=5)
 }
-images = normal_images | lowpass_images
 
 helpers = {
     'anisocado_psf':
@@ -343,62 +389,3 @@ helpers = {
     'single_star_image':
         lambda: make_single_star_image()
 }
-
-# make sure concurrent calls with the same filename don't tread on each other's toes.
-# only generate/write file once
-filename_locks = defaultdict(lambda: multiprocessing.Lock())
-
-
-def read_or_generate_helper(filename: str, config=Config.instance()):
-    try:
-        generator = helpers[filename]
-    except KeyError:
-        print(f'No generator for {filename} defined')
-        raise
-
-    image_name = join(config.image_folder, filename + '.fits')
-    with filename_locks[filename]:
-        if exists(image_name):
-            img = fits.open(image_name)[0].data
-        else:
-            img = generator()
-            PrimaryHDU(img).writeto(image_name, overwrite=True)
-
-    return img
-
-
-def read_or_generate_image(filename: str, config=Config.instance()):
-    """
-    For the 'recipes' defined in the 'images' dictionary either generate and write the image/catalogue
-    or read existing image/catalogue from disk
-    :param filename: where to write/read the image from/to
-    :param config: Configuration object
-    :return: image, input_catalogue
-    """
-    try:
-        generator = images[filename]
-    except KeyError:
-        print(f'No generator for {filename} defined')
-        raise
-    image_name = join(config.image_folder, filename + '.fits')
-    table_name = join(config.image_folder, filename + '.dat')
-
-    with filename_locks[filename]:
-        if exists(image_name) and exists(table_name):
-            img = fits.open(image_name)[0].data
-            table = Table.read(table_name, format='ascii.ecsv')
-        else:
-            img, table = generator()
-            PrimaryHDU(img).writeto(image_name, overwrite=True)
-            table.write(table_name, format='ascii.ecsv')
-
-        return img, table
-
-
-# TODO how to account for e.g. Gaussian2D as parameter? will look mucho ugly and not be unique due to memory address
-def read_or_generate_future(function: Callable[..., Tuple[np.ndarray, Table]], config=Config.instance(), **kwargs):
-    base_name = '_'.join([f'{str(item[0])}={str(item[1])}' for item in kwargs.items()])
-    image_name = join(config.image_folder, base_name + '.fits')
-    table_name = join(config.image_folder, base_name + '.dat')
-
-    function(**kwargs)
