@@ -128,6 +128,7 @@ def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
     table = source.fields[0]
     table['x'] = to_pixel_scale(table['x']).ravel()
     table['y'] = to_pixel_scale(table['y']).ravel()
+    table['m'] = table['weight']  # TODO these don't really correspond, do they?
 
     return observed_image, table
 

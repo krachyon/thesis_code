@@ -165,8 +165,20 @@ lowpass_config.photometry_iterations = 1  # with known positions we know all sta
 if not os.path.exists(lowpass_config.output_folder):
     os.mkdir(lowpass_config.output_folder)
 
-lowpass_args = itertools.product(testdata_generators.lowpass_images.keys(), [lowpass_config])
-import multiprocessing as mp
 
-with mp.Pool() as p:
-    res = list(p.starmap(photometry_with_plots, lowpass_args))
+def recipe_template(seed):
+    return lambda: scopesim_grid(seed=seed, N1d=30, perturbation=2., psf_transform=lowpass(),
+                                 magnitude=lambda N: np.random.uniform(18, 24, N))
+
+
+#image, input_table = read_or_generate_image(lowpass_images['scopesim_grid_30_perturb2_low_mag18-24'], 'scopesim_grid_30_perturb2_low_mag18-24', lowpass_config.image_folder)
+#result = run_photometry(image, input_table, 'scopesim_grid_30_perturb2_low_mag18-24', lowpass_config)
+#with open('tmpRes.pck','wb')as f:
+#    pickle.dump(result,f)
+
+with open('tmpRes.pck', 'rb')as f:
+    result: PhotometryResult = pickle.load(f)
+matched_table = match_observation_to_source(result.input_table, result.result_table)
+plot_deviation_vs_magnitude(matched_table)
+#res = photometry_multi(recipe_template, 'mag18-24_grid', n=6, config=lowpass_config)
+

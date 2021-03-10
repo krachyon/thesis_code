@@ -1,18 +1,19 @@
 import os
 import pickle
-from typing import Union, Callable, Tuple
+from typing import Union, Callable, Tuple, Optional
 
 import matplotlib.pyplot as plt
 import multiprocess as mp  # not multiprocessing, this can pickle lambdas
 import numpy as np
 from astropy.table import Table
+import astropy.table
 
 import testdata_generators
 import util
 from config import Config
 from photometry import run_photometry, PhotometryResult, cheating_astrometry
 from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
-    save, concat_star_images, plot_deviation_vs_magnitude
+    save, concat_star_images, plot_deviation_vs_magnitude, plot_deviation_histograms
 from scopesim_helper import download
 from testdata_generators import read_or_generate_image, read_or_generate_helper
 
@@ -23,11 +24,13 @@ def run_plots(photometry_result: PhotometryResult):
     plot_filename = os.path.join(config.output_folder, filename + '_photometry_vs_sources')
     plot_image_with_source_and_measured(image, input_table, result_table, output_path=plot_filename)
 
+    offsets = util.match_observation_to_source(input_table, result_table)
+
     if len(result_table) != 0:
         plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
-        plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+        plot_input_vs_photometry_positions(offsets, output_path=plot_filename)
         plot_filename = os.path.join(config.output_folder, filename + '_magnitude_v_offset')
-        plot_deviation_vs_magnitude(input_table, result_table, output_path=plot_filename)
+        plot_deviation_vs_magnitude(offsets, output_path=plot_filename)
     else:
         print(f"No sources found for {filename} with {config}")
 
@@ -54,6 +57,46 @@ def photometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, Table]],
     result = run_photometry(image, input_table, image_name, config)
     run_plots(result)
     return result
+
+
+def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
+                     image_name_template: str,
+                     n: int,
+                     config=Config.instance(),
+                     pool: Optional[mp.Pool]=None) -> Table:
+    """
+    apply EPSF fitting photometry to a testimage
+    :param image_recipe: function to generate test image
+    :param image_name: name to cache image and print status/errors
+    :param config: instance of Config containing all processing parameters
+    :return: table with results and matched input catalogue
+    """
+
+    def inner(i):
+        image_recipe = image_recipe_template(i)
+        image_name = image_name_template+f'_{i}'
+        image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
+        result = run_photometry(image, input_table, image_name, config)
+        return util.match_observation_to_source(input_table, result.result_table)
+
+    if pool:
+        partial_results = pool.map(inner, range(n))
+    else:
+        partial_results = map(inner, range(n))
+
+    matched_result = astropy.table.vstack(partial_results)
+
+    plot_filename = os.path.join(config.output_folder, image_name_template + '_measurement_offset')
+    plot_input_vs_photometry_positions(matched_result, output_path=plot_filename)
+    plot_filename = os.path.join(config.output_folder, image_name_template + '_magnitude_v_offset')
+    plot_deviation_vs_magnitude(matched_result, output_path=plot_filename)
+
+    plot_filename = os.path.join(config.output_folder, image_name_template + '_histogram')
+    plot_deviation_histograms(matched_result, output_path=plot_filename)
+    plt.close('all')
+    return matched_result
+
+
 
 
 def cheating_astrometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, Table]],
@@ -116,13 +159,23 @@ if __name__ == '__main__':
                     for name, recipe in testdata_generators.lowpass_images.items()
                     for c in (lowpass_config,)]
 
+    def recipe_template(seed):
+        return lambda: testdata_generators.scopesim_grid(seed=seed, N1d=30, perturbation=2.,
+                                                         psf_transform=testdata_generators.lowpass(),
+                                                         magnitude=lambda N: np.random.uniform(18, 24, N))
+
     # Honestly you'll have to change this yourself for your machine. Too much and you won't have enough memory
     with mp.Pool(10) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
-        future1 = pool.starmap_async(photometry_with_plots, misc_args)
-        future2 = pool.starmap_async(cheating_astrometry_with_plots, cheat_args)
-        future3 = pool.starmap_async(photometry_with_plots, lowpass_args)
-        results = list(future1.get()) + list(future2.get()) + list(future3.get())
+        futures = []
+        results = []
+
+        results += photometry_multi(recipe_template, 'mag18-24_grid', n=10, config=lowpass_config, pool=pool)
+        futures.append(pool.starmap_async(photometry_with_plots, misc_args))
+        futures.append(pool.starmap_async(cheating_astrometry_with_plots, cheat_args))
+        futures.append(pool.starmap_async(photometry_with_plots, lowpass_args))
+        for future in futures:
+            results += future.get()
 
     # this is not going to scale very well
     with open('all_photometry_results.pickle', 'wb') as f:

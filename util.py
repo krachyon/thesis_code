@@ -73,6 +73,8 @@ def write_ds9_regionfile(x_y_data: np.ndarray, filename: str) -> None:
 
 def match_observation_to_source(reference_catalog: Table, photometry_result: Table) \
         -> Table:
+    # TODO is this really necessary? there seems to be x_0, y_0 in results,
+    #  can use this in cases where the guess is known
     """
     Match the closest points in a photometry catalogue to the input catalogue
     :param reference_catalog: Table containing input positions in 'x' and 'y' columns
@@ -81,12 +83,13 @@ def match_observation_to_source(reference_catalog: Table, photometry_result: Tab
     """
     from scipy.spatial import cKDTree
 
-    x_y_pixel = np.array((reference_catalog['x'], reference_catalog['y'])).T
-    lookup_tree = cKDTree(x_y_pixel)
+    x_y_pixel = np.array((reference_catalog['x'], reference_catalog['y'], reference_catalog['m'])).T
+    lookup_tree = cKDTree(x_y_pixel[:, :2])  # only feed x and y to the lookup tree
 
     photometry_result = photometry_result.copy()
     photometry_result['x_orig'] = np.nan
     photometry_result['y_orig'] = np.nan
+    photometry_result['m_orig'] = np.nan
     photometry_result['offset'] = np.nan
 
     seen_indices = set()
@@ -98,6 +101,7 @@ def match_observation_to_source(reference_catalog: Table, photometry_result: Tab
         seen_indices.add(index)
         row['x_orig'] = x_y_pixel[index, 0]
         row['y_orig'] = x_y_pixel[index, 1]
+        row['m_orig'] = x_y_pixel[index, 2]
         row['offset'] = dist
 
     return photometry_result
