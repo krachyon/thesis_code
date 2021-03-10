@@ -24,3 +24,20 @@
   `x_0 x_1 x_2` you have to guess and if you don't guess right you get index errors.
   
   
+numpy indexing reminder:
+```python
+cube = np.linspace(0, 3*3*3-1, 3*3*3).reshape(3,3,3)
+# dimension order is z,y,x -> most significant stride to least
+cube[0,:,:] == cube[0]  # select first 3d slice
+np.sum(cube,axis=0)  # collapse to 2d by summing 3d stack along z
+flat_cube = cube.ravel()
+cube[z,y,x] == flat_cube[z*cube.shape[0]+y*cube.shape[1]+x*cube.shape[2]]
+
+img = np.linspace(0,3*3-1,3*3).reshape(3,3)
+img[y,x]
+
+quader = np.linspace(0,3*4*5-1,3*4*5).reshape(3,4,5)
+quader.shape == [3,4,5]
+```
+Imagine array that 1d gets stacked to 2d which gets stacked to 3d. First indexing collapses to 2d, so first
+index is z. z has biggest stride.

@@ -164,12 +164,12 @@ def convolved_grid(N1d: int = 16,
     y, y_frac = np.divmod(y_float, 1)
     x, y = x.astype(int), y.astype(int)
     # Y U so ugly sometimes PEP8?
-    data[x, y] = (1 - x_frac) * (1 - y_frac)
+    data[y, x] = (1 - x_frac) * (1 - y_frac)
     # noinspection PyRedundantParentheses
-    data[x + 1, y] = (x_frac) * (1 - y_frac)
+    data[y + 1, x] = (x_frac) * (1 - y_frac)
     # noinspection PyRedundantParentheses
-    data[x, y + 1] = (1 - x_frac) * (y_frac)
-    data[x + 1, y + 1] = y_frac * x_frac
+    data[y, x + 1] = (1 - x_frac) * (y_frac)
+    data[y + 1, x + 1] = y_frac * x_frac
 
     if kernel is not None:
         # noinspection PyTypeChecker
