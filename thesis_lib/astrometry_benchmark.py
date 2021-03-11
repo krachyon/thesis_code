@@ -112,7 +112,7 @@ def cheating_astrometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, 
     return result
 
 
-if __name__ == '__main__':
+def main():
     download()
     normal_config = Config.instance()
 
@@ -185,3 +185,6 @@ if __name__ == '__main__':
         pickle.dump(results, f)
     plt.close('all')
     pass
+
+if __name__ == '__main__':
+    main()

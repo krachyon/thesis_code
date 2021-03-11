@@ -9,4 +9,8 @@ setup(
     author='Sebastian Meßlinger',
     author_email='sebastian.messlinger@posteo.de',
     description='Analysis scripts for master thesis',
+    entry_points={
+        'console_scripts':
+            ['astrometry_benchmark=thesis_lib.astrometry_benchmark:main']
+    }
 )
