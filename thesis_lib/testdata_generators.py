@@ -12,8 +12,8 @@ from astropy.io.fits import PrimaryHDU
 from astropy.modeling.functional_models import Gaussian2D
 from astropy.table import Table
 
-from config import Config
-from scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale, make_psf
+from .config import Config
+from .scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale, make_psf
 
 # all generators defined here should return a source table with the following columns
 # x,y are in pixel scale
@@ -61,8 +61,10 @@ def scopesim_grid(N1d: int = 16,
     return observed_image, table
 
 
-def gaussian_cluster(N: int = 1000, seed: int = 9999, psf_transform=lambda x: x) \
-        -> Tuple[np.ndarray, Table]:
+def gaussian_cluster(N: int = 1000,
+                     seed: int = 9999,
+                     magnitude=lambda N: np.random.normal(21, 2, N),
+                     psf_transform=lambda x: x) -> Tuple[np.ndarray, Table]:
     """
     Emulates custom cluster creation from initial simcado script.
     Stars with gaussian position and magnitude distribution
@@ -71,11 +73,10 @@ def gaussian_cluster(N: int = 1000, seed: int = 9999, psf_transform=lambda x: x)
     :param psf_transform: function modifying the psf array
     :return: image and input catalogue
     """
-    # TODO could use more parameters e.g for magnitudes
     np.random.seed(seed)
     x = np.random.normal(0, 1, N)
     y = np.random.normal(0, 1, N)
-    m = np.random.normal(21, 2, N)
+    m = magnitude(N)
     x_in_px = to_pixel_scale(x)
     y_in_px = to_pixel_scale(y)
 
@@ -363,15 +364,23 @@ misc_images = {
         lambda: scopesim_grid(N1d=16, perturbation=2.),
 }
 
+
+def expmag(N):
+    dist = np.log(np.random.exponential(1, N))
+    mag_target = 21
+    dist_shift = dist - np.median(dist) + mag_target
+    return dist_shift
+
+
 lowpass_images = {
-    'scopesim_grid_16_perturb2_low':
-        lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass()),
-    'scopesim_grid_16_perturb2_low_mag20':
-        lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [20]),
-    'scopesim_grid_30_perturb2_low_mag22':
-        lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [22]),
-    'scopesim_grid_30_perturb2_low_mag20':
-        lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [20]),
+    # 'scopesim_grid_16_perturb2_low':
+    #     lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass()),
+    # 'scopesim_grid_16_perturb2_low_mag20':
+    #     lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [20]),
+    # 'scopesim_grid_30_perturb2_low_mag22':
+    #     lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [22]),
+    # 'scopesim_grid_30_perturb2_low_mag20':
+    #     lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: N * [20]),
     'scopesim_grid_30_perturb2_low_mag18-24':
         lambda: scopesim_grid(N1d=30, perturbation=2., psf_transform=lowpass(),
                               magnitude=lambda N: np.random.uniform(18, 24, N)),
@@ -380,7 +389,11 @@ lowpass_images = {
                                 group_radius=7, group_size=2),
     'scopesim_groups_16_perturb_2_low_radius_10':
         lambda: scopesim_groups(N1d=16, jitter=2., psf_transform=lowpass(), magnitude=lambda N: N * [20],
-                                group_radius=10, group_size=5)
+                                group_radius=10, group_size=5),
+    'gausscluster_N2000_mag22':
+        lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N), psf_transform=lowpass()),
+    'gausscluster_N4000_expmag21':
+        lambda: gaussian_cluster(4000, magnitude=expmag, psf_transform=lowpass())
 }
 
 helpers = {

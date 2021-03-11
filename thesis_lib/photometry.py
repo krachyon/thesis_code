@@ -17,7 +17,7 @@ from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, Integrate
     IterativelySubtractedPSFPhotometry
 from photutils.psf import EPSFModel
 
-from config import Config
+from .config import Config
 config = Config.instance()
 
 

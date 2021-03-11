@@ -8,8 +8,7 @@ from astropy.table import Table
 from matplotlib.colors import LogNorm
 
 import photutils
-from util import flux_to_magnitude
-from util import match_observation_to_source
+from .util import flux_to_magnitude, match_observation_to_source
 
 
 def save(filename_base: str, figure: matplotlib.pyplot.figure):
@@ -140,7 +139,7 @@ def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] =
     fig, axes = plt.subplots(2, 2, sharex='all')
 
     axes[0,0].hist(matched_table['offset'], bins=60)
-    σ = np.std(matched_table['offset'])
+    σ = np.nanstd(matched_table['offset'])
     axes[0,0].axvline(σ, label=f'σ={σ:.3f}', color='r')
     axes[0,0].set_title('offset input<->measured')
     axes[0,0].legend()
@@ -149,23 +148,23 @@ def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] =
     # TODO m is the original value or the starfinder value;
     #  need to calculate from flux_fit
     magnitude_diff = np.array(matched_table['m'] - flux_to_magnitude(matched_table['flux_fit']))
-    magnitude_diff = magnitude_diff - magnitude_diff.mean()
+    magnitude_diff = magnitude_diff - np.nanmean(magnitude_diff)
     axes[0,1].hist(magnitude_diff, bins=60)
-    σ = np.std(magnitude_diff)
+    σ = np.nanstd(magnitude_diff)
     axes[0,1].axvline(σ, label=f'σ={σ:.3f}', color='r')
     axes[0,1].set_title('magnitude offset input<->measured')
     axes[0,1].legend()
     axes[0,1].set_xlabel('[mag]')
 
     axes[1,0].hist(matched_table['x_fit']-matched_table['x_orig'], bins=60)
-    σ = np.std(matched_table['x_fit']-matched_table['x_orig'])
+    σ = np.nanstd(matched_table['x_fit']-matched_table['x_orig'])
     axes[1,0].axvline(σ, label=f'σ={σ:.3f}', color='r')
     axes[1,0].set_title('x offset input<->measured')
     axes[1,0].legend()
     axes[1,0].set_xlabel('[pixel]')
 
     axes[1,1].hist(matched_table['y_fit']-matched_table['y_orig'], bins=60)
-    σ = np.std(matched_table['y_fit'] - matched_table['y_orig'])
+    σ = np.nanstd(matched_table['y_fit'] - matched_table['y_orig'])
     axes[1,1].axvline(σ, label=f'σ={σ:.3f}', color='r')
     axes[1,1].set_title('y offset input<->measured')
     axes[1,1].legend()

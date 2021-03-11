@@ -2,7 +2,7 @@ from pylab import *
 import photutils as phot
 from astropy.io import fits
 import numpy as np
-from photometry import FWHM_estimate
+from thesis_lib.photometry import FWHM_estimate
 import astropy.table as table
 import itertools
 from astropy.stats import sigma_clipped_stats

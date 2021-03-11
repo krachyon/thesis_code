@@ -1,14 +1,12 @@
-import itertools
-from astropy.modeling.functional_models import Gaussian2D
 # noinspection PyPackageRequirements
 from pylab import *
 
-from astrometry_benchmark import *
-from photometry import *
+from thesis_lib.astrometry_benchmark import *
+from thesis_lib.photometry import *
 from photutils.detection import IRAFStarFinder, DAOStarFinder
-from plots_and_sanitycheck import *
-from testdata_generators import *
-from util import *
+from thesis_lib.plots_and_sanitycheck import *
+from thesis_lib.testdata_generators import *
+from thesis_lib.util import *
 
 plt.ion()
 
@@ -165,20 +163,5 @@ lowpass_config.photometry_iterations = 1  # with known positions we know all sta
 if not os.path.exists(lowpass_config.output_folder):
     os.mkdir(lowpass_config.output_folder)
 
-
-def recipe_template(seed):
-    return lambda: scopesim_grid(seed=seed, N1d=30, perturbation=2., psf_transform=lowpass(),
-                                 magnitude=lambda N: np.random.uniform(18, 24, N))
-
-
-#image, input_table = read_or_generate_image(lowpass_images['scopesim_grid_30_perturb2_low_mag18-24'], 'scopesim_grid_30_perturb2_low_mag18-24', lowpass_config.image_folder)
-#result = run_photometry(image, input_table, 'scopesim_grid_30_perturb2_low_mag18-24', lowpass_config)
-#with open('tmpRes.pck','wb')as f:
-#    pickle.dump(result,f)
-
-with open('tmpRes.pck', 'rb')as f:
-    result: PhotometryResult = pickle.load(f)
-matched_table = match_observation_to_source(result.input_table, result.result_table)
-plot_deviation_vs_magnitude(matched_table)
-#res = photometry_multi(recipe_template, 'mag18-24_grid', n=6, config=lowpass_config)
+res = photometry_with_plots(testdata_generators.lowpass_images['gausscluster_N4000_expmag21'], 'gausscluster_N4000_expmag21', lowpass_config)
 

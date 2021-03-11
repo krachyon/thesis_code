@@ -8,14 +8,14 @@ import numpy as np
 from astropy.table import Table
 import astropy.table
 
-import testdata_generators
-import util
-from config import Config
-from photometry import run_photometry, PhotometryResult, cheating_astrometry
-from plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
+from .import testdata_generators
+from .import util
+from .config import Config
+from .photometry import run_photometry, PhotometryResult, cheating_astrometry
+from .plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
     save, concat_star_images, plot_deviation_vs_magnitude, plot_deviation_histograms
-from scopesim_helper import download
-from testdata_generators import read_or_generate_image, read_or_generate_helper
+from .scopesim_helper import download
+from .testdata_generators import read_or_generate_image, read_or_generate_helper
 
 
 def run_plots(photometry_result: PhotometryResult):
@@ -31,6 +31,8 @@ def run_plots(photometry_result: PhotometryResult):
         plot_input_vs_photometry_positions(offsets, output_path=plot_filename)
         plot_filename = os.path.join(config.output_folder, filename + '_magnitude_v_offset')
         plot_deviation_vs_magnitude(offsets, output_path=plot_filename)
+        plot_filename = os.path.join(config.output_folder, filename + '_histogram')
+        plot_deviation_histograms(offsets, output_path=plot_filename)
     else:
         print(f"No sources found for {filename} with {config}")
 
@@ -40,6 +42,7 @@ def run_plots(photometry_result: PhotometryResult):
     plt.figure()
     plt.imshow(concat_star_images(star_guesses))
     save(os.path.join(config.output_folder, filename + '_star_guesses'), plt.gcf())
+
     plt.close('all')
 
 
@@ -171,14 +174,14 @@ if __name__ == '__main__':
         results = []
 
         results += photometry_multi(recipe_template, 'mag18-24_grid', n=10, config=lowpass_config, pool=pool)
-        futures.append(pool.starmap_async(photometry_with_plots, misc_args))
-        futures.append(pool.starmap_async(cheating_astrometry_with_plots, cheat_args))
+        #futures.append(pool.starmap_async(photometry_with_plots, misc_args))
+        #futures.append(pool.starmap_async(cheating_astrometry_with_plots, cheat_args))
         futures.append(pool.starmap_async(photometry_with_plots, lowpass_args))
         for future in futures:
             results += future.get()
 
     # this is not going to scale very well
-    with open('all_photometry_results.pickle', 'wb') as f:
+    with open('../all_photometry_results.pickle', 'wb') as f:
         pickle.dump(results, f)
     plt.close('all')
     pass

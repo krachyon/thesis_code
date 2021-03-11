@@ -1,3 +1,4 @@
+.
 anisocado>=0.2
 astropy>=4.2
 matplotlib>=3.3.4
