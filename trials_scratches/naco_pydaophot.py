@@ -8,7 +8,7 @@ from astwro.sampledata import fits_image
 from astropy.visualization import simple_norm
 from astropy.table import Table
 
-img_path = 'test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits'
+img_path = '../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits'
 #img_path = fits_image()
 img = astropy.io.fits.getdata(img_path)
 
