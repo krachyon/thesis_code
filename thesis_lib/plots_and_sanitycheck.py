@@ -108,10 +108,10 @@ def plot_deviation_vs_magnitude(matched_table: Table,
     magnitudes = flux_to_magnitude(matched_table['flux_fit'])
 
     order = np.argsort(magnitudes)
-    dists=dists[order]
-    magnitudes=magnitudes[order]
+    dists = dists[order]
+    magnitudes = magnitudes[order]
 
-    window_size = 31
+    window_size = 41
     x_offset = int(window_size/2)
     dists_slide = np.lib.stride_tricks.sliding_window_view(dists, window_size)
 
@@ -135,7 +135,6 @@ def plot_deviation_vs_magnitude(matched_table: Table,
 
 def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
 
-    plt.figure()
     fig, axes = plt.subplots(2, 2, sharex='all')
 
     axes[0,0].hist(matched_table['offset'], bins=60)

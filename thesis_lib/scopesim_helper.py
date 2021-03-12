@@ -121,9 +121,9 @@ def download() -> None:
     get scopesim files if not present in current directory
     :return:
     """
-    if not os.path.exists('../MICADO'):
+    if not os.path.exists('./MICADO'):
         # TODO is it really necessary to always throw shit into the current wdir?
-        print('''Simcado Data missing. Do you want to download?
+        print('''Scopesim data missing. Do you want to download?
         Attention: Will write into current working dir!''')
         choice = input('[y/N] ')
         if choice == 'y' or choice == 'Y':

@@ -85,7 +85,7 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
     if pool:
         partial_results = pool.map(inner, range(n))
     else:
-        partial_results = map(inner, range(n))
+        partial_results = list(map(inner, range(n)))
 
     matched_result = astropy.table.vstack(partial_results)
 
@@ -134,6 +134,7 @@ def main():
     lowpass_config.output_folder = 'output_files_lowpass'
     lowpass_config.use_catalogue_positions = True
     lowpass_config.photometry_iterations = 1  # with known positions we know all stars on first iter
+    lowpass_config.separation_factor = 0.1
 
     configs = [normal_config, gauss_config, init_guess_config, cheating_config, lowpass_config]
     for config in configs:
@@ -176,7 +177,7 @@ def main():
         results += photometry_multi(recipe_template, 'mag18-24_grid', n=10, config=lowpass_config, pool=pool)
         #futures.append(pool.starmap_async(photometry_with_plots, misc_args))
         #futures.append(pool.starmap_async(cheating_astrometry_with_plots, cheat_args))
-        futures.append(pool.starmap_async(photometry_with_plots, lowpass_args))
+        #futures.append(pool.starmap_async(photometry_with_plots, lowpass_args))
         for future in futures:
             results += future.get()
 
@@ -185,6 +186,7 @@ def main():
         pickle.dump(results, f)
     plt.close('all')
     pass
+
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,8 @@
 # Global values and names
 import dataclasses
-from typing import Optional
+from typing import Optional, Union
+import numpy as np
+import os
 
 import matplotlib.pyplot as plt
 
@@ -43,24 +45,30 @@ class Config(metaclass=ClassRepr):
     image_folder: str = 'test_images'
     output_folder: str = 'output_files'
 
+    # TODO allow choosing starfinder type, maybe background as well?
     # magic parameters for Starfinder
     clip_sigma: float = 3.0  # sigma_clipping to apply for star guessing
     threshold_factor: float = 3.  # how many stds brighter than image for star to be detected?
-    fwhm_guess: float = 2.5  # estimate of PSF fwhm
-    separation_factor: float = 1.  # How far do stars need to be apart to be considered?
+    fwhm_guess: float = 7.  # estimate of PSF fwhm
+    separation_factor: float = 2.  # How far do stars need to be apart to be considered a group?
 
     # magic parameters for EPSFBuilder
     stars_to_keep: int = 200
     cutout_size: int = 50  # TODO PSF is pretty huge, right?
     oversampling: int = 4
     epsfbuilder_iters: int = 5
-    smoothing = 'quartic'
+    smoothing: Union[str, np.ndarray] = 'quartic'
     epsf_guess: Optional[EPSFModel] = None
 
     # photometry
     # use known star positions from input catalogue as initial guess for photometry?
     use_catalogue_positions: bool = False
     photometry_iterations: int = 3
+
+    def create_dirs(self):
+        for dirname in [self.image_folder, self.output_folder]:
+            if not os.path.exists(dirname):
+                os.mkdir(dirname)
 
 
 # matplotlib
