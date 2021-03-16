@@ -387,7 +387,7 @@ lowpass_images = {
     'scopesim_groups_16_perturb_2_low_radius_7':
         lambda: scopesim_groups(N1d=16, jitter=2., psf_transform=lowpass(), magnitude=lambda N: N * [20],
                                 group_radius=7, group_size=2),
-    'scopesim_groups_16_perturb_2_low_radius_10':
+    'scopesim_groups_16_perturb_2_low_radius_5':
         lambda: scopesim_groups(N1d=16, jitter=2., psf_transform=lowpass(), magnitude=lambda N: N * [20],
                                 group_radius=10, group_size=5),
     'gausscluster_N2000_mag22':

@@ -4,6 +4,7 @@ from typing import Union, Callable, Tuple, Optional
 
 import matplotlib.pyplot as plt
 import multiprocess as mp  # not multiprocessing, this can pickle lambdas
+from multiprocess.pool import Pool as Pool_t
 import numpy as np
 from astropy.table import Table
 import astropy.table
@@ -66,7 +67,7 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
                      image_name_template: str,
                      n: int,
                      config=Config.instance(),
-                     pool: Optional[mp.Pool]=None) -> Table:
+                     threads: Union[int, None]=None) -> Table:
     """
     apply EPSF fitting photometry to a testimage
     :param image_recipe: function to generate test image
@@ -82,8 +83,9 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
         result = run_photometry(image, input_table, image_name, config)
         return util.match_observation_to_source(input_table, result.result_table)
 
-    if pool:
-        partial_results = pool.map(inner, range(n))
+    if threads:
+        with mp.Pool(threads) as pool:
+            partial_results = pool.map(inner, range(n))
     else:
         partial_results = list(map(inner, range(n)))
 
@@ -169,17 +171,18 @@ def main():
                                                          magnitude=lambda N: np.random.uniform(18, 24, N))
 
     # Honestly you'll have to change this yourself for your machine. Too much and you won't have enough memory
-    with mp.Pool(10) as pool:
+    n_threads = 10
+    with mp.Pool(n_threads) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
         futures = []
         results = []
-
-        results += photometry_multi(recipe_template, 'mag18-24_grid', n=10, config=lowpass_config, pool=pool)
-        #futures.append(pool.starmap_async(photometry_with_plots, misc_args))
-        #futures.append(pool.starmap_async(cheating_astrometry_with_plots, cheat_args))
-        #futures.append(pool.starmap_async(photometry_with_plots, lowpass_args))
+        futures.append(pool.starmap_async(photometry_with_plots, misc_args))
+        futures.append(pool.starmap_async(cheating_astrometry_with_plots, cheat_args))
+        futures.append(pool.starmap_async(photometry_with_plots, lowpass_args))
         for future in futures:
             results += future.get()
+
+    results += photometry_multi(recipe_template, 'mag18-24_grid', n=10, config=lowpass_config, threads=n_threads)
 
     # this is not going to scale very well
     with open('../all_photometry_results.pickle', 'wb') as f:

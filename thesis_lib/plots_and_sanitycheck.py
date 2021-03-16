@@ -105,7 +105,9 @@ def plot_deviation_vs_magnitude(matched_table: Table,
     plt.figure()
 
     dists = matched_table['offset']
-    magnitudes = flux_to_magnitude(matched_table['flux_fit'])
+
+    #magnitudes = flux_to_magnitude(matched_table['flux_fit'])
+    magnitudes = matched_table['m']
 
     order = np.argsort(magnitudes)
     dists = dists[order]
@@ -140,7 +142,7 @@ def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] =
     axes[0,0].hist(matched_table['offset'], bins=60)
     σ = np.nanstd(matched_table['offset'])
     axes[0,0].axvline(σ, label=f'σ={σ:.3f}', color='r')
-    axes[0,0].set_title('offset input<->measured')
+    axes[0,0].set_title('distance offset input<->measured')
     axes[0,0].legend()
     axes[0,0].set_xlabel('[pixel]')
 

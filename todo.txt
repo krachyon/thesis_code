@@ -7,3 +7,10 @@
 - Calculate image stats only once and propagate
 
 - Main issue: How to tune starfinders?
+
+
+- Technical issue: Using spawn/forkserver plays nicely with notebooks and uses less memory,
+but causes issues with passing functions, e.g. if you pass
+lambda x: testdata_generators.generate()
+testdata_generators is not imported in the place that executes the lambda it errors
+Is there a way of avoiding that? Or warning the user?

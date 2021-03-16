@@ -287,8 +287,8 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
         guess_table = cut_edges(guess_table, 101, image.shape[0])
         guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
 
-        # guess_table['x_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['x_0']))
-        # guess_table['y_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['y_0']))
+        guess_table['x_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['x_0']))
+        guess_table['y_0'] += np.random.uniform(-0.1, +0.1, size=len(guess_table['y_0']))
 
         result_table = photometry(image, guess_table)
 
