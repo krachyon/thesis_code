@@ -40,7 +40,7 @@ psf_res=dp.PSf()
 alls_res = al.ALlstar(image_file=frame, stars='i.ap', subtracted_image_file='is.fits')
 #shutil.copy(os.path.join(dp.dir,'i.als'), 'i.als')
 #shutil.copy(os.path.join(dp.dir,'is.fits'), 'is.fits')
-shutil.copy(os.path.join(dp.dir,'i.psf'), 'i.psf')
+#shutil.copy(os.path.join(dp.dir,'i.psf'), 'i.psf')
 #shutil.copy(frame, 'i.fits')
 
 #img = fits.getdata(frame)

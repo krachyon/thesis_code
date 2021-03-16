@@ -24,6 +24,11 @@ def flux_to_magnitude(flux):
     return -2.5 * np.log10(flux)
 
 
+@np.vectorize
+def magnitude_to_flux(magnitude):
+    return 10**(-magnitude/2.5)
+
+
 def fit_gaussian_to_psf(psf: np.ndarray, plot=False) -> np.ndarray:
     """Take a (centered) psf image and attempt to fit a gaussian through
     :return: tuple of a, x0, σ
