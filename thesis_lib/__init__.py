@@ -13,3 +13,4 @@ from . import util
 from . import testdata_generators
 from . import scopesim_helper
 from . import config
+from . import photometry_daophot

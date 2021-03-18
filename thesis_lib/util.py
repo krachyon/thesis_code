@@ -169,8 +169,10 @@ def estimate_photometric_precision(image: np.ndarray, sources: Table, fwhm: floa
     x, y = np.ogrid[0:image.shape[1], 0:image.shape[0]]
     # this should do linear interpolation
     snr_interpolated = RectBivariateSpline(x, y, snr, kx=1, ky=1)
+    assert np.allclose(snr, snr_interpolated(x, y))
 
-    sigma_pos = [float(fwhm / snr_interpolated(row['x'], row['y'])) for row in sources]
+    # snr_interpolated is indexed the same way as images/arrays: outer dimension (== y) first
+    sigma_pos = [float(fwhm / snr_interpolated(row['y'], row['x'])) for row in sources]
     return sigma_pos
 
 

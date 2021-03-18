@@ -128,6 +128,8 @@ def plot_deviation_vs_magnitude(matched_table: Table,
     plt.plot(magnitudes[x_offset:-x_offset], dists_mean, color='blue', alpha=0.4)
     plt.fill_between(magnitudes[x_offset:-x_offset], dists_mean-dists_std, dists_mean+dists_std,
                      label=f'sliding average $\pm σ$; window_size={window_size}', alpha=0.2, color='blue')
+    plt.plot(magnitudes[x_offset:-x_offset], dists_std, linewidth=1, color='green',
+             label=f'sliding σ, window_size={window_size}')
     plt.legend()
 
     if output_path:

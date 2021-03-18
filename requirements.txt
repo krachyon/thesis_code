@@ -1,6 +1,7 @@
 .
 anisocado>=0.2
 astropy>=4.2
+astwro
 matplotlib>=3.3.4
 numpy>=1.20.1
 git+git://github.com/krachyon/photutils.git#egg=photutils

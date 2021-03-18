@@ -12,8 +12,19 @@ from thesis_lib.photometry import PhotometryResult
 from thesis_lib.util import magnitude_to_flux
 
 
-def run_daophot_photometry(image:np.ndarray, input_table: Optional[astropy.table.Table]):
-    dp = Daophot()
+def run_daophot_photometry(image:np.ndarray,
+                           input_table: Optional[astropy.table.Table],
+                           options=(('FITTING RADIUS', '6.0'),)):
+    """
+    Perform psf photometry with daophot as per the astwro pydaophot tutorial.
+    Warning: This will just lock up if an issue occurs, then you need to debug it by looking at
+    the "commands" passed to daophot as stdin by the runner and see why it chocked
+    :param image: what to analyze
+    :param input_table: want to cheat on the initial positions?
+    :param options: pass daophot options as list/tuple of key-val tuples
+    :return: PhotometryResult, but only input_table, image and result table are filled
+    """
+    dp = Daophot(options=options)
     image_file_name = os.path.join(dp.dir, 'input.fits')
     hdu = fits.PrimaryHDU(image)
     hdu.data = hdu.data.astype(np.float32)
@@ -88,7 +99,8 @@ def run_daophot_photometry(image:np.ndarray, input_table: Optional[astropy.table
     return PhotometryResult(image, input_table, result_table=result_table, config=None, epsf=None, image_name=None, star_guesses=None)
 
 
-img, table = testdata_generators.read_or_generate_image(
-    testdata_generators.lowpass_images['scopesim_grid_30_perturb2_low_mag18-24'], 'scopesim_grid_30_perturb2_low_mag18-24')
+if __name__ == '__main__':
+    img, table = testdata_generators.read_or_generate_image(
+        testdata_generators.lowpass_images['scopesim_grid_30_perturb2_low_mag18-24'], 'scopesim_grid_30_perturb2_low_mag18-24')
 
-res = run_daophot_photometry(img, table)
+    res = run_daophot_photometry(img, table)
