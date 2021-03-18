@@ -1,6 +1,6 @@
 # Global values and names
 import dataclasses
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 import numpy as np
 import os
 
@@ -55,6 +55,7 @@ class Config(metaclass=ClassRepr):
     # magic parameters for EPSFBuilder
     stars_to_keep: int = 200
     cutout_size: int = 50  # TODO PSF is pretty huge, right?
+    fitshape: Union[int, Tuple[int, int]] = 49  # this should probably be equal or slightly less than the epsf model dimension
     oversampling: int = 4
     epsfbuilder_iters: int = 5
     smoothing: Union[str, np.ndarray] = 'quartic'

@@ -224,8 +224,6 @@ def do_photometry_epsf(image: np.ndarray,
 
     grouper = DAOGroup(separation_factor * fwhm_guess)
 
-    shape = (epsf.psfmodel.shape / epsf.psfmodel.oversampling).astype(np.int64)
-
     epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
     epsf.fwhm.value = fwhm_guess
 
@@ -236,7 +234,7 @@ def do_photometry_epsf(image: np.ndarray,
         psf_model=epsf,
         fitter=LevMarLSQFitter(),
         niters=photometry_iterations,
-        fitshape=shape
+        fitshape=config.fitshape
     )
 
     return photometry.do_photometry(image, init_guesses=initial_guess)
@@ -268,8 +266,6 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
 
         grouper = DAOGroup(config.separation_factor * fwhm)
 
-        shape = (epsf.psfmodel.shape / epsf.psfmodel.oversampling).astype(np.int64)
-
         epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
         epsf.fwhm.value = fwhm
         bkgrms = MADStdBackgroundRMS()
@@ -280,7 +276,7 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
             bkg_estimator=bkgrms,
             psf_model=epsf,
             fitter=LevMarLSQFitter(),
-            fitshape=shape
+            fitshape=config.fitshape
         )
 
         guess_table = input_table.copy()
