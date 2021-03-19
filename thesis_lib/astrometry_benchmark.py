@@ -65,7 +65,7 @@ def photometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, Table]],
 
 def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
                      image_name_template: str,
-                     n: int,
+                     n_images: int,
                      config=Config.instance(),
                      threads: Union[int, None]=None) -> Table:
     """
@@ -85,9 +85,9 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
 
     if threads:
         with mp.Pool(threads) as pool:
-            partial_results = pool.map(inner, range(n))
+            partial_results = pool.map(inner, range(n_images))
     else:
-        partial_results = list(map(inner, range(n)))
+        partial_results = list(map(inner, range(n_images)))
 
     matched_result = astropy.table.vstack(partial_results)
 
@@ -182,7 +182,7 @@ def main():
         for future in futures:
             results += future.get()
 
-    results += photometry_multi(recipe_template, 'mag18-24_grid', n=10, config=lowpass_config, threads=n_threads)
+    results += photometry_multi(recipe_template, 'mag18-24_grid', n_images=10, config=lowpass_config, threads=n_threads)
 
     # this is not going to scale very well
     with open('../all_photometry_results.pickle', 'wb') as f:

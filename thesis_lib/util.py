@@ -1,9 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from astropy.table import Table
 from typing import Tuple
-
+from astropy.table import Table
+from astropy.stats import sigma_clipped_stats
+from photutils.utils.errors import calc_total_error
+from scipy.interpolate import RectBivariateSpline
+from photutils import CircularAperture
 
 def gauss(x, a, x0, σ):
     """just the formula"""
@@ -143,15 +146,10 @@ def linspace_grid(start: float, stop: float, num: int):
     # complex step: use number of steps instead
     return np.mgrid[start:stop:1j*num, start:stop:1j*num]
 
-from astropy.table import Table
-from astropy.stats import sigma_clipped_stats
-from photutils.utils.errors import calc_total_error
-from scipy.interpolate import RectBivariateSpline
 
-
-def estimate_photometric_precision(image: np.ndarray, sources: Table, fwhm: float, effective_gain: float = 1):
+def estimate_photometric_precision_peak_only(image: np.ndarray, sources: Table, fwhm: float, effective_gain: float = 1):
     """
-    Estimate the possible position precission for stars in an image based on the SNR and the PSF FWHM.
+    Estimate the possible position precision for stars in an image based on the SNR and the PSF FWHM.
     To calculate the SNR of a star with fractional coordinates, bilinear interpolation is used
     see. Lindegren, Lennart. “Photoelectric Astrometry - A Comparison of Methods for Precise Image Location.”
 
@@ -166,17 +164,41 @@ def estimate_photometric_precision(image: np.ndarray, sources: Table, fwhm: floa
     error_img = calc_total_error(image, bkg_error, effective_gain)
     snr = image/error_img
 
-    x, y = np.ogrid[0:image.shape[1], 0:image.shape[0]]
+    row_idxs, col_idxs = np.ogrid[0:image.shape[0], 0:image.shape[1]]
     # this should do linear interpolation
-    snr_interpolated = RectBivariateSpline(x, y, snr, kx=1, ky=1)
-    assert np.allclose(snr, snr_interpolated(x, y))
+    snr_interpolated = RectBivariateSpline(row_idxs, col_idxs, snr, kx=1, ky=1)
+    assert np.allclose(snr, snr_interpolated(row_idxs, col_idxs))
 
     # snr_interpolated is indexed the same way as images/arrays: outer dimension (== y) first
     sigma_pos = [float(fwhm / snr_interpolated(row['y'], row['x'])) for row in sources]
     return sigma_pos
 
 
+def estimate_photometric_precision_full(image: np.ndarray, sources: Table, fwhm: float, effective_gain: float = 1):
+    """
+    Estimate the possible position precision for stars in an image based on the SNR and the PSF FWHM.
+    The signal is summed over a circular aperture with radius = fwhm, the error the geometric mean
+    within this aperture.
+    see. Lindegren, Lennart. “Photoelectric Astrometry - A Comparison of Methods for Precise Image Location.”
 
+    :param image: input exposure
+    :param sources: table with 'x' and 'y' columns in pixel coordinates
+    :param fwhm: Full width at half maximum for the PSF of the image
+    :param effective_gain: gain/quantum_efficiency
+    :return: list of computed σ_pos same order as sources in table
+    """
+    # Idea: use aperture photometry to sum the signal, internally it will perform quadratic mean
+    #  of pixel errors, so for each star we have signal and error.
+    mean, median, std = sigma_clipped_stats(image, sigma=3.0)
+    bkg_error = std
+    error_img = calc_total_error(image, bkg_error, effective_gain)
+
+    xy = np.array((sources['x'], sources['y'])).T
+    apertures = CircularAperture(xy, r=fwhm)
+    signals, errors = apertures.do_photometry(image, error_img)
+
+    sigma_pos = fwhm/(signals/errors)
+    return sigma_pos
 
 
 
