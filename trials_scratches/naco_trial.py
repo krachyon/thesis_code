@@ -2,7 +2,7 @@ from pylab import *
 import photutils as phot
 from astropy.io import fits
 import numpy as np
-from thesis_lib.photometry import FWHM_estimate
+from thesis_lib.photometry import estimate_fwhm
 import astropy.table as table
 import itertools
 from astropy.stats import sigma_clipped_stats
@@ -66,7 +66,7 @@ def psf_from_image(image: np.ndarray):
 def runme(image, psf, offset):
     # if np.isclose(np.sum(psf.psfmodel.data), 0):
     #     continue
-    fwhm = FWHM_estimate(psf.psfmodel)
+    fwhm = estimate_fwhm(psf.psfmodel)
     mean, median, std = sigma_clipped_stats(image)
 
     grouper = phot.DAOGroup(3*fwhm)

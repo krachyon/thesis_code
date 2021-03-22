@@ -84,7 +84,7 @@ def cut_edges(peak_table: Table, cutout_size: int, image_size: int) -> Table:
     return peak_table[mask]
 
 
-def FWHM_estimate(psf: photutils.psf.EPSFModel) -> float:
+def estimate_fwhm(psf: photutils.psf.EPSFModel) -> float:
     """
     Use a 2D symmetric gaussian fit to estimate the FWHM of an empirical psf
     :param psf: psfmodel to estimate
@@ -220,7 +220,7 @@ def do_photometry_epsf(image: np.ndarray,
     background_rms = MADStdBackgroundRMS()
 
     _, img_median, img_stddev = sigma_clipped_stats(image, sigma=clip_sigma)
-    fwhm_guess = FWHM_estimate(epsf.psfmodel)
+    fwhm_guess = estimate_fwhm(epsf.psfmodel)
 
     grouper = DAOGroup(separation_factor * fwhm_guess)
 
@@ -260,7 +260,7 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
         mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
         threshold = median + config.threshold_factor * std
 
-        fwhm = FWHM_estimate(epsf.psfmodel)
+        fwhm = estimate_fwhm(epsf.psfmodel)
 
         finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
 

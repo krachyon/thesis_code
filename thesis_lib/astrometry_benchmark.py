@@ -12,7 +12,7 @@ import astropy.table
 from .import testdata_generators
 from .import util
 from .config import Config
-from .photometry import run_photometry, PhotometryResult, cheating_astrometry
+from .photometry import run_photometry, PhotometryResult, cheating_astrometry, estimate_fwhm
 from .plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
     save, concat_star_images, plot_deviation_vs_magnitude, plot_deviation_histograms
 from .scopesim_helper import download
@@ -81,6 +81,8 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
         image_name = image_name_template+f'_{i}'
         image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
         result = run_photometry(image, input_table, image_name, config)
+        result.result_table['σ_pos_estimated'] = util.estimate_photometric_precision_full\
+            (image, input_table, estimate_fwhm(result.epsf))
         return util.match_observation_to_source(input_table, result.result_table)
 
     if threads:

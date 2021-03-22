@@ -26,7 +26,7 @@ def foo():
     prelim_stars = make_stars_guess(image, finder)
 
     prelim_epsf = make_epsf_combine(prelim_stars)
-    fwhm_guess = FWHM_estimate(prelim_epsf)
+    fwhm_guess = estimate_fwhm(prelim_epsf)
 
     finder = IRAFStarFinder(threshold=threshold, fwhm=fwhm_guess, minsep_fwhm=1)
 
@@ -111,7 +111,7 @@ def baz():
     mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
     threshold = median + config.threshold_factor * std
 
-    fwhm = FWHM_estimate(epsf.psfmodel)
+    fwhm = estimate_fwhm(epsf.psfmodel)
 
     finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
 
