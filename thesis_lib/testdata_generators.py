@@ -273,7 +273,7 @@ def scopesim_groups(N1d: int = 16,
 
 def lowpass(std=5):
     def transform(data):
-        x, y = data.shape
+        y, x = data.shape
         # psf array is offset by one, hence need the -1 after coordinates
         return data * Gaussian2D(x_stddev=std, y_stddev=std)(*np.mgrid[-x / 2:x / 2:x * 1j, -y / 2:y / 2:y * 1j] - 1)
 
