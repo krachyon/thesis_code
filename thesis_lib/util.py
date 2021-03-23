@@ -161,8 +161,8 @@ def estimate_photometric_precision_peak_only(image: np.ndarray, sources: Table, 
     """
     mean, median, std = sigma_clipped_stats(image, sigma=3.0)
     bkg_error = std
-    error_img = calc_total_error(image, bkg_error, effective_gain)
-    snr = image/error_img
+    error_img = calc_total_error(image-median, bkg_error, effective_gain)
+    snr = (image-median)/error_img
 
     row_idxs, col_idxs = np.ogrid[0:image.shape[0], 0:image.shape[1]]
     # this should do linear interpolation
@@ -170,7 +170,7 @@ def estimate_photometric_precision_peak_only(image: np.ndarray, sources: Table, 
     assert np.allclose(snr, snr_interpolated(row_idxs, col_idxs))
 
     # snr_interpolated is indexed the same way as images/arrays: outer dimension (== y) first
-    sigma_pos = [float(fwhm / snr_interpolated(row['y'], row['x'])) for row in sources]
+    sigma_pos = np.abs([float(fwhm / snr_interpolated(row['y'], row['x'])) for row in sources])
     return sigma_pos
 
 
@@ -195,9 +195,10 @@ def estimate_photometric_precision_full(image: np.ndarray, sources: Table, fwhm:
 
     xy = np.array((sources['x'], sources['y'])).T
     apertures = CircularAperture(xy, r=fwhm)
-    signals, errors = apertures.do_photometry(image, error_img)
+    signals, errors = apertures.do_photometry(image-median, error_img)
 
-    sigma_pos = fwhm/(signals/errors)
+    # sometimes signal is negative over FWHM, avoid negative sigma
+    sigma_pos = np.abs(fwhm/(signals/errors))
     return sigma_pos
 
 
