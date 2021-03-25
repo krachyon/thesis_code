@@ -72,7 +72,7 @@ def runme(image, psf, offset):
     grouper = phot.DAOGroup(3*fwhm)
     # values here are handfudged to get maximum amount of candidates
     # ommitted peakmax = 10_000
-    finder = phot.IRAFStarFinder(threshold=median*0.5, fwhm=fwhm*1.5, brightest=100, minsep_fwhm=0.4)
+    finder = phot.IRAFStarFinder(threshold=median*0.05, fwhm=fwhm*1.5, brightest=300, minsep_fwhm=0.4)
     photometry = phot.IterativelySubtractedPSFPhotometry(
         group_maker=grouper,
         finder=finder,
@@ -109,10 +109,10 @@ def do_it(image_name: str, psf_name: str):
 
 
 if __name__ == '__main__':
-    img, psf, res = do_it('test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits',
-              'test_images_naco/PSF.NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.fits')
+    img, psf, res = do_it('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits',
+              '../test_images_naco/PSF.NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.fits')
 
-    ref = table.Table.read('test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym', format='ascii')
+    ref = table.Table.read('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym', format='ascii')
     imshow(img, cmap='hot')
     plot(ref['XRAW']-1, ref['YRAW']-1, 'go', markersize=3, alpha=1, label='reference analysis')
     plot(res['x_fit'], res['y_fit'], 'b+', markersize=2, alpha=1, label='photutils')

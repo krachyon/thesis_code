@@ -8,6 +8,7 @@ from photutils.utils.errors import calc_total_error
 from scipy.interpolate import RectBivariateSpline
 from photutils import CircularAperture
 
+
 def gauss(x, a, x0, σ):
     """just the formula"""
     return a * np.exp(-(x - x0) ** 2 / (2 * σ ** 2))

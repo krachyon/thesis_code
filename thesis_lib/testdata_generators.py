@@ -1,6 +1,7 @@
 import multiprocessing
 from collections import defaultdict
 from os.path import exists, join
+from os import mkdir
 from typing import Callable, Tuple, Union
 
 import anisocado
@@ -295,6 +296,8 @@ def read_or_generate_image(recipe: Callable[[], Tuple[np.ndarray, Table]],
     :param recipe: function generating your image and catalogue
     :return: image, input_catalogue
     """
+    if not exists(directory):
+        mkdir(directory)
     image_name = join(directory, filename_base + '.fits')
     table_name = join(directory, filename_base + '.dat')
     with filename_locks[filename_base]:
@@ -319,6 +322,8 @@ def read_or_generate_helper(recipe: Callable[[], Tuple[np.ndarray, Table]],
     :param recipe: function generating your image and catalogue
     :return: image, input_catalogue
     """
+    if not exists(directory):
+        mkdir(directory)
     image_name = join(directory, filename_base + '.fits')
     with filename_locks[filename_base]:
         if exists(image_name):
@@ -394,6 +399,18 @@ lowpass_images = {
         lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N), psf_transform=lowpass()),
     'gausscluster_N4000_expmag21':
         lambda: gaussian_cluster(4000, magnitude=expmag, psf_transform=lowpass())
+}
+
+
+benchmark_images = {
+    'scopesim_grid_16_perturb2':
+        lambda: scopesim_grid(N1d=16, perturbation=2.),
+    'scopesim_grid_16_perturb2_lowpass':
+        lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass()),
+    'gausscluster_N2000_mag22':
+        lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N)),
+    'gausscluster_N2000_mag22_lowpass':
+        lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N), psf_transform=lowpass()),
 }
 
 helpers = {

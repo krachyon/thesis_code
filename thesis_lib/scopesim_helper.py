@@ -116,19 +116,19 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None) ->
     return micado
 
 
-def download() -> None:
+def download(ask: bool = True) -> None:
     """
     get scopesim files if not present in current directory
     :return:
     """
     if not os.path.exists('./MICADO'):
         # TODO is it really necessary to always throw shit into the current wdir?
-        print('''Scopesim data missing. Do you want to download?
-        Attention: Will write into current working dir!''')
-        choice = input('[y/N] ')
-        if choice == 'y' or choice == 'Y':
-            scopesim.download_package(["locations/Armazones",
-                                       "telescopes/ELT",
-                                       "instruments/MICADO"])
-        else:
-            exit(-1)
+        if ask:
+            print('''Scopesim data missing. Do you want to download?
+            Attention: Will write into current working dir!''')
+            choice = input('[y/N] ')
+            if not (choice == 'y' or choice == 'Y'):
+                exit(-1)
+        scopesim.download_package(["locations/Armazones",
+                                   "telescopes/ELT",
+                                   "instruments/MICADO"])
