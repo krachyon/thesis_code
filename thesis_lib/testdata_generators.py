@@ -403,10 +403,10 @@ lowpass_images = {
 
 
 benchmark_images = {
-    'scopesim_grid_16_perturb2':
-        lambda: scopesim_grid(N1d=16, perturbation=2.),
-    'scopesim_grid_16_perturb2_lowpass':
-        lambda: scopesim_grid(N1d=16, perturbation=2., psf_transform=lowpass()),
+    'scopesim_grid_16_perturb2_mag18_24':
+        lambda: scopesim_grid(N1d=16, perturbation=2., magnitude=lambda N: np.random.uniform(18, 24, N)),
+    'scopesim_grid_16_perturb2_lowpass_mag18_24':
+        lambda: scopesim_grid(N1d=16, perturbation=2., magnitude=lambda N: np.random.uniform(18, 24, N), psf_transform=lowpass()),
     'gausscluster_N2000_mag22':
         lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N)),
     'gausscluster_N2000_mag22_lowpass':
