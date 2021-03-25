@@ -1,6 +1,15 @@
+# Library
+This package contains a library with helpers around photometry with photutils on scopesim generated images.
+Install with 
+```bash
+git clone <this repo>
+cd thesis_code
+pip install -r requirements.txt
+pip install -e .
+```
+
 # Usage
-Run `astrometry_benchmark.py`, either with the ipython `%run` magic
-or just with `python3 /path/to/astrometry_benchmark.py`. This will generate test images and perform
+Run `astrometry_benchmark.py`, after installing the library. This will generate test images and perform
 astrometry on them and create a bunch of plots in output_files* directories. Also will download
 a bunch of scopesim files to the current directory, so ideally use a empty one so you don't have to clean up
 
