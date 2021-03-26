@@ -7,6 +7,8 @@ from astropy.stats import sigma_clipped_stats
 from photutils.utils.errors import calc_total_error
 from scipy.interpolate import RectBivariateSpline
 from photutils import CircularAperture
+from typing import List, Any
+from dataclasses import dataclass
 
 
 def gauss(x, a, x0, σ):
@@ -202,5 +204,30 @@ def estimate_photometric_precision_full(image: np.ndarray, sources: Table, fwhm:
     sigma_pos = np.abs(fwhm/(signals/errors))
     return sigma_pos
 
+
+class DebugPool:
+    """
+    Limited fake of multiprocess.Pool that executes sequentially and synchronously to allow debugging
+    """
+
+    @dataclass
+    class Future:
+        results: List[Any]
+
+        def get(self):
+            return self.results
+
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def starmap_async(self, function, arg_lists):
+        future = self.Future([])
+        for arg_list in arg_lists:
+            future.results.append(function(*arg_list))
+        return future
 
 

@@ -2,23 +2,96 @@ from pylab import *
 import photutils as phot
 from astropy.io import fits
 import numpy as np
-from thesis_lib.photometry import estimate_fwhm
 import astropy.table as table
 import itertools
+from itertools import repeat
 from astropy.stats import sigma_clipped_stats
 import multiprocessing as mp
+from astropy.nddata import NDData
+from dataclasses import dataclass
+from typing import List, Any
 
-# TODO forget source selection, just go off of the reference data an check fit quality
+# Configuration
+known_psf_oversampling = 4  # for precomputed psf
+known_psf_size = 201  # dito
+
+photometry_iters = 3
+
+# epsf_fit
+cutout_size = 51
+fitshape = 31
+smoothing_kernel = 'quartic'
+oversampling = 4
+epsf_iters = 5
+# grouper
+group_radius = 3
+# starfinder
+threshold_factor = 0.05  # img_median*this
+fwhm_factor = 1.5  # fwhm*this
+n_brightest = 50  # use only n stars
+minsep_fwhm = 0.4  # only find stars at least this*fwhm apart
+peakmax = 50_000  #only find stars below this pixel value
+
+
+class DebugPool:
+    """
+    Limited fake of multiprocess.Pool that executes sequentially and synchronously to allow debugging
+    """
+
+    @dataclass
+    class Future:
+        results: List[Any]
+
+        def get(self):
+            return self.results
+
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def starmap_async(self, function, arg_lists):
+        future = self.Future([])
+        for arg_list in arg_lists:
+            future.results.append(function(*arg_list))
+        return future
+
+
+
+def estimate_fwhm(psf: phot.psf.EPSFModel) -> float:
+    """
+    Use a 2D symmetric gaussian fit to estimate the FWHM of an empirical psf
+    :param psf: psfmodel to estimate
+    :return: FWHM in pixel coordinates, takes into account oversampling parameter of EPSF
+    """
+    from astropy.modeling import fitting
+    from astropy.modeling.functional_models import Gaussian2D
+
+    # Not sure if this would work for non-quadratic images
+    assert (psf.data.shape[0] == psf.data.shape[1])
+    assert (psf.oversampling[0] == psf.oversampling[1])
+    dim = psf.data.shape[0]
+    center = int(dim / 2)
+    gauss_in = Gaussian2D(x_mean=center, y_mean=center, x_stddev=5, y_stddev=5)
+
+    # force a symmetric gaussian
+    gauss_in.y_stddev.tied = lambda model: model.x_stddev
+
+    x, y = np.mgrid[:dim, :dim]
+    gauss_out = fitting.LevMarLSQFitter()(gauss_in, x, y, psf.data)
+
+    # have to divide by oversampling to get back to original scale
+    return gauss_out.x_fwhm / psf.oversampling[0]
+
 
 def pairwise(iterable):
-    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
     a, b = itertools.tee(iterable)
     next(b, None)
     return zip(a, b)
 
-
-oversampling = 4
-psf_size = 201
 
 psf_offsets = [[0, 0], [200, 0], [400, 0],
                [0, 200], [200, 200], [400, 200],
@@ -57,41 +130,90 @@ def get_img_subframes(data: np.ndarray, segments=3):
 
 
 def psf_from_image(image: np.ndarray):
-    offset = int(psf_size/2)
-    origin = [offset/oversampling, offset/oversampling]
-    model = phot.psf.EPSFModel(image, flux=1, oversampling=oversampling, origin=origin)
+    offset = int(known_psf_size / 2)
+    origin = [offset / known_psf_oversampling, offset / known_psf_oversampling]
+    model = phot.psf.EPSFModel(image, flux=1, oversampling=known_psf_oversampling, origin=origin)
     return phot.prepare_psf_model(model, renormalize_psf=False)
 
 
-def runme(image, psf, offset):
-    # if np.isclose(np.sum(psf.psfmodel.data), 0):
-    #     continue
-    fwhm = estimate_fwhm(psf.psfmodel)
+def naco_astrometry(image, input_psf, offset, reference_table, use_reference=False, use_psf=False):
+
+    fwhm = estimate_fwhm(input_psf.psfmodel)
     mean, median, std = sigma_clipped_stats(image)
+    # todo make configurable
+    #  values here are handfudged to get maximum amount of candidates
+    #  ommitted peakmax = 10_000
 
-    grouper = phot.DAOGroup(3*fwhm)
-    # values here are handfudged to get maximum amount of candidates
-    # ommitted peakmax = 10_000
-    finder = phot.IRAFStarFinder(threshold=median*0.05, fwhm=fwhm*1.5, brightest=300, minsep_fwhm=0.4)
-    photometry = phot.IterativelySubtractedPSFPhotometry(
-        group_maker=grouper,
-        finder=finder,
-        bkg_estimator=phot.MMMBackground(),
-        aperture_radius=fwhm,
-        fitshape=psf_size,
-        psf_model=psf, niters=3)
+    finder = phot.IRAFStarFinder(threshold=median*threshold_factor,
+                                 fwhm=fwhm*fwhm_factor,
+                                 brightest=n_brightest,
+                                 minsep_fwhm=minsep_fwhm,
+                                 peakmax=peakmax)
 
-    result = photometry(image)
+    if np.all(np.isnan(image)):
+        return table.Table()
+
+    if use_reference:
+        stars_tbl = reference_table.copy()
+        stars_tbl.rename_columns(['XRAW', 'YRAW'], ['x', 'y'])
+        stars_tbl['x'] -= offset[0]
+        stars_tbl['y'] -= offset[1]
+        cut_x = (stars_tbl['x'] >= 0) & (stars_tbl['x'] <= image.shape[1])
+        cut_y = (stars_tbl['y'] >= 0) & (stars_tbl['y'] <= image.shape[0])
+        stars_tbl = stars_tbl[cut_x & cut_y]
+    else:
+        stars_tbl = finder(image)
+        stars_tbl.rename_columns(['xcentroid', 'ycentroid'], ['x', 'y'])
+
+    if use_psf:
+        psf = input_psf
+    else:
+        image_no_background = image - median
+        stars = phot.extract_stars(NDData(image_no_background), stars_tbl, size=cutout_size)
+        epsf, fitted_stars = phot.EPSFBuilder(oversampling=oversampling,
+                                         maxiters=epsf_iters,
+                                         progress_bar=True,
+                                         smoothing_kernel=smoothing_kernel).build_epsf(stars)
+        psf = phot.prepare_psf_model(epsf, renormalize_psf=False)
+
+
+    grouper = phot.DAOGroup(group_radius*fwhm)
+
+    if use_reference:
+        photometry = phot.BasicPSFPhotometry(
+            group_maker=grouper,
+            finder=finder,
+            bkg_estimator=phot.MMMBackground(),
+            aperture_radius=fwhm,
+            fitshape=fitshape,
+            psf_model=psf)
+        stars_tbl.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+        size = len(stars_tbl)
+        stars_tbl['x_0'] += np.random.uniform(0.1,  0.2, size) * np.random.choice([-1, 1], size)
+        stars_tbl['y_0'] += np.random.uniform(0.1,  0.2, size) * np.random.choice([-1, 1], size)
+        result = photometry(image, init_guesses=stars_tbl)
+    else:
+        photometry = phot.IterativelySubtractedPSFPhotometry(
+            group_maker=grouper,
+            finder=finder,
+            bkg_estimator=phot.MMMBackground(),
+            aperture_radius=fwhm,
+            fitshape=fitshape,
+            psf_model=psf,
+            niters=photometry_iters
+        )
+
+        result = photometry(image)
+
     result['x_fit'] += offset[0]
     result['y_fit'] += offset[1]
 
     return result
 
 
-def do_it(image_name: str, psf_name: str):
+def astrometry_wrapper(image_name: str, psf_name: str, reference_table_name: str):
 
     image_data = fits.getdata(image_name)
-    #image_data = image_data - phot.Background2D(image_data, (50,50)).background
     image_data[image_data < 0] = np.nan
     mask = np.zeros(image_data.shape, dtype=bool)
     mask[0:512, 0:512] = 1
@@ -102,21 +224,44 @@ def do_it(image_name: str, psf_name: str):
     psf_subframes = get_psf_subframe(psf_data)
     psf_models = [psf_from_image(p) for p in psf_subframes]
 
-    with mp.Pool() as p:
-        results = p.starmap(runme, zip(image_subframes, psf_models, offsets))
+    ref = table.Table.read('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym',
+                           format='ascii')
+    # make 0-indexed
+    ref['XRAW'] -= 1
+    ref['YRAW'] -= 1
 
-    return image_data, psf_data, table.vstack(results)
+    # with DebugPool() as p:
+    with mp.Pool() as p:
+        ref_psf = p.starmap_async(
+            naco_astrometry, zip(image_subframes, psf_models, offsets, repeat(ref), repeat(True), repeat(True)))
+        ref_nopsf = p.starmap_async(
+            naco_astrometry, zip(image_subframes, psf_models, offsets, repeat(ref), repeat(True), repeat(False)))
+        noref_psf = p.starmap_async(
+            naco_astrometry, zip(image_subframes, psf_models, offsets, repeat(ref), repeat(False), repeat(True)))
+        noref_nopsf = p.starmap_async(
+            naco_astrometry, zip(image_subframes, psf_models, offsets, repeat(ref), repeat(False), repeat(False)))
+
+        results = {'ref_psf': table.vstack(ref_psf.get()),
+                   'ref_nopsf': table.vstack(ref_nopsf.get()),
+                   'noref_psf': table.vstack(noref_psf.get()),
+                   'noref_nopsf': table.vstack(noref_nopsf.get())
+                   }
+        return image_data, psf_data, ref, results
 
 
 if __name__ == '__main__':
-    img, psf, res = do_it('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits',
-              '../test_images_naco/PSF.NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.fits')
+    img, psf, ref, results =\
+        astrometry_wrapper('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits',
+                          '../test_images_naco/PSF.NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.fits',
+                          '../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym')
 
-    ref = table.Table.read('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym', format='ascii')
-    imshow(img, cmap='hot')
-    plot(ref['XRAW']-1, ref['YRAW']-1, 'go', markersize=3, alpha=1, label='reference analysis')
-    plot(res['x_fit'], res['y_fit'], 'b+', markersize=2, alpha=1, label='photutils')
-    legend()
+    for name, res in results.items():
+        figure()
+        imshow(img, cmap='hot')
+        plot(ref['XRAW'], ref['YRAW'], 'go', markersize=3, alpha=1, label='reference analysis')
+        plot(res['x_fit'], res['y_fit'], 'b+', markersize=2, alpha=1, label='photutils')
+        title(name)
+        legend()
     show()
 
 
