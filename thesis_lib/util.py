@@ -258,6 +258,10 @@ def read_coo(coo_filename):
     tab = Table.read(coo_filename, data_start=3, format='ascii',
                      names=['id', 'x', 'y', 'm', 'sharp', 'round', 'dy'])
     tab.meta = meta
+
+    # adapt xy to zero-indexing
+    tab['x'] -= 1
+    tab['y'] -= 1
     return tab
 
 
@@ -281,4 +285,7 @@ def read_ap(ap_filename):
 
     tab = Table(data, names = names)
     tab.meta = meta
+    # adapt xy to zero-indexing
+    tab['x'] -= 1
+    tab['y'] -= 1
     return tab
