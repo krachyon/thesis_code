@@ -9,6 +9,7 @@ from scipy.interpolate import RectBivariateSpline
 from photutils import CircularAperture
 from typing import List, Any
 from dataclasses import dataclass
+import re
 
 
 def gauss(x, a, x0, σ):
@@ -214,7 +215,7 @@ class DebugPool:
     class Future:
         results: List[Any]
 
-        def get(self):
+        def get(self, *args):
             return self.results
 
 
@@ -231,3 +232,53 @@ class DebugPool:
         return future
 
 
+_number_regex = re.compile(r'''[+-]?\d+  # optional sign, mandatory digit(s) 
+                              \.?\d*  # possible decimal dot can be followed by digits
+                              (?:[eE][+-]?\d+)? # non-capturing group for exponential
+                           ''', re.VERBOSE)
+
+
+def _read_header(daophot_filename):
+    # parse header
+    with open(daophot_filename, 'r') as f:
+        name_line = f.readline().strip()
+        number_line = f.readline().strip()
+
+    header_names = re.split(r'\s+', name_line)
+    header_values = re.findall(_number_regex, number_line)
+
+    assert len(header_values) == len(header_names)
+    return dict(zip(header_names, header_values))
+
+
+def read_coo(coo_filename):
+
+    meta = _read_header(coo_filename)
+    # read main content
+    tab = Table.read(coo_filename, data_start=3, format='ascii',
+                     names=['id', 'x', 'y', 'm', 'sharp', 'round', 'dy'])
+    tab.meta = meta
+    return tab
+
+
+def read_ap(ap_filename):
+    meta = _read_header(ap_filename)
+
+    with open(ap_filename, 'r') as f:
+        content = f.readlines()[2:]
+
+    datalines = ''.join(content).strip().split('\n\n')
+    data = np.array([re.findall(_number_regex, i) for i in datalines], dtype=float)
+
+    # variable column width depending on number of apertures, 6 fixed columns
+    n_apertures = (data.shape[1] - 6)/2
+    assert (n_apertures - int(n_apertures)) == 0
+    n_apertures = int(n_apertures)
+    names = ['id', 'x', 'y'] + \
+            [f'mag_{i}' for i in range(n_apertures)] +\
+            ['sky', 'sky_err', 'sky_skew'] + \
+            [f'mag_err_{i}' for i in range(n_apertures)]
+
+    tab = Table(data, names = names)
+    tab.meta = meta
+    return tab

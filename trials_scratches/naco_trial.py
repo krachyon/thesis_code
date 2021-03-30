@@ -15,22 +15,25 @@ from typing import List, Any
 known_psf_oversampling = 4  # for precomputed psf
 known_psf_size = 201  # dito
 
-photometry_iters = 3
+# photometry
+photometry_iters = 8
+fitshape = 15
 
 # epsf_fit
 cutout_size = 51
-fitshape = 31
-smoothing_kernel = 'quartic'
+smoothing_kernel = 'quadratic'
 oversampling = 4
 epsf_iters = 5
+
 # grouper
-group_radius = 3
+group_radius = 1.5
 # starfinder
-threshold_factor = 0.05  # img_median*this
-fwhm_factor = 1.5  # fwhm*this
+
+threshold_factor = 0.01  # img_median*this
+fwhm_factor = 1.  # fwhm*this
 n_brightest = 50  # use only n stars
-minsep_fwhm = 0.4  # only find stars at least this*fwhm apart
-peakmax = 50_000  #only find stars below this pixel value
+minsep_fwhm = 0.3  # only find stars at least this*fwhm apart
+peakmax = 10_000  #only find stars below this pixel value
 
 
 class DebugPool:
