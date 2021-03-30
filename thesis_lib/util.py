@@ -238,7 +238,17 @@ _number_regex = re.compile(r'''[+-]?\d+  # optional sign, mandatory digit(s)
                            ''', re.VERBOSE)
 
 
-def _read_header(daophot_filename):
+def _read_header(daophot_filename: str) -> dict:
+    """
+    Read the header of a daophot file
+    expected format:
+    0: name0 name1 name2
+    1: num0 num1 num2
+
+    As daophot uses fixed with, numbers are not always separated by spaces
+    :param daophot_filename: file containing a daophot table
+    :return: dictionary {name0:num0,...}
+    """
     # parse header
     with open(daophot_filename, 'r') as f:
         name_line = f.readline().strip()
@@ -251,7 +261,12 @@ def _read_header(daophot_filename):
     return dict(zip(header_names, header_values))
 
 
-def read_coo(coo_filename):
+def read_coo(coo_filename: str) -> Table:
+    """
+    Read the contents of a daophot .coo (FIND) file as an astropy table
+    :param coo_filename:
+    :return:
+    """
 
     meta = _read_header(coo_filename)
     # read main content
@@ -265,7 +280,12 @@ def read_coo(coo_filename):
     return tab
 
 
-def read_ap(ap_filename):
+def read_ap(ap_filename: str) -> Table:
+    """
+    read contents of a daophot .ap (PHOTOMETRY) file as an astropy table
+    :param ap_filename: 
+    :return:
+    """
     meta = _read_header(ap_filename)
 
     with open(ap_filename, 'r') as f:
