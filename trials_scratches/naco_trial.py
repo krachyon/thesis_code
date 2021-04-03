@@ -2,7 +2,7 @@ from pylab import *
 import photutils as phot
 from astropy.io import fits
 import numpy as np
-import astropy.table as table
+from astropy.table import vstack, Table
 import itertools
 from itertools import repeat
 from astropy.stats import sigma_clipped_stats
@@ -10,6 +10,8 @@ import multiprocessing as mp
 from astropy.nddata import NDData
 from dataclasses import dataclass
 from typing import List, Any
+from pathlib import Path
+import re
 
 # Configuration
 known_psf_oversampling = 4  # for precomputed psf
@@ -45,7 +47,7 @@ class DebugPool:
     class Future:
         results: List[Any]
 
-        def get(self):
+        def get(self,*args):
             return self.results
 
 
@@ -62,6 +64,52 @@ class DebugPool:
         return future
 
 
+_number_regex = re.compile(r'''[+-]?\d+  # optional sign, mandatory digit(s) 
+                              \.?\d*  # possible decimal dot can be followed by digits
+                              (?:[eE][+-]?\d+)? # non-capturing group for exponential
+                           ''', re.VERBOSE)
+
+
+def _read_header(daophot_filename: str) -> dict:
+    """
+    Read the header of a daophot file
+    expected format:
+    0: name0 name1 name2
+    1: num0 num1 num2
+
+    As daophot uses fixed with, numbers are not always separated by spaces
+    :param daophot_filename: file containing a daophot table
+    :return: dictionary {name0:num0,...}
+    """
+    # parse header
+    with open(daophot_filename, 'r') as f:
+        name_line = f.readline().strip()
+        number_line = f.readline().strip()
+
+    header_names = re.split(r'\s+', name_line)
+    header_values = re.findall(_number_regex, number_line)
+
+    assert len(header_values) == len(header_names)
+    return dict(zip(header_names, header_values))
+
+
+def read_dp_coo(coo_filename: str) -> Table:
+    """
+    Read the contents of a daophot .coo (FIND) file as an astropy table
+    :param coo_filename:
+    :return:
+    """
+
+    meta = _read_header(coo_filename)
+    # read main content
+    tab = Table.read(coo_filename, data_start=3, format='ascii',
+                     names=['id', 'x', 'y', 'm', 'sharp', 'round', 'dy'])
+    tab.meta = meta
+
+    # adapt xy to zero-indexing
+    tab['x'] -= 1
+    tab['y'] -= 1
+    return tab
 
 def estimate_fwhm(psf: phot.psf.EPSFModel) -> float:
     """
@@ -154,7 +202,7 @@ def naco_astrometry(image, input_psf, offset, reference_table, use_reference=Fal
                                  peakmax=peakmax)
 
     if np.all(np.isnan(image)):
-        return table.Table()
+        return Table()
 
     if use_reference:
         stars_tbl = reference_table.copy()
@@ -227,7 +275,7 @@ def astrometry_wrapper(image_name: str, psf_name: str, reference_table_name: str
     psf_subframes = get_psf_subframe(psf_data)
     psf_models = [psf_from_image(p) for p in psf_subframes]
 
-    ref = table.Table.read('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym',
+    ref = Table.read('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym',
                            format='ascii')
     # make 0-indexed
     ref['XRAW'] -= 1
@@ -244,27 +292,37 @@ def astrometry_wrapper(image_name: str, psf_name: str, reference_table_name: str
         noref_nopsf = p.starmap_async(
             naco_astrometry, zip(image_subframes, psf_models, offsets, repeat(ref), repeat(False), repeat(False)))
 
-        results = {'ref_psf': table.vstack(ref_psf.get()),
-                   'ref_nopsf': table.vstack(ref_nopsf.get()),
-                   'noref_psf': table.vstack(noref_psf.get()),
-                   'noref_nopsf': table.vstack(noref_nopsf.get())
+        results = {'ref_psf': vstack(ref_psf.get()),
+                   'ref_nopsf': vstack(ref_nopsf.get()),
+                   'noref_psf': vstack(noref_psf.get()),
+                   'noref_nopsf': vstack(noref_nopsf.get())
                    }
         return image_data, psf_data, ref, results
 
 
 if __name__ == '__main__':
-    img, psf, ref, results =\
-        astrometry_wrapper('../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits',
-                          '../test_images_naco/PSF.NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.fits',
-                          '../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.clean.xym')
+    img_folder = '../test_images_naco'
+    basenames = ['NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15',
+                 'NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15']
 
-    for name, res in results.items():
-        figure()
-        imshow(img, cmap='hot')
-        plot(ref['XRAW'], ref['YRAW'], 'go', markersize=3, alpha=1, label='reference analysis')
-        plot(res['x_fit'], res['y_fit'], 'b+', markersize=2, alpha=1, label='photutils')
-        title(name)
-        legend()
-    show()
+    for basename in basenames:
+        psf_name = Path(img_folder)/('PSF.'+basename+'.clean.fits')
+        img_name = Path(img_folder)/(basename+'.fits')
+        ref_max_name = Path(img_folder)/(basename+'.clean.xym')
+        ref_dav_name = Path(img_folder)/(basename+'_davide.coo')
+
+        img, psf, ref_max, results = astrometry_wrapper(img_name, psf_name, ref_max_name)
+        ref_dav = read_dp_coo(ref_dav_name)
+
+
+        for name, res in results.items():
+            figure()
+            imshow(img, cmap='hot')
+            plot(ref_max['XRAW'], ref_max['YRAW'], 'go', markersize=3, alpha=1, label='max analysis')
+            plot(ref_dav['x'], ref_dav['y'], 'rx', markersize=2, label='davide analysis')
+            plot(res['x_fit'], res['y_fit'], 'b+', markersize=2, alpha=1, label='photutils')
+            title(name)
+            legend()
+        show()
 
 

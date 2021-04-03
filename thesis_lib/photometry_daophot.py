@@ -12,19 +12,19 @@ from thesis_lib.photometry import PhotometryResult
 from thesis_lib.util import magnitude_to_flux
 
 
-def run_daophot_photometry(image:np.ndarray,
+def run_daophot_photometry(image: np.ndarray,
                            input_table: Optional[astropy.table.Table],
-                           options=(('FITTING RADIUS', '6.0'),)):
+                           daophot_options=(('FITTING RADIUS', '6.0'),)):
     """
     Perform psf photometry with daophot as per the astwro pydaophot tutorial.
     Warning: This will just lock up if an issue occurs, then you need to debug it by looking at
     the "commands" passed to daophot as stdin by the runner and see why it chocked
     :param image: what to analyze
     :param input_table: want to cheat on the initial positions?
-    :param options: pass daophot options as list/tuple of key-val tuples
+    :param daophot_options: pass daophot options as list/tuple of key-val tuples
     :return: PhotometryResult, but only input_table, image and result table are filled
     """
-    dp = Daophot(options=options)
+    dp = Daophot(options=daophot_options)
     image_file_name = os.path.join(dp.dir, 'input.fits')
     hdu = fits.PrimaryHDU(image)
     hdu.data = hdu.data.astype(np.float32)

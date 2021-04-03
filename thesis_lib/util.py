@@ -261,7 +261,7 @@ def _read_header(daophot_filename: str) -> dict:
     return dict(zip(header_names, header_values))
 
 
-def read_coo(coo_filename: str) -> Table:
+def read_dp_coo(coo_filename: str) -> Table:
     """
     Read the contents of a daophot .coo (FIND) file as an astropy table
     :param coo_filename:
@@ -280,10 +280,10 @@ def read_coo(coo_filename: str) -> Table:
     return tab
 
 
-def read_ap(ap_filename: str) -> Table:
+def read_dp_ap(ap_filename: str) -> Table:
     """
     read contents of a daophot .ap (PHOTOMETRY) file as an astropy table
-    :param ap_filename: 
+    :param ap_filename:
     :return:
     """
     meta = _read_header(ap_filename)
@@ -303,7 +303,7 @@ def read_ap(ap_filename: str) -> Table:
             ['sky', 'sky_err', 'sky_skew'] + \
             [f'mag_err_{i}' for i in range(n_apertures)]
 
-    tab = Table(data, names = names)
+    tab = Table(data, names=names)
     tab.meta = meta
     # adapt xy to zero-indexing
     tab['x'] -= 1
