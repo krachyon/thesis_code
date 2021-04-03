@@ -1,9 +1,9 @@
-.
+-e .
 anisocado>=0.2
 astropy>=4.2
 matplotlib>=3.3.4
 numpy>=1.20.1
-git+git://github.com/krachyon/photutils.git@working#egg=photutils
+-e git+git://github.com/krachyon/photutils.git@working#egg=photutils
 scipy>=1.6.1
 scopesim>=0.1.0
 scopesim_templates
