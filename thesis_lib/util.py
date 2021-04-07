@@ -10,6 +10,7 @@ from photutils import CircularAperture
 from typing import List, Any
 from dataclasses import dataclass
 import re
+import astropy.io.fits
 
 
 def gauss(x, a, x0, σ):
@@ -309,3 +310,21 @@ def read_dp_ap(ap_filename: str) -> Table:
     tab['x'] -= 1
     tab['y'] -= 1
     return tab
+
+
+def getdata_safer(filename, *args, **kwargs):
+    """
+    Wrapper for astropy.io.fits.getdata to coerce data into float64 with native byteorder.
+    FITS are default big-endian which can cause weird stuff to happen as numpy stores it as-is in memory
+    :param filename: what to read
+    :param args: further args to fits.getdata
+    :param kwargs: further keyword-args to fits.getdata
+    :return: the read data
+    """
+    data = astropy.io.fits.getdata(filename, *args, **kwargs)\
+        .astype(np.float64, order='C', copy=False)
+
+    assert data.dtype.byteorder == '='
+    assert data.flags.c_contiguous
+
+    return data

@@ -308,38 +308,29 @@ def run_photometry(image, input_table, filename='?', config=Config.instance()) -
     :param config: instance of Config containing all processing parameters
     :return: PhotometryResult, (image, input_table, result_table, epsf, star_guesses)
     """
-    try:
-        print(f'starting job on image {filename} with {config}')
 
-        mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
-        threshold = median + config.threshold_factor * std
+    print(f'starting job on image {filename} with {config}')
 
-        finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
+    mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+    threshold = median + config.threshold_factor * std
 
-        # TODO does not work with just the brackets
-        star_guesses = photutils.EPSFStars(make_stars_guess(image,
-                                                            finder,
-                                                            cutout_size=config.cutout_size)[:config.stars_to_keep])
+    finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
 
-        epsf = make_epsf_fit(star_guesses,
-                             iters=config.epsfbuilder_iters,
-                             oversampling=config.oversampling,
-                             smoothing_kernel=config.smoothing,
-                             epsf_guess=config.epsf_guess)
+    star_guesses = make_stars_guess(image, finder, cutout_size=config.cutout_size)[:config.stars_to_keep]
 
-        if config.use_catalogue_positions:
-            guess_table = input_table.copy()
-            guess_table = cut_edges(guess_table, config.cutout_size, image.shape[0])
-            guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
-        else:
-            guess_table = None
+    epsf = make_epsf_fit(star_guesses,
+                         iters=config.epsfbuilder_iters,
+                         oversampling=config.oversampling,
+                         smoothing_kernel=config.smoothing,
+                         epsf_guess=config.epsf_guess)
 
-        result_table = do_photometry_epsf(image, epsf, finder, initial_guess=guess_table, config=config)
+    if config.use_catalogue_positions:
+        guess_table = input_table.copy()
+        guess_table = cut_edges(guess_table, config.cutout_size, image.shape[0])
+        guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+    else:
+        guess_table = None
 
-        return PhotometryResult(image, input_table, result_table, epsf, star_guesses, config, filename)
-    except Exception as ex:
-        import traceback
-        print(f'error in photometry_full({filename}, {config})')
-        error = ''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))
-        print(error)
-        return error
+    result_table = do_photometry_epsf(image, epsf, finder, initial_guess=guess_table, config=config)
+
+    return PhotometryResult(image, input_table, result_table, epsf, star_guesses, config, filename)

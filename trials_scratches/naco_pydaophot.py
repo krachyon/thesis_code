@@ -5,10 +5,11 @@ import astropy
 import photutils as phot
 from astropy.visualization import simple_norm
 from astropy.table import Table
+import numpy as np
 
 img_path = '../test_images_naco/NACO.2018-08-12T00:10:49.488_NGC6441_P13_flt.subtr15.fits'
 #img_path = fits_image()
-img = astropy.io.fits.getdata(img_path)
+img = astropy.io.fits.getdata(img_path).astype(np.float64)
 
 sharplo=0.3
 sharphi=1.4

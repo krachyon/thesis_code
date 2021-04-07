@@ -264,14 +264,14 @@ def naco_astrometry(image, input_psf, offset, reference_table, use_reference=Fal
 
 def astrometry_wrapper(image_name: str, psf_name: str, reference_table_name: str):
 
-    image_data = fits.getdata(image_name)
+    image_data = fits.getdata(image_name).astype(np.float64)
     image_data[image_data < 0] = np.nan
     mask = np.zeros(image_data.shape, dtype=bool)
     mask[0:512, 0:512] = 1
     image_data[mask] = np.nan
 
     image_subframes, offsets = get_img_subframes(image_data)
-    psf_data   = fits.getdata(psf_name)
+    psf_data   = fits.getdata(psf_name).astype(np.float64)
     psf_subframes = get_psf_subframe(psf_data)
     psf_models = [psf_from_image(p) for p in psf_subframes]
 

@@ -15,6 +15,7 @@ from astropy.table import Table
 
 from .config import Config
 from .scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale, make_psf
+from .util import getdata_safer
 
 # all generators defined here should return a source table with the following columns
 # x,y are in pixel scale
@@ -302,7 +303,7 @@ def read_or_generate_image(recipe: Callable[[], Tuple[np.ndarray, Table]],
     table_name = join(directory, filename_base + '.dat')
     with filename_locks[filename_base]:
         if exists(image_name) and exists(table_name):
-            img = fits.open(image_name)[0].data
+            img = getdata_safer(image_name)
             table = Table.read(table_name, format='ascii.ecsv')
         else:
             img, table = recipe()
@@ -327,7 +328,7 @@ def read_or_generate_helper(recipe: Callable[[], Tuple[np.ndarray, Table]],
     image_name = join(directory, filename_base + '.fits')
     with filename_locks[filename_base]:
         if exists(image_name):
-            img = fits.open(image_name)[0].data
+            img = getdata_safer(image_name)
         else:
             img = recipe()
             PrimaryHDU(img).writeto(image_name, overwrite=True)

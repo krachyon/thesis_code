@@ -11,7 +11,7 @@ from photutils.background import MADStdBackgroundRMS, MMMBackground
 import pickle
 import os
 
-image = fits.getdata('./cutout_BS90_V.fits')
+image = fits.getdata('./cutout_BS90_V.fits').astype(np.float64)
 
 epsf_file = 'epsf.pkl'
 

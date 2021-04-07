@@ -6,6 +6,7 @@ import os
 from astropy.io import fits
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+import numpy as np
 
 frame = fits_image()
 #frame='/home/basti/gaus32.fits'
@@ -44,7 +45,7 @@ alls_res = al.ALlstar(image_file=frame, stars='i.ap', subtracted_image_file='is.
 #shutil.copy(frame, 'i.fits')
 
 #img = fits.getdata(frame)
-img = fits.getdata(os.path.join(dp.dir, 'is.fits'))
+img = fits.getdata(os.path.join(dp.dir, 'is.fits')).astype(np.float64)
 plt.imshow(img, norm=LogNorm())
 plt.plot(alls_res.als_stars['x']-1, alls_res.als_stars['y']-1, 'ro')
 plt.show()

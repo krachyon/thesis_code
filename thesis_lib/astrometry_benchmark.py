@@ -174,6 +174,8 @@ def main():
 
     # Honestly you'll have to change this yourself for your machine. Too much and you won't have enough memory
     n_threads = 10
+    #from .util import DebugPool
+    #with DebugPool() as pool:
     with mp.Pool(n_threads) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
         futures = []
