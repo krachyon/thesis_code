@@ -1,8 +1,12 @@
-import multiprocessing
+import os
+import time
+
+import multiprocess
 from collections import defaultdict
 from os.path import exists, join
-from os import mkdir
+from os import mkdir, remove
 from typing import Callable, Tuple, Union
+from contextlib import contextmanager
 
 import anisocado
 import numpy as np
@@ -282,9 +286,45 @@ def lowpass(std=5):
     return transform
 
 
+# TODO this and the previous attempt don't work: Everything here is executed by each process
+#  independently. Need one manager object in the main process and pass it to children in construction
+#  of Pool. Not sure if this can be automated somehow.
+#  Maybe implement wrapper for Pool, that passes a manager that's initialized once in main proc
+#  by checking if we have children
+
 # make sure concurrent calls with the same filename don't tread on each other's toes.
 # only generate/write file once
-filename_locks = defaultdict(lambda: multiprocessing.Lock())
+# manager = multiprocess.Manager()
+# filename_locks = manager.dict()
+#
+# def get_lock(filename_base):
+#     try:
+#         return filename_locks[filename_base]
+#     except KeyError:
+#         filename_locks[filename_base] = multiprocess.Lock()
+#         return filename_locks[filename_base]
+
+# TODO hacky fs-locks
+@contextmanager
+def get_lock(filename_base):
+    np.random.seed(os.getpid())
+    time.sleep(np.random.uniform(0, 0.5))
+
+    name = filename_base+'.lockfile'
+    while exists(name):
+        time.sleep(0.1)
+    f = open(name, 'w')
+    f.write('a')
+    f.flush()
+    try:
+        yield f
+    finally:
+        f.close()
+        try:
+            os.remove(name)
+        except:
+            pass
+
 
 
 def read_or_generate_image(recipe: Callable[[], Tuple[np.ndarray, Table]],
@@ -301,7 +341,8 @@ def read_or_generate_image(recipe: Callable[[], Tuple[np.ndarray, Table]],
         mkdir(directory)
     image_name = join(directory, filename_base + '.fits')
     table_name = join(directory, filename_base + '.dat')
-    with filename_locks[filename_base]:
+
+    with get_lock(filename_base):
         if exists(image_name) and exists(table_name):
             img = getdata_safer(image_name)
             table = Table.read(table_name, format='ascii.ecsv')
@@ -327,7 +368,7 @@ def read_or_generate_helper(recipe: Callable[[], np.ndarray],
     if not exists(directory):
         mkdir(directory)
     image_name = join(directory, filename_base + '.fits')
-    with filename_locks[filename_base]:
+    with get_lock(filename_base):
         if exists(image_name):
             img = getdata_safer(image_name)
         else:
@@ -403,10 +444,22 @@ lowpass_images = {
         lambda: gaussian_cluster(4000, magnitude=expmag, psf_transform=lowpass())
 }
 
-
 helpers = {
     'anisocado_psf':
         lambda: make_anisocado_kernel().array,
     'single_star_image':
         lambda: make_single_star_image()
+}
+
+benchmark_images = {
+    'scopesim_grid_16_perturb2_mag18_24':
+        lambda: scopesim_grid(N1d=16, perturbation=2.,
+                              magnitude=lambda N: np.random.uniform(18, 24, N)),
+    'scopesim_grid_16_perturb2_lowpass_mag18_24':
+        lambda: scopesim_grid(N1d=16, perturbation=2.,
+                              magnitude=lambda N: np.random.uniform(18, 24, N), psf_transform=lowpass()),
+    'gausscluster_N2000_mag22':
+        lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N)),
+    'gausscluster_N2000_mag22_lowpass':
+        lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N), psf_transform=lowpass()),
 }

@@ -209,14 +209,6 @@ def do_photometry_epsf(image: np.ndarray,
     photometry_iterations = config.photometry_iterations
 
     epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)  # renormalize is super slow...
-    # TODO
-    #  Okay, somehow this seems to be the issue: CompoundModel._map_parameters somehow gets screwed up by the way
-    #  prepare_psf_model combines models into a tree and you get wrong parameter names (offset_0_1 -> offset_4)
-    #  For some reason the call to _map_parameters really messes up the debugger when you try to step in.
-    #  Figure out if we can maybe add the missing Parameters ourselves somehow. But working with these models seems
-    #  unpleasant as far as just adding parameters
-    #  This issue is only triggered if you get multiple stars per group as then the compound of two star models is
-    #  constructed
 
     background_rms = MADStdBackgroundRMS()
 
@@ -298,7 +290,10 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
         return error
 
 
-def run_photometry(image, input_table, filename='?', config=Config.instance()) -> Union[PhotometryResult, str]:
+def run_photometry(image: np.ndarray,
+                   input_table: Table,
+                   filename: str = '?',
+                   config=Config.instance()) -> Union[PhotometryResult, str]:
     """
     apply EPSF fitting photometry to a testimage
 
