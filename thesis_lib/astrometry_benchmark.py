@@ -57,9 +57,20 @@ def photometry_with_plots(image_recipe: Callable[[], Tuple[np.ndarray, Table]],
     :param config: instance of Config containing all processing parameters
     :return: PhotometryResult
     """
-    image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
-    result = run_photometry(image, input_table, image_name, config)
-    run_plots(result)
+    try:
+        image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
+        result = run_photometry(image, input_table, image_name, config)
+        run_plots(result)
+
+    except Exception as ex:
+        import traceback
+        print('\033[93m##############\033[0m')
+        print(f'error in photometry_with_plots({image_name}, {config})')
+        print('\033[93m##############\033[0m')
+        error = ''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+        print(error)
+        return error
+
     return result
 
 
@@ -174,9 +185,9 @@ def main():
 
     # Honestly you'll have to change this yourself for your machine. Too much and you won't have enough memory
     n_threads = 10
-    #from .util import DebugPool
-    #with DebugPool() as pool:
-    with mp.Pool(n_threads) as pool:
+    from .util import DebugPool
+    with DebugPool() as pool:
+    #with mp.Pool(n_threads) as pool:
         # call photometry_full(*args[0]), photometry_full(*args[1]) ...
         futures = []
         results = []

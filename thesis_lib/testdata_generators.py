@@ -307,13 +307,14 @@ def read_or_generate_image(recipe: Callable[[], Tuple[np.ndarray, Table]],
             table = Table.read(table_name, format='ascii.ecsv')
         else:
             img, table = recipe()
+            img = img.astype(np.float64, order='C', copy=False)
             PrimaryHDU(img).writeto(image_name, overwrite=True)
             table.write(table_name, format='ascii.ecsv')
 
     return img, table
 
 
-def read_or_generate_helper(recipe: Callable[[], Tuple[np.ndarray, Table]],
+def read_or_generate_helper(recipe: Callable[[], np.ndarray],
                             filename_base: str,
                             directory: str = Config.instance().image_folder):
     """
@@ -330,7 +331,7 @@ def read_or_generate_helper(recipe: Callable[[], Tuple[np.ndarray, Table]],
         if exists(image_name):
             img = getdata_safer(image_name)
         else:
-            img = recipe()
+            img = recipe().astype(np.float64, order='C', copy=False)
             PrimaryHDU(img).writeto(image_name, overwrite=True)
 
     return img

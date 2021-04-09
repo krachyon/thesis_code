@@ -6,6 +6,15 @@ except RuntimeError:
     assert (multiprocess.get_start_method() == 'forkserver'), \
         'This package only works with the forkserver process startup method'
 
+try:
+    import bottleneck
+    raise ImportError('bottleneck is installed, which is numerically inaccurate. '
+                      'see https://github.com/pydata/bottleneck/issues/379 and '
+                      'https://github.com/astropy/astropy/issues/11492 for details')
+except ModuleNotFoundError:
+    pass
+
+
 from . import astrometry_benchmark
 from . import photometry
 from . import plots_and_sanitycheck

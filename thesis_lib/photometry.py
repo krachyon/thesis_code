@@ -18,6 +18,7 @@ from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, Integrate
 from photutils.psf import EPSFModel
 
 from .config import Config
+from .util import flux_to_magnitude
 config = Config.instance()
 
 
@@ -297,7 +298,6 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
         return error
 
 
-# TODO the giant try block. Better way to not cause exception to propagate if run in Pool?
 def run_photometry(image, input_table, filename='?', config=Config.instance()) -> Union[PhotometryResult, str]:
     """
     apply EPSF fitting photometry to a testimage
@@ -332,5 +332,6 @@ def run_photometry(image, input_table, filename='?', config=Config.instance()) -
         guess_table = None
 
     result_table = do_photometry_epsf(image, epsf, finder, initial_guess=guess_table, config=config)
+    result_table['m'] = flux_to_magnitude(result_table['flux_fit'])
 
     return PhotometryResult(image, input_table, result_table, epsf, star_guesses, config, filename)
