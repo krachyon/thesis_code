@@ -323,6 +323,8 @@ def run_photometry(image: np.ndarray,
         guess_table = input_table.copy()
         guess_table = cut_edges(guess_table, config.cutout_size, image.shape[0])
         guess_table.rename_columns(['x', 'y'], ['x_0', 'y_0'])
+        guess_table['x_0'] += np.random.uniform(-0.2, +0.2, size=len(guess_table['x_0']))
+        guess_table['y_0'] += np.random.uniform(-0.2, +0.2, size=len(guess_table['y_0']))
     else:
         guess_table = None
 
