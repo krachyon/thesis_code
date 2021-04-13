@@ -5,7 +5,7 @@ from thesis_lib.config import Config
 from thesis_lib import util
 from thesis_lib.plots_and_sanitycheck import *
 
-image_name = 'scopesim_grid_16_perturb2_mag18_24'
+image_name = 'gausscluster_N2000_mag22_lowpass'
 image_recipe = testdata_generators.benchmark_images[image_name]
 
 
@@ -13,7 +13,7 @@ def view_objective(cutout_size: int, fitshape_half: int, sigma: float, iters:int
     config = Config()
     config.use_catalogue_positions = True
     config.photometry_iterations = 1
-    config.oversampling = 1
+    config.oversampling = 2
 
     config.smoothing = util.make_gauss_kernel(sigma)
     config.fitshape = fitshape_half*2+1
@@ -29,48 +29,13 @@ def view_objective(cutout_size: int, fitshape_half: int, sigma: float, iters:int
     plot_image_with_source_and_measured(image,input_table,result_table)
     return result, result_table
 
+
 from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm
 
-def plot_evaluations(result, bins=20, dimensions=None):
-    """Visualize the order in which points were sampled during optimization.
 
-    This creates a 2-d matrix plot where the diagonal plots are histograms
-    that show the distribution of samples for each search-space dimension.
+def plot_shape(result, dimensions=None):
 
-    The plots below the diagonal are scatter-plots of the samples for
-    all combinations of search-space dimensions.
-
-    The order in which samples
-    were evaluated is encoded in each point's color.
-
-    A red star shows the best found parameters.
-
-    Parameters
-    ----------
-    result : `OptimizeResult`
-        The optimization results from calling e.g. `gp_minimize()`.
-
-    bins : int, bins=20
-        Number of bins to use for histograms on the diagonal.
-
-    dimensions : list of str, default=None
-        Labels of the dimension
-        variables. `None` defaults to `space.dimensions[i].name`, or
-        if also `None` to `['X_0', 'X_1', ..]`.
-
-    plot_dims : list of str and int, default=None
-        List of dimension names or dimension indices from the
-        search-space dimensions to be included in the plot.
-        If `None` then use all dimensions except constant ones
-        from the search-space.
-
-    Returns
-    -------
-    ax : `Matplotlib.Axes`
-        A 2-d matrix of Axes-objects with the sub-plots.
-
-    """
     space = result.space
     n_dims = space.n_dims
 
@@ -94,7 +59,8 @@ def plot_evaluations(result, bins=20, dimensions=None):
         for col in range(n_dims):
             if row == col:
                 order = np.argsort(x[:,row])
-                ax[row, row].plot(x[:,row][order], y[order])
+                ax[row, row].plot(x[:,row][order], y[order], 'o')
+                ax[row, row].plot(result.x[row], result.fun, 'x')
                 ax[row, row].set_box_aspect(1)
             # lower triangle
             elif row > col:
@@ -115,7 +81,18 @@ def plot_evaluations(result, bins=20, dimensions=None):
                 X, Y = np.mgrid[x0_low:x0_high:img_points*1j, x1_low:x1_high:img_points*1j]
 
                 avg_img = griddata(points, np.array(avgs), (X, Y), method='nearest').T
+                avg_img -= np.min(avg_img)
+                avg_img /= np.max(avg_img)
+                avg_img[~np.isfinite(avg_img)] = np.nanmax(np.hstack((avg_img[avg_img<np.inf],[0.])))
+                avg_img += 0.0001
+                assert(np.all(np.isfinite(avg_img)))
+
                 std_img = griddata(points, np.array(stds), (X, Y), method='nearest').T
+                std_img -= np.min(std_img)
+                std_img /= np.max(std_img)
+                std_img[~np.isfinite(std_img)] = np.nanmax(np.hstack((std_img[std_img<np.inf],[0.])))
+                std_img += 0.0001
+                assert(np.all(np.isfinite(std_img)))
 
                 n_ticks = 6
 
@@ -126,9 +103,8 @@ def plot_evaluations(result, bins=20, dimensions=None):
                 ytick_labels = [f'{i:.2f}' for i in np.linspace(x1_low, x1_high, n_ticks)]
 
                 la = ax[row, col]
-                im = la.imshow(avg_img, origin='lower')
-                breakpoint()
-                la.plot(result.x[col]/x0_high*img_points, result.x[row]/x1_high*img_points, 'r*')
+                im = la.imshow(avg_img, origin='lower', norm=LogNorm())
+                la.plot((result.x[col]-x0_low)/(x0_high-x0_low)*img_points, (result.x[row]-x1_low)/(x1_high-x1_low)*img_points, 'r*')
                 la.set_xticks(xticks)
                 la.set_yticks(yticks)
                 la.set_xticklabels(xtick_labels)
@@ -138,8 +114,8 @@ def plot_evaluations(result, bins=20, dimensions=None):
                 #fig.colorbar(im, ax=ax[i, j])
 
                 ua = ax[col, row]
-                im = ua.imshow(std_img, origin='lower')
-                ua.plot(result.x[col]/x0_high*img_points, result.x[row]/x1_high*img_points, 'r*')
+                im = ua.imshow(std_img, origin='lower', norm=LogNorm())
+                ua.plot((result.x[col]-x0_low)/(x0_high-x0_low)*img_points, (result.x[row]-x1_low)/(x1_high-x1_low)*img_points, 'r*')
                 ua.set_xticks(xticks)
                 ua.set_yticks(yticks)
                 ua.set_xticklabels(xtick_labels)
@@ -147,8 +123,6 @@ def plot_evaluations(result, bins=20, dimensions=None):
                 ua.set_xlabel(dimensions[col])
                 ua.set_ylabel(dimensions[row])
                 #fig.colorbar(im, ax=ax[j, i])
-
-
 
 
 if __name__=='__main__':
