@@ -311,8 +311,6 @@ def run_photometry(image: np.ndarray,
 
     finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
 
-    # TODO should this also be done using the catalogue positions?
-    # TODO can we somehow sort the stars according to usefulness?
     star_guesses = make_stars_guess(image, finder, cutout_size=config.cutout_size)[:config.stars_to_keep]
 
     epsf = make_epsf_fit(star_guesses,

@@ -16,8 +16,7 @@ import dill
 import os
 from collections import namedtuple
 
-result_filename = 'optimize_result_RF_lpcluster.pkl'
-image_name = 'gausscluster_N2000_mag22_lowpass'
+image_name = 'scopesim_grid_16_perturb2_mag18_24'
 image_recipe = testdata_generators.benchmark_images[image_name]
 
 
@@ -26,7 +25,7 @@ def objective(cutout_size: int, fitshape_half: int, sigma: float, iters: int):
         config = Config()
         config.use_catalogue_positions = True
         config.photometry_iterations = 1
-        config.oversampling = 2
+        config.oversampling = 1
 
         config.smoothing = util.make_gauss_kernel(sigma)
         config.fitshape = fitshape_half*2+1
@@ -39,16 +38,24 @@ def objective(cutout_size: int, fitshape_half: int, sigma: float, iters: int):
 
         loss = np.sqrt(np.sum(result_table['offset']**2))
         return loss
-    except Exception as ex:
-        import traceback
-        print('\033[93m##############\033[0m')
-        print(f'error in objective({cutout_size}, {fitshape_half}, {sigma}, {iters})')
-        print('\033[93m##############\033[0m')
-        error = ''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))
-        print(error)
-        raise ex
+    except:
+        return 100
 
 
+result_filename = 'optimize_result_RF_expanded.pkl'
+
+if os.path.exists(result_filename):
+    with open(result_filename, 'rb') as f:
+        optimizer = dill.load(f)
+else:
+    optimizer = Optimizer(
+        dimensions=[Integer(5, 40), Integer(5, 15), Real(0.20, 0.4), Integer(5, 30)],
+        n_jobs=12,
+        random_state=1,
+        base_estimator='RF',
+        n_initial_points=15,
+        initial_point_generator='random'
+    )
 #GaussianProcessRegressor(noise=1e-10)
 
 Job = namedtuple('Job', ('result', 'args'))
@@ -59,24 +66,11 @@ def not_ready(job: Job):
 
 
 if __name__ == '__main__':
-    if os.path.exists(result_filename):
-        with open(result_filename, 'rb') as f:
-            optimizer = dill.load(f)
-    else:
-        optimizer = Optimizer(
-            dimensions=[Integer(5, 40), Integer(1, 10), Real(0.30, 3.), Categorical([4, 5, 7, 10])],
-            n_jobs=12,
-            random_state=1,
-            base_estimator='RF',
-            n_initial_points=14,
-            initial_point_generator='random'
-        )
-
-    n_procs = 11
+    n_procs = 10
     with mp.Pool(n_procs) as p:
         jobs = []
         try:
-            for i in range(100):
+            for i in range(500):
                 args = optimizer.ask()
                 optimizer.update_next()
                 print('#######')

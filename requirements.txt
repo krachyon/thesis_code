@@ -13,4 +13,3 @@ pytest>=6.2.2
 pyckles>=0.1.3
 astwro>=0.7.5
 multiprocess>=0.70.11.1
-scikit-optimize
