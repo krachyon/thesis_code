@@ -17,7 +17,7 @@ config = Config.instance()
 pixel_count = 1024 * u.pixel
 pixel_scale = 0.004 * u.arcsec/u.pixel
 
-max_coord = pixel_count - 1*u.pixel #  size 1024 to max index 1023
+max_pixel_coord = pixel_count - 1 * u.pixel #  size 1024 to max index 1023
 
 filter_name = 'MICADO/filters/TC_filter_K-cont.dat'
 
@@ -33,10 +33,11 @@ def to_pixel_scale(as_coord):
         as_coord *= u.arcsec
 
     shifted_pixel_coord = as_coord / pixel_scale
-    return shifted_pixel_coord + max_coord/2
+    pixel = shifted_pixel_coord + max_pixel_coord / 2
+    return pixel.value
 
 
-def pixel_to_uas(px_coord):
+def pixel_to_mas(px_coord):
     """
     convert position of objects from pixel coordinates to arcseconds
     """
@@ -44,8 +45,9 @@ def pixel_to_uas(px_coord):
         px_coord *= u.pixel
 
     # shift bounds (0,1023) to (-511.5,511.5)
-    coord_shifted = px_coord - max_coord/2
-    return coord_shifted * pixel_scale
+    coord_shifted = px_coord - max_pixel_coord / 2
+    mas = coord_shifted * pixel_scale
+    return mas.value
 
 
 # noinspection PyPep8Naming
@@ -61,7 +63,7 @@ def make_psf(psf_wavelength: float = 2.15,
     :return: effect object you can plug into OpticalTrain
     """
     hdus = anisocado.misc.make_simcado_psf_file(
-        [shift], [psf_wavelength], pixelSize=pixel_scale, N=N)
+        [shift], [psf_wavelength], pixelSize=pixel_scale.value, N=N)
     image = hdus[2]
     image.data = np.squeeze(image.data)  # remove leading dimension, we're only looking at a single picture, not a stack
 

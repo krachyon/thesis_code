@@ -16,9 +16,10 @@ from astropy.io import fits
 from astropy.io.fits import PrimaryHDU
 from astropy.modeling.functional_models import Gaussian2D
 from astropy.table import Table
+import astropy.units as u
 
 from .config import Config
-from .scopesim_helper import setup_optical_train, pixel_scale, pixel_count, filter_name, to_pixel_scale, make_psf
+from .scopesim_helper import setup_optical_train, pixel_scale, filter_name, to_pixel_scale, make_psf, max_pixel_coord, pixel_to_mas
 from .util import getdata_safer
 
 # all generators defined here should return a source table with the following columns
@@ -44,13 +45,15 @@ def scopesim_grid(N1d: int = 16,
     """
     np.random.seed(seed)
 
+
     N = N1d ** 2
     spectral_types = ['A0V'] * N
 
-    y = (np.tile(np.linspace(border, pixel_count - border, N1d), reps=(N1d, 1)) - pixel_count / 2) * pixel_scale
+
+    y = pixel_to_mas(np.tile(np.linspace(border, max_pixel_coord.value - border, N1d), reps=(N1d, 1)))
     x = y.T
-    x += np.random.uniform(0, perturbation * pixel_scale, x.shape)
-    y += np.random.uniform(0, perturbation * pixel_scale, y.shape)
+    x += np.random.uniform(0, perturbation * pixel_scale.value, x.shape)
+    y += np.random.uniform(0, perturbation * pixel_scale.value, y.shape)
 
     m = np.array(magnitude(N))
 
@@ -188,7 +191,7 @@ def convolved_grid(N1d: int = 16,
     return data, table
 
 
-def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=pixel_count):
+def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=max_pixel_coord.value):
     """
     Get a convolvable Kernel from anisocado to approximate field constant MICADO PSF
     :param shift: how far away from center are we?
@@ -246,8 +249,8 @@ def scopesim_groups(N1d: int = 16,
     N = N1d ** 2
     spectral_types = ['A0V'] * N * group_size
 
-    x_center, y_center = (np.mgrid[border:pixel_count - border:N1d * 1j,
-                          border:pixel_count - border:N1d * 1j] - pixel_count / 2) * pixel_scale
+    x_center, y_center = (np.mgrid[border:max_pixel_coord.value - border:N1d * 1j,
+                          border:max_pixel_coord.value - border:N1d * 1j] - max_pixel_coord.value / 2) * pixel_scale.value
 
     x, y = [], []
 
@@ -259,8 +262,8 @@ def scopesim_groups(N1d: int = 16,
         y_angle_offset = np.sin(θ_perturbed) * group_radius
         x_jitter = np.random.uniform(-jitter / 2, jitter / 2, len(θ))
         y_jitter = np.random.uniform(-jitter / 2, jitter / 2, len(θ))
-        x += list(x_c + (x_angle_offset + x_jitter) * pixel_scale)
-        y += list(y_c + (y_angle_offset + y_jitter) * pixel_scale)
+        x += list(x_c + (x_angle_offset + x_jitter) * pixel_scale.value)
+        y += list(y_c + (y_angle_offset + y_jitter) * pixel_scale.value)
 
     m = np.array(magnitude(N * group_size))
 
