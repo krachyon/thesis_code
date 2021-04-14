@@ -8,36 +8,44 @@ import numpy as np
 import scopesim
 
 from .config import Config
+import astropy.units as u
 
 config = Config.instance()
 
 # globals
-pixel_scale = 0.004  # TODO get these from scopesim?
-pixel_count = 1024
+# TODO get these from scopesim?
+pixel_count = 1024 * u.pixel
+pixel_scale = 0.004 * u.arcsec/u.pixel
+
+max_coord = pixel_count - 1*u.pixel #  size 1024 to max index 1023
+
 filter_name = 'MICADO/filters/TC_filter_K-cont.dat'
 
 # generators should be able to run in parallel but scopesim tends to lock up on the initialization
 scopesim_lock = multiprocessing.Lock()
 
 
-@np.vectorize
-def to_pixel_scale(pos):
+def to_pixel_scale(as_coord):
     """
     convert position of objects from arcseconds to pixel coordinates
-    :param pos:
-    :return:
     """
-    # TODO I'm pretty sure this is correct like this, see scopesim_placement for trying it out
-    #  but the distortion seems to be exactly one pixel towards the edges so that seems fishy
-    return pos / pixel_scale + 512
+    if not isinstance(as_coord, u.Quantity):
+        as_coord *= u.arcsec
+
+    shifted_pixel_coord = as_coord / pixel_scale
+    return shifted_pixel_coord + max_coord/2
 
 
-def pixel_to_uas(pixel):
-    import astropy.units as u
-    if not isinstance(pixel, u.Quantity):
-        pixel = pixel * u.pixel
+def pixel_to_uas(px_coord):
+    """
+    convert position of objects from pixel coordinates to arcseconds
+    """
+    if not isinstance(px_coord, u.Quantity):
+        px_coord *= u.pixel
 
-    return (pixel * 4 * u.milliarcsecond / u.pixel).to(u.microarcsecond)
+    # shift bounds (0,1023) to (-511.5,511.5)
+    coord_shifted = px_coord - max_coord/2
+    return coord_shifted * pixel_scale
 
 
 # noinspection PyPep8Naming
