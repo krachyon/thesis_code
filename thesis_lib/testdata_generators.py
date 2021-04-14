@@ -60,7 +60,7 @@ def scopesim_grid(N1d: int = 16,
                                                   x=x.ravel(), y=y.ravel())
     detector = setup_optical_train(make_psf(transform=psf_transform))
 
-    detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
+    detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
     table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
