@@ -1,3 +1,4 @@
+# can be installed from github.com/krachyon/thesis_code
 from thesis_lib.testdata_generators import read_or_generate_image, scopesim_grid, gaussian_cluster, lowpass
 from thesis_lib.scopesim_helper import download
 
