@@ -214,10 +214,13 @@ class DebugPool:
 
     @dataclass
     class Future:
-        results: List[Any]
+        results: Any
 
         def get(self, *args):
             return self.results
+
+        def ready(self):
+            return True
 
 
     def __enter__(self):
@@ -225,6 +228,10 @@ class DebugPool:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+
+    def apply_async(self, function, args):
+        future = self.Future(function(*args))
+        return future
 
     def starmap_async(self, function, arg_lists):
         future = self.Future([])
