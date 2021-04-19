@@ -255,7 +255,7 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
 
         fwhm = estimate_fwhm(epsf.psfmodel)
 
-        finder = DAOStarFinder(threshold=threshold, fwhm=fwhm)
+        finder = DAOStarFinder(threshold=threshold, fwhm=fwhm, sigma_radius=config.sigma_radius)
 
         grouper = DAOGroup(config.separation_factor * fwhm)
 
@@ -309,7 +309,7 @@ def run_photometry(image: np.ndarray,
     mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
     threshold = median + config.threshold_factor * std
 
-    finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess)
+    finder = DAOStarFinder(threshold=threshold, fwhm=config.fwhm_guess, sigma_radius=config.sigma_radius)
 
     # TODO should this also be done using the catalogue positions?
     # TODO can we somehow sort the stars according to usefulness?

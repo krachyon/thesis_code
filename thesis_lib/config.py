@@ -50,6 +50,7 @@ class Config(metaclass=ClassRepr):
     clip_sigma: float = 3.0  # sigma_clipping to apply for star guessing
     threshold_factor: float = 3.  # how many stds brighter than image for star to be detected?
     fwhm_guess: float = 7.  # estimate of PSF fwhm
+    sigma_radius: float = 3.  # clipping radius of starfinder kernel
     separation_factor: float = 2.  # How far do stars need to be apart to be considered a group?
 
     # magic parameters for EPSFBuilder

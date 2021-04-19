@@ -113,7 +113,7 @@ def plot_shape(result, dimensions=None):
                 #fig.colorbar(im, ax=ax[j, i])
 
 
-result_filename = 'daofind_opt_full_threshfwhmsigma.pkl'
+result_filename = 'daofind_opt_full_redo.pkl'
 image_name = 'gausscluster_N2000_mag22'
 image_recipe = benchmark_images[image_name]
 img, ref_table = read_or_generate_image(image_recipe, image_name)
@@ -127,25 +127,25 @@ img, ref_table = read_or_generate_image(image_recipe, image_name)
 
 # for no lowpass:
 # roundlo, roundhi, sharplo, sharphi = -10, 8.5, -11, 2.4
-# thresh, fwhm, sigma_radius = -0.9985482815217563, 2.790086326795894, 4.015963504846637
-# thresh, fwhm, sigma_radius = -2.942323484472957, 2.24827752258762, 4.367898600244883
+# threshold, fwhm, sigma_radius = -2.942323484472957, 2.24827752258762, 4.367898600244883
+# threshold, fwhm, sigma_radius = -0.9985482815217563, 2.790086326795894, 4.015963504846637
+
+#-11.288660990445317, 1.000361717764853, -2.5904444426411564, 1.4934012105230134
+
+dimensions = ('threshold', 'fwhm', 'sigma_radius', 'roundlo', 'roundhi', 'sharplo', 'sharphi')
+dim_vals = [(-6., -3), (2., 3.7), (3., 5.5), (-15., -5.), (0., 10.), (-10., 0.), (0., 5.)]
+n_procs = 11
+n_initial = 500
+n_eval = 1000
 
 
-
-dimensions = ('threshold', 'fwhm', 'sigma_radius')#, 'roundlo', 'roundhi', 'sharplo', 'sharphi'
-dim_vals = [(-5., -0.5), (2., 3.7), (3., 4.5)]
-n_procs = 10
-n_initial = 800
-n_eval = 1200
-
-roundlo, roundhi, sharplo, sharphi = -10, 8.5, -11, 2.4
 xym_pixel = np.array((ref_table['x'], ref_table['y'], ref_table['m'])).T
 lookup_tree = cKDTree(xym_pixel[:, :2])  # only feed x and y to the lookup tree
 
 mean, median, std = sigma_clipped_stats(img)
 
 
-def objective(threshold, fwhm, sigma_radius):
+def objective(threshold, fwhm, sigma_radius, roundlo, roundhi, sharplo, sharphi):
     res_table = DAOStarFinder(threshold=median+std*threshold,
                               fwhm=fwhm,
                               sigma_radius=sigma_radius,
@@ -153,26 +153,27 @@ def objective(threshold, fwhm, sigma_radius):
                               sharphi=sharphi,
                               roundlo=roundlo,
                               roundhi=roundhi,
+                              exclude_border=True
                               )(img)
     if not res_table:
-        return 2000
+        return 3000
 
     xys = structured_to_unstructured(np.array(res_table['xcentroid', 'ycentroid']))
     seen_indices = set()
     offsets = []
     for xy in xys:
         dist, index = lookup_tree.query(xy)
-        if dist > 1 or index in seen_indices:
+        if dist > 2 or index in seen_indices:
             offsets.append(np.nan)
         else:
             offsets.append(dist)
         seen_indices.add(index)
 
-    offsets += [np.nan] * abs(len(res_table) - len(ref_table))
-    offsets += [np.nan] * abs(len(seen_indices) - len(res_table))
+    offsets += [np.nan] * len(seen_indices - set(lookup_tree.indices))
+    offsets += [np.nan] * abs(len(ref_table)-len(res_table))
     offsets = np.array(offsets)
     offsets -= np.nanmean(offsets)
-    offsets[np.isnan(offsets)] = 1.
+    offsets[np.isnan(offsets)] = 3.
 
     return np.sqrt(np.sum(np.array(offsets)**2))
 
@@ -223,20 +224,21 @@ if __name__ == '__main__':
     with open(result_filename, 'wb') as f:
         dill.dump(optimizer, f)
 
-    threshold, fwhm, sigma_radius = res.x
+    threshold, fwhm, sigma_radius, roundlo, roundhi, sharplo, sharphi = res.x
     res_table = DAOStarFinder(threshold=median+std*threshold,
                               fwhm=fwhm,
                               sigma_radius=sigma_radius,
                               sharplo=sharplo,
                               sharphi=sharphi,
                               roundlo=roundlo,
-                              roundhi=roundhi
+                              roundhi=roundhi,
+                              exclude_border=True
                               )(img)
 
 
 
     plt.ion()
-    plt.imshow(img)
+    plt.imshow(img, norm=LogNorm())
     plt.plot(res_table['xcentroid'], res_table['ycentroid'], 'ro', markersize=0.5)
 
     plot_evaluations(res, dimensions=dimensions)
@@ -244,7 +246,7 @@ if __name__ == '__main__':
     ax = plot_convergence(res)
     ax.set_yscale('log')
 
-    plot_objective(res, sample_source='result', dimensions=dimensions)
+    #plot_objective(res, sample_source='result', dimensions=dimensions)
 
     plot_shape(res, dimensions=dimensions)
     plt.show()
