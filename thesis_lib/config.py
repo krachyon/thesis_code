@@ -52,6 +52,11 @@ class Config(metaclass=ClassRepr):
     fwhm_guess: float = 7.  # estimate of PSF fwhm
     sigma_radius: float = 3.  # clipping radius of starfinder kernel
     separation_factor: float = 2.  # How far do stars need to be apart to be considered a group?
+    sharplo: float = 0.2
+    sharphi: float = 1.0
+    roundlo: float = -1.0
+    roundhi: float = 1.0
+
 
     # magic parameters for EPSFBuilder
     stars_to_keep: int = 200
