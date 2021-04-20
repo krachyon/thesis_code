@@ -200,6 +200,7 @@ def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=max_pixel_
     :return: Convolution kernel
     """
     count = pixel_count + 1 if pixel_count % 2 == 0 else pixel_count
+    count = int(count)
     hdus = anisocado.misc.make_simcado_psf_file(
         [shift], [wavelength], pixelSize=0.004, N=count)
     image = hdus[2]
