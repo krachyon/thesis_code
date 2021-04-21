@@ -5,6 +5,7 @@ import dill
 import time
 import matplotlib.pyplot as plt
 import skopt
+from skopt.space import Real, Integer, Categorical
 from typing import Callable, Any
 from collections import namedtuple
 from scipy.spatial import cKDTree
@@ -42,7 +43,8 @@ def plot_shape(result: skopt.utils.OptimizeResult, dimensions=None) -> matplotli
     if dimensions:
         assert len(dimensions) == n_dims
     else:
-        dimensions = [f'$X_{i}$' for i in range(n_dims)]
+        dimensions = result.space.dimension_names
+        #dimensions = [f'$X_{i}$' for i in range(n_dims)]
 
     fig, ax = plt.subplots(n_dims, n_dims,
                            figsize=(2 * n_dims, 2 * n_dims))
@@ -144,6 +146,8 @@ def run_optimizer(optimizer: skopt.Optimizer, objective: Callable[[Any], float],
     if n_processes is None:
         n_processes = mp.cpu_count()
 
+    from thesis_lib.util import DebugPool
+    #with DebugPool() as p:
     with mp.Pool(n_processes) as p:
         jobs = []
         try:
@@ -152,7 +156,7 @@ def run_optimizer(optimizer: skopt.Optimizer, objective: Callable[[Any], float],
                 optimizer.update_next()
                 print('\033[93m##############\033[0m')
                 print(f'Evaluation #{i}')
-                print(args)
+                print(list(zip(optimizer.space.dimension_names, args)))
                 print('\033[93m##############\033[0m')
                 jobs.append(Job(p.apply_async(objective, args), args))
                 for job in jobs:
@@ -166,7 +170,7 @@ def run_optimizer(optimizer: skopt.Optimizer, objective: Callable[[Any], float],
         except KeyboardInterrupt:
             pass
 
-    return optimizer
+    return optimizer.get_result()
 
 
 def make_starfinder_objective(image_recipe: Callable, image_name: str):
@@ -177,7 +181,13 @@ def make_starfinder_objective(image_recipe: Callable, image_name: str):
     xym_pixel = np.array((input_table['x'], input_table['y'])).T
     lookup_tree = cKDTree(xym_pixel)
 
-    dimensions = ['threshold', 'fwhm', 'sigma_radius', 'roundlo', 'roundhi', 'sharplo', 'sharphi']
+    dimensions = [Real(-6., -3, name='threshold'),
+                  Real(2., 3.7, name='fwhm'),
+                  Real(3., 5.5, name='sigma_radius'),
+                  Real(-15., -5., name='roundlo'),
+                  Real(0., 10., name='roundhi'),
+                  Real(-10., 0., name='sharplo'),
+                  Real(0., 5., name='sharphi')]
 
     def starfinder_objective(threshold, fwhm, sigma_radius, roundlo, roundhi, sharplo, sharphi):
         res_table = DAOStarFinder(threshold=median+std*threshold,
@@ -216,11 +226,15 @@ def make_starfinder_objective(image_recipe: Callable, image_name: str):
 
 def make_epsf_objective(config: Config, image_recipe: Callable, image_name: str):
 
-    dimensions = ['cutout_size', 'fitshape_half', 'sigma', 'iters']
+    dimensions = [Integer(5, 40, name='cutout_size'),
+                  Integer(1, 10, name='fitshape_half'),
+                  Real(0.30, 3., name='sigma'),
+                  Categorical([4, 5, 7, 10], name='iters'),
+                  Categorical([1,2,4], name='oversampling')]
 
     def epsf_objective(cutout_size: int, fitshape_half: int, sigma: float, iters: int, oversampling: int):
-        config.oversampling = oversampling
 
+        config.oversampling = oversampling
         config.smoothing = util.make_gauss_kernel(sigma)
         config.fitshape = fitshape_half * 2 + 1
         config.cutout_size = cutout_size
