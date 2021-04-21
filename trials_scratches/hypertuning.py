@@ -16,7 +16,7 @@ import dill
 import os
 from collections import namedtuple
 
-result_filename = 'optimize_result_RF_lpcluster.pkl'
+result_filename = '../optimize_result_RF_lpcluster.pkl'
 image_name = 'gausscluster_N2000_mag22_lowpass'
 image_recipe = testdata_generators.benchmark_images[image_name]
 

@@ -26,7 +26,7 @@ def view_objective(cutout_size: int, fitshape_half: int, sigma: float, iters:int
 
     plot_input_vs_photometry_positions(result_table)
     plot_deviation_vs_magnitude(result_table)
-    plot_image_with_source_and_measured(image,input_table,result_table)
+    plot_image_with_source_and_measured(image, input_table, result_table)
     return result, result_table
 
 
