@@ -150,14 +150,17 @@ def make_epsf_combine(stars: photutils.psf.EPSFStars,
     #    value so we're restricted to most common stars
     #  - add iterations where the star positions are re-determined with the epsf and overlaying happens again
 
-    avg_center = np.sum([np.array(st.cutout_center) for st in stars], axis=0) / len(stars)
+    avg_center = np.mean([np.array(st.cutout_center) for st in stars], axis=0)
 
     # upsample_image should scale and shift/resample an image with a FFT, aligning the cutouts more precisely
-    combined = np.median([upsample_image(star.data, upsample_factor=oversampling,
+    combined = np.median([upsample_image(star.data/star.data.max(), upsample_factor=oversampling,
                                          xshift=star.cutout_center[0] - avg_center[0],
                                          yshift=star.cutout_center[1] - avg_center[1]
                                          ).real
                           for star in stars], axis=0)
+
+    combined-=np.min(combined)
+    combined/=np.max(combined)
 
     origin = np.array(combined.shape) / 2 / oversampling
     # TODO What we return here needs to actually use the image in it's __call__ operator to work as a model
