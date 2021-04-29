@@ -51,7 +51,7 @@ def scopesim_grid(N1d: int = 16,
 
 
     y = pixel_to_mas(np.tile(np.linspace(border, max_pixel_coord.value - border, N1d), reps=(N1d, 1)))
-    x = y.T
+    x = y.T.copy()
     x += np.random.uniform(0, perturbation * pixel_scale.value, x.shape)
     y += np.random.uniform(0, perturbation * pixel_scale.value, y.shape)
 
@@ -167,7 +167,8 @@ def convolved_grid(N1d: int = 16,
 
     idx_float = np.linspace(0 + border, size - border, N1d)
     x_float = np.tile(idx_float, reps=(N1d, 1))
-    y_float = x_float.T
+    y_float = x_float.T.copy()  # just a view of x_float
+    # these two modify same array...
     x_float += np.random.uniform(0, perturbation, x_float.shape)
     y_float += np.random.uniform(0, perturbation, y_float.shape)
 
@@ -234,6 +235,15 @@ def make_single_star_image(seed: int = 9999) -> Tuple[np.ndarray, Table]:
     observed_image = detector.readout()[0][1].data
 
     return observed_image
+
+
+def empty_image(seed: int = 1000) -> Tuple[np.ndarray, Table]:
+
+    source = scopesim_templates.basic.misc.empty_sky()
+    detector = setup_optical_train()
+    detector.observe(source, random_seed=seed, update=True)
+    observed_image = detector.readout()[0][1].data
+    return observed_image, Table()
 
 
 def scopesim_groups(N1d: int = 16,
@@ -414,6 +424,8 @@ misc_images = {
         lambda: scopesim_grid(N1d=16, perturbation=0.),
     'scopesim_grid_16_perturb2':
         lambda: scopesim_grid(N1d=16, perturbation=2.),
+    'empty_image':
+        lambda: empty_image()
 }
 
 
