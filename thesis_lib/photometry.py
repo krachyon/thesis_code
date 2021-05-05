@@ -330,6 +330,9 @@ def run_photometry(image: np.ndarray,
     # TODO can we somehow sort the stars according to usefulness?
     star_guesses = make_stars_guess(image, finder, cutout_size=config.cutout_size)[:config.stars_to_keep]
 
+    if len(star_guesses) < config.stars_to_keep:
+        print('Warning: found less stars than config.stars_to_keep')
+
     epsf = make_epsf_fit(star_guesses,
                          iters=config.epsfbuilder_iters,
                          oversampling=config.oversampling,
