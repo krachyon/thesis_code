@@ -178,9 +178,9 @@ def convolved_grid(N1d: int = 16,
     # Y U so ugly sometimes PEP8?
     data[y, x] = (1 - x_frac) * (1 - y_frac)
     # noinspection PyRedundantParentheses
-    data[y + 1, x] = (x_frac) * (1 - y_frac)
+    data[y + 1, x] = (1 - x_frac) * (y_frac)
     # noinspection PyRedundantParentheses
-    data[y, x + 1] = (1 - x_frac) * (y_frac)
+    data[y, x + 1] = (x_frac) * (1 - y_frac)
     data[y + 1, x + 1] = y_frac * x_frac
 
     if kernel is not None:
