@@ -5,11 +5,12 @@ import dill
 import time
 import matplotlib.pyplot as plt
 import skopt
-from skopt.space import Real, Integer, Categorical
+from skopt.space import Real, Integer, Categorical, Dimension
 from typing import Callable, Any
 from collections import namedtuple
 from scipy.spatial import cKDTree
 from numpy.lib.recfunctions import structured_to_unstructured
+from typing import Optional, List
 
 
 from photutils.detection import DAOStarFinder
@@ -173,7 +174,7 @@ def run_optimizer(optimizer: skopt.Optimizer, objective: Callable[[Any], float],
     return optimizer.get_result()
 
 
-def make_starfinder_objective(image_recipe: Callable, image_name: str):
+def make_starfinder_objective(image_recipe: Callable, image_name: str) -> Callable:
 
     image, input_table = testdata_generators.read_or_generate_image(image_recipe, image_name)
     mean, median, std = sigma_clipped_stats(image)
@@ -181,13 +182,6 @@ def make_starfinder_objective(image_recipe: Callable, image_name: str):
     xym_pixel = np.array((input_table['x'], input_table['y'])).T
     lookup_tree = cKDTree(xym_pixel)
 
-    dimensions = [Real(-6., -3, name='threshold'),
-                  Real(2., 3.7, name='fwhm'),
-                  Real(3., 5.5, name='sigma_radius'),
-                  Real(-15., -5., name='roundlo'),
-                  Real(0., 10., name='roundhi'),
-                  Real(-10., 0., name='sharplo'),
-                  Real(0., 5., name='sharphi')]
 
     def starfinder_objective(threshold, fwhm, sigma_radius, roundlo, roundhi, sharplo, sharphi):
         res_table = DAOStarFinder(threshold=median+std*threshold,
@@ -221,16 +215,16 @@ def make_starfinder_objective(image_recipe: Callable, image_name: str):
 
         return np.sqrt(np.sum(np.array(offsets)**2))
 
-    return starfinder_objective, dimensions
+    return starfinder_objective
 
 
-def make_epsf_objective(config: Config, image_recipe: Callable, image_name: str):
+def make_epsf_objective(config: Config, image_recipe: Callable, image_name: str) -> Callable:
 
     dimensions = [Integer(5, 40, name='cutout_size'),
                   Integer(1, 10, name='fitshape_half'),
                   Real(0.30, 3., name='sigma'),
                   Categorical([4, 5, 7, 10], name='iters'),
-                  Categorical([1,2,4], name='oversampling')]
+                  Categorical([1, 2, 4], name='oversampling')]
 
     def epsf_objective(cutout_size: int, fitshape_half: int, sigma: float, iters: int, oversampling: int):
 
@@ -251,4 +245,4 @@ def make_epsf_objective(config: Config, image_recipe: Callable, image_name: str)
         finally:
             return loss
 
-    return epsf_objective, dimensions
+    return epsf_objective
