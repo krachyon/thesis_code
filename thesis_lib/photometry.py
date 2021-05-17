@@ -264,7 +264,8 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
                                sharplo=config.sharplo,
                                sharphi=config.sharphi,
                                roundlo=config.roundlo,
-                               roundhi=config.roundhi)
+                               roundhi=config.roundhi,
+                               exclude_border=config.exclude_border)
 
         grouper = DAOGroup(config.separation_factor * fwhm)
 
@@ -324,7 +325,8 @@ def run_photometry(image: np.ndarray,
                            sharplo=config.sharplo,
                            sharphi=config.sharphi,
                            roundlo=config.roundlo,
-                           roundhi=config.roundhi)
+                           roundhi=config.roundhi,
+                           exclude_border=config.exclude_border)
 
     # TODO should this also be done using the catalogue positions?
     # TODO can we somehow sort the stars according to usefulness?

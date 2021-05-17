@@ -56,6 +56,7 @@ class Config(metaclass=ClassRepr):
     sharphi: float = 1.0
     roundlo: float = -1.0
     roundhi: float = 1.0
+    exclude_border: bool = True
 
 
     # magic parameters for EPSFBuilder
