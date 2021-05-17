@@ -192,6 +192,68 @@ def convolved_grid(N1d: int = 16,
     return data, table
 
 
+def _centered_grid(size, border):
+    """todo"""
+    stop = (size-1)/2 - border
+    start = -stop + border
+    step = 1j*size
+
+    # y,x =
+    return np.mgrid[start:stop:step, start:stop:step]
+
+import numba
+
+
+def gauss2d(σ_x=1., σ_y=1., a=1.):
+
+    @numba.njit(fastmath=True)
+    def inner(x: np.ndarray, y: np.ndarray):
+        return a * np.exp(-x**2 / (2 * σ_x ** 2) + -y**2 / (2 * σ_y ** 2))
+    return inner
+
+
+def model_add_grid(model: Callable,
+                   N1d: int = 16,
+                   border: int = 64,
+                   perturbation: float = 0.,
+                   seed: int = 1000):
+    """
+
+    :param model: Assumed to be centered around x,y = (0,0)
+    :param N1d:
+    :param border:
+    :param perturbation:
+    :param seed:
+    :return:
+    """
+    np.random.seed(seed)
+    size = 1024
+
+    # shape [xvalues, yvalues] -> feed to model as (y[1],y[0])
+    y, x = np.indices((size, size))
+    # list of sources to generate, shape: [[y0,y1...], [x0,x1...]]
+    yx_sources = np.mgrid[0+border:size-border:N1d*1j, 0+border:size-border:N1d*1j].transpose((1, 2, 0)).reshape(-1, 2)
+    yx_sources += np.random.uniform(0, perturbation, (N1d**2, 2))
+
+    # Too much memory...
+    ## magic: Marry (2, size, size) to (2, N1D) to allow broadcasting
+    ##    (2, 1,   size, size)
+    ##    (2, N1d, 1   , 1)
+    ## -> (2, N1d, size, size)
+    #ysxs = yx_template[:, None, :, :] - yx_sources[..., None, None]
+
+    data = np.zeros((size, size))
+
+    for yshift, xshift in yx_sources:
+        data += model(x-xshift, y-yshift)
+
+    table = Table((yx_sources[:, 1], yx_sources[:, 0], np.ones(N1d**2)), names=names)
+
+    return data, table
+
+
+
+
 def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=max_pixel_coord.value):
     """
     Get a convolvable Kernel from anisocado to approximate field constant MICADO PSF

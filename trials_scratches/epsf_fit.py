@@ -18,11 +18,12 @@ data = np.zeros((img_size, img_size))
 # distribute point source over neighbour pixels
 x, x_frac = np.divmod(x_float, 1)
 y, y_frac = np.divmod(y_float, 1)
-y, x = x.astype(int), y.astype(int)
-data[x, y] = (1 - x_frac) * (1 - y_frac)
-data[x + 1, y] = (x_frac) * (1 - y_frac)
-data[x, y + 1] = (1 - x_frac) * (y_frac)
-data[x + 1, y + 1] = y_frac * x_frac
+x, y = x.astype(int), y.astype(int)
+
+data[y, x] = (1 - x_frac) * (1 - y_frac)
+data[y + 1, x] = (1 - x_frac) * (y_frac)
+data[y, x + 1] = (x_frac) * (1 - y_frac)
+data[y + 1, x + 1] = y_frac * x_frac
 
 # convolve image to simulate PSF
 kernel = Gaussian2DKernel(σ, σ)
@@ -34,9 +35,8 @@ input_table = Table((x_float.ravel(), y_float.ravel(), 1000 * np.ones(x.size)), 
 x, y = np.mgrid[-2:2.1:0.5, -2:2.1:0.5]
 epsf_data = Gaussian2D(x_stddev=σ, y_stddev=σ)(x, y)
 
-epsf = prepare_psf_model(
-    EPSFModel(epsf_data, flux=1, normalize=False, oversampling=2),
-    renormalize_psf=False, fluxname='flux')
+epsf_pre = EPSFModel(epsf_data, flux=1, normalize=False, oversampling=2)
+epsf = prepare_psf_model(epsf_pre, renormalize_psf=False, fluxname='flux')
 
 # fit should not touch this
 basic_phot = BasicPSFPhotometry(group_maker=DAOGroup(2),
@@ -47,10 +47,13 @@ exact_result = basic_phot(image, input_table)
 #assert_allclose(input_table['y_0'], exact_result['y_fit'])
 
 perturbed_input = input_table.copy()
-perturbed_input['x_0'] += 0.1
-perturbed_input['y_0'] += 0.1
+perturbed_input['x_0'] += 0.4
+perturbed_input['y_0'] += 0.4
+perturbed_input['flux_0'] = 0
 
 # fit should improve this
 result = basic_phot(image, perturbed_input)
 #assert_allclose(input_table['x_0'], result['x_fit'])
 #assert_allclose(input_table['y_0'], result['y_fit'])
+print(result)
+print(exact_result)
