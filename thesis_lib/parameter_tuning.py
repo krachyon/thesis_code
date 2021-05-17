@@ -211,7 +211,7 @@ def make_starfinder_objective(image_recipe: Callable, image_name: str) -> Callab
         offsets += [np.nan] * abs(len(input_table)-len(res_table))
         offsets = np.array(offsets)
         offsets -= np.nanmean(offsets)
-        offsets[np.isnan(offsets)] = 3.
+        offsets[np.isnan(offsets)] = 50.
 
         return np.sqrt(np.sum(np.array(offsets)**2))
 
