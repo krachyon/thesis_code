@@ -25,11 +25,11 @@ if __name__ == '__main__':
             n_jobs=mp.cpu_count(),
             random_state=1,
             base_estimator='RF',
-            n_initial_points=4000,
+            n_initial_points=3000,
             initial_point_generator='random'
         )
 
-        starfinder_result = run_optimizer(starfinder_optimizer, starfinder_obj, n_evaluations=5000)
+        starfinder_result = run_optimizer(starfinder_optimizer, starfinder_obj, n_evaluations=3100)
 
         with open(name+'_starfinder_opt.pkl', 'wb') as f:
             dill.dump(starfinder_result, f)
@@ -66,7 +66,7 @@ if __name__ == '__main__':
             n_initial_points=1000,
             initial_point_generator='random'
         )
-        epsf_result = run_optimizer(epsf_optimizer, epsf_obj, n_evaluations=1300)
+        epsf_result = run_optimizer(epsf_optimizer, epsf_obj, n_evaluations=1200)
 
         with open(name+'_epsf_opt.pkl', 'wb') as f:
             dill.dump(epsf_result, f)
