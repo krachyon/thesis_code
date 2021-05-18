@@ -26,14 +26,14 @@ if __name__ == '__main__':
 
     starfinder_optimizer = skopt.Optimizer(
         dimensions=starfinder_dims,
-        n_jobs=mp.cpu_count(),
+        n_jobs=12,
         random_state=1,
         base_estimator='RF',
         n_initial_points=1000,
         initial_point_generator='random'
     )
 
-    starfinder_result = run_optimizer(starfinder_optimizer, starfinder_obj, n_evaluations=1400)
+    starfinder_result = run_optimizer(starfinder_optimizer, starfinder_obj, n_evaluations=1400, n_processes=12)
 
     with open(name+'_starfinder_opt.pkl', 'wb') as f:
         dill.dump(starfinder_result, f)
@@ -64,13 +64,13 @@ if __name__ == '__main__':
 
     epsf_optimizer = skopt.Optimizer(
         dimensions=epsf_dims,
-        n_jobs=mp.cpu_count(),
+        n_jobs=12,
         random_state=1,
         base_estimator='RF',
         n_initial_points=1000,
         initial_point_generator='random'
     )
-    epsf_result = run_optimizer(epsf_optimizer, epsf_obj, n_evaluations=1400)
+    epsf_result = run_optimizer(epsf_optimizer, epsf_obj, n_evaluations=1400, n_processes=12)
 
     with open(name+'_epsf_opt.pkl', 'wb') as f:
         dill.dump(epsf_result, f)
