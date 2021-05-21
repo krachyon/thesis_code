@@ -14,13 +14,14 @@ from typing import Optional, List
 
 
 from photutils.detection import DAOStarFinder
+from photutils import DAOGroup
 
 from astropy.stats import sigma_clipped_stats
 
 from .config import Config
 from . import testdata_generators
 from . import util
-from .photometry import run_photometry
+from .photometry import run_photometry, get_finder
 
 from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm
@@ -147,7 +148,7 @@ def run_optimizer(optimizer: skopt.Optimizer, objective: Callable[[Any], float],
     if n_processes is None:
         n_processes = mp.cpu_count()
 
-    from thesis_lib.util import DebugPool
+    #from thesis_lib.util import DebugPool
     #with DebugPool() as p:
     with mp.Pool(n_processes) as p:
         jobs = []
@@ -226,22 +227,30 @@ def make_epsf_objective(config: Config, image_recipe: Callable, image_name: str)
                   Categorical([4, 5, 7, 10], name='iters'),
                   Categorical([1, 2, 4], name='oversampling')]
 
-    def epsf_objective(cutout_size: int, fitshape_half: int, sigma: float, iters: int, oversampling: int):
+    def epsf_objective(cutout_size: int, fitshape_half: int, sigma: float, iters: int, oversampling: int, separation: float):
 
         config.oversampling = oversampling
         config.smoothing = util.make_gauss_kernel(sigma)
         config.fitshape = fitshape_half * 2 + 1
         config.cutout_size = cutout_size
         config.epsfbuilder_iters = iters
+        config.separation_factor = separation
 
         image, input_table = testdata_generators.read_or_generate_image(image_recipe, image_name, config.image_folder)
         try:
+            find_result = get_finder(image, config)(image)
+            find_result.rename_columns(['xcentroid', 'ycentroid'], ['x_0', 'y_0'])
+            group_table = DAOGroup(separation * config.fwhm_guess)(find_result)
+            if any([len(i) > 10 for i in group_table.group_by('group_id').groups]):
+                print('\n### too big group### \n')
+                raise ValueError('too big group')
+
             result = run_photometry(image, input_table, image_name, config)
             result_table = util.match_observation_to_source(input_table, result.result_table)
 
             loss = np.sqrt(np.sum(result_table['offset']**2))
         except Exception as ex:
-            loss = np.sqrt(np.sum(len(input_table)*[4**2]))
+            loss = np.sqrt(np.sum(len(input_table)*[10**2]))
         finally:
             return loss
 
