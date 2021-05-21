@@ -137,6 +137,23 @@ def make_stars_guess(image: np.ndarray,
     return stars
 
 
+def get_finder(image:np.ndarray, config: Config)-> photutils.StarFinderBase:
+    """construct a StarFinder from a given configuration and image(needed for threshold)"""
+
+    mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
+    threshold = median + config.threshold_factor * std
+
+    finder = DAOStarFinder(threshold=threshold,
+                           fwhm=config.fwhm_guess,
+                           sigma_radius=config.sigma_radius,
+                           sharplo=config.sharplo,
+                           sharphi=config.sharphi,
+                           roundlo=config.roundlo,
+                           roundhi=config.roundhi,
+                           exclude_border=config.exclude_border)
+    return finder
+
+
 def make_epsf_combine(stars: photutils.psf.EPSFStars,
                       oversampling: int = config.oversampling) -> photutils.psf.EPSFModel:
     """
@@ -253,20 +270,10 @@ def cheating_astrometry(image, input_table, psf: np.ndarray, filename: str = '?'
         epsf = photutils.psf.EPSFModel(psf, flux=1, origin=origin, oversampling=1, normalize=False)
         epsf = photutils.psf.prepare_psf_model(epsf, renormalize_psf=False)
 
-        mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
-        threshold = median + config.threshold_factor * std
+        finder = get_finder(image, config)
 
-        fwhm = estimate_fwhm(epsf.psfmodel)
-
-        finder = DAOStarFinder(threshold=threshold,
-                               fwhm=config.fwhm_guess,
-                               sigma_radius=config.sigma_radius,
-                               sharplo=config.sharplo,
-                               sharphi=config.sharphi,
-                               roundlo=config.roundlo,
-                               roundhi=config.roundhi,
-                               exclude_border=config.exclude_border)
-
+        #fwhm = estimate_fwhm(epsf.psfmodel)
+        fwhm = config.fwhm_guess
         grouper = DAOGroup(config.separation_factor * fwhm)
 
         epsf.fwhm = astropy.modeling.Parameter('fwhm', 'this is not the way to add this I think')
@@ -316,17 +323,7 @@ def run_photometry(image: np.ndarray,
 
     print(f'starting job on image {filename} with {config}')
 
-    mean, median, std = sigma_clipped_stats(image, sigma=config.clip_sigma)
-    threshold = median + config.threshold_factor * std
-
-    finder = DAOStarFinder(threshold=threshold,
-                           fwhm=config.fwhm_guess,
-                           sigma_radius=config.sigma_radius,
-                           sharplo=config.sharplo,
-                           sharphi=config.sharphi,
-                           roundlo=config.roundlo,
-                           roundhi=config.roundhi,
-                           exclude_border=config.exclude_border)
+    finder = get_finder(image, config)
 
     # TODO should this also be done using the catalogue positions?
     # TODO can we somehow sort the stars according to usefulness?
