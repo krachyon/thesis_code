@@ -214,6 +214,7 @@ def gauss2d(σ_x=1., σ_y=1., a=1.):
 
 def model_add_grid(model: Callable,
                    N1d: int = 16,
+                   size: int = 1024,
                    border: int = 64,
                    perturbation: float = 0.,
                    seed: int = 1000):
@@ -221,13 +222,13 @@ def model_add_grid(model: Callable,
 
     :param model: Assumed to be centered around x,y = (0,0)
     :param N1d:
+    :param size:
     :param border:
     :param perturbation:
     :param seed:
     :return:
     """
     np.random.seed(seed)
-    size = 1024
 
     # shape [xvalues, yvalues] -> feed to model as (y[1],y[0])
     y, x = np.indices((size, size))
