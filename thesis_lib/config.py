@@ -7,24 +7,7 @@ import os
 import matplotlib.pyplot as plt
 
 from photutils.psf import EPSFModel
-
-
-class ClassRepr(type):
-    """
-    Use this as a metaclass to make a class (and not just an instance of it) print its contents.
-    Kinda hacky and doesn't really consider edge-cases
-    """
-
-    def __new__(mcs, *args, **kwargs):
-        return super().__new__(mcs, *args, **kwargs)
-
-    def __repr__(cls):
-        items = [item for item in cls.__dict__.items() if not item[0].startswith('__')]
-        item_string = ', '.join([f'{item[0]} = {item[1]}' for item in items])
-        return f'{cls.__name__}({item_string})'
-
-    def __str__(cls):
-        return repr(cls)
+from .util import ClassRepr
 
 
 @dataclasses.dataclass(init=True, repr=True, eq=False, order=False)
