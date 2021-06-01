@@ -86,7 +86,7 @@ def get_cutout(image, position, cutout_size):
     return image[low[1]:high[1], low[0]:high[0]]
 
 def test_get_cutout():
-    testimg = np.arange(0,100).reshape(10,-1)
+    testimg = np.arange(0, 100).reshape(10, -1)
 
     assert np.all(get_cutout(testimg, np.array((0, 0)), 1) == np.array([[0]]))
     assert np.all(get_cutout(testimg, np.array((0, 0)), 2) == np.array([[0,1], [10,11]]))
@@ -113,8 +113,8 @@ def fit_epsf(image: np.ndarray,
     cutout = get_cutout(image, detection, cutout_size)
 
     y, x = np.indices(cutout.shape)
-    x = x - cutout.shape[1]/2
-    y = y - cutout.shape[0]/2
+    x = x - cutout.shape[1]/2 + 0.5
+    y = y - cutout.shape[0]/2 + 0.5
 
     fitter = fitting.LevMarLSQFitter()
     fitted = fitter(model, x, y, cutout)
@@ -135,6 +135,7 @@ for detection in detections:
 plt.clf()
 plt.imshow(np.sum(np.array(residuals), axis=0))
 plt.colorbar()
+plt.show()
 
 # from photutils import BasicPSFPhotometry, DAOGroup, MMMBackground
 # phot=BasicPSFPhotometry(DAOGroup(1),MMMBackground(),epsf,[31,31])
