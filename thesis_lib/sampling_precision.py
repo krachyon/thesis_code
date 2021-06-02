@@ -9,7 +9,7 @@
 #       - analytical model as sanity check: How good can optimizer be?
 #  - Interpolation of gridded model
 # TODO?
-#  - Poisson noise?
+#  - Fitting with weights; Is that done in photutils-photometry?
 
 
 # Funny things to note:
@@ -35,12 +35,15 @@ from anisocado import AnalyticalScaoPsf
 
 
 Result = namedtuple('Result',
-                    ['img', 'tab', 'pixelphase', 'fitshape', 'noise', 'model_oversampling', 'model_degree', 'fit_accuracy'])
+                    ['img', 'tab', 'pixelphase', 'fitshape', 'noise',
+                     'model_oversampling', 'model_degree', 'model_mode',
+                     'fit_accuracy'])
 
 
 def gen_image(model, N1d, size, border, pixelphase, noise=None):
-
+    # TODO could be improved by model.render
     yx_sources = np.mgrid[0+border:size-border:N1d*1j, 0+border:size-border:N1d*1j].transpose((1, 2, 0)).reshape(-1, 2)
+    # swap x and y and round to nearest integer
     xy_sources = np.round(np.roll(yx_sources, 1, axis=0))
 
     # constant pixelphase for both x and y
@@ -59,11 +62,12 @@ def gen_image(model, N1d, size, border, pixelphase, noise=None):
     for xshift, yshift in xy_sources:
         data += model(x-xshift, y-yshift)
 
-    # normalization: Each model should contribute flux=1
-    data /= np.sum(data)*(N1d**2)
+    # normalization: Each model should contribute flux=1 (maybe bad?)
+    # data /= np.sum(data)*(N1d**2)
+    data /= np.max(data)
 
     if noise:
-        data += noise(data)
+        data = noise(data)
     return data, xy_sources
 
 
@@ -77,31 +81,64 @@ def get_cutout_slices(position: np.ndarray, cutout_size: Union[int, np.ndarray])
     return slice(low[1], high[1]), slice(low[0], high[0])
 
 
+class DummyAdd2D(Fittable2DModel):
+    @staticmethod
+    def evaluate(x, y):
+        return np.zeros_like(x)
 
-def fit_models(model: Fittable2DModel,
+
+
+def fit_models(input_model: Fittable2DModel,
                pixelphase=0.,
-               fitshape=(7, 7),
+               n_sources1d=4,
+               img_size=128,
+               img_border=16,
                noise=None,
-               model_oversampling=1,
-               model_degree=3,
+               fitshape=(7, 7),
+               model_oversampling=2,
+               model_degree=5,
+               model_mode='grid',
                fit_accuracy=1e-8) -> Result:
 
     # it's pretty hard to get a different random state in each process...
     np.random.seed(int.from_bytes(os.urandom(4), 'little'))
 
     fitshape = np.array(fitshape)
-    img, xy_sources = gen_image(model, 4, 128, 16, pixelphase, noise)
-
-    y_init, x_init = np.mgrid[-fitshape[0]-2:fitshape[0]+2.001:1/model_oversampling,
-                              -fitshape[1]-2:fitshape[1]+2.001:1/model_oversampling]
-    assert np.sum(y_init) == 0.  # arrays should be centered on zero
-    assert np.sum(x_init) == 0.
+    img, xy_sources = gen_image(input_model, n_sources1d, img_size, img_border, pixelphase, noise)
 
 
-    gridded_model = FittableImageModel(model(x_init, y_init),
-                                       oversampling=model_oversampling,
-                                       degree=model_degree) + Const2D(0)
-    # gridded_model.right.fixed['amplitude'] = True
+    if model_mode.startswith('grid'):
+        y_init, x_init = np.mgrid[-fitshape[0]-2:fitshape[0]+2.001:1/model_oversampling,
+                                  -fitshape[1]-2:fitshape[1]+2.001:1/model_oversampling]
+        assert np.sum(y_init) == 0.  # arrays should be centered on zero
+        assert np.sum(x_init) == 0.
+
+
+        gridded_model = FittableImageModel(input_model(x_init, y_init),
+                                           oversampling=model_oversampling,
+                                           degree=model_degree)
+        if '+const' in model_mode:
+            fit_model = gridded_model + Const2D(0)
+        else:
+            fit_model = gridded_model + DummyAdd2D()
+
+    if model_mode == 'same':
+        fit_model = input_model.copy() + DummyAdd2D()
+
+    if model_mode == 'EPSF':
+        raise NotImplementedError
+
+    # todo So this is a lot more annoying than originally though as it will change the parameter names
+    #  if we pass in a Gaussian2D we'd have to change x_0 to x_mean and flux to amplitude and
+    #  mess around with getattr(model, parname)/setattr. Already the .left is bugging me
+    xname = [name for name in ['x_0', 'x_mean'] if hasattr(fit_model.left, name)][0]  # should always be one, yolo
+    yname = [name for name in ['y_0', 'y_mean'] if hasattr(fit_model.left, name)][0]
+    fluxname = [name for name in ['flux', 'amplitude'] if hasattr(fit_model.left, name)][0]
+    # nail down everything extra that could be changed by the fit, we only want to optimize position and flux
+    for name in fit_model.left.param_names:
+        if name not in {xname, yname, fluxname}:
+            fit_model.left.fixed[name] = True
+
     fitter = fitting.LevMarLSQFitter()
     y, x = np.indices(img.shape)
 
@@ -109,15 +146,24 @@ def fit_models(model: Fittable2DModel,
     for xy_position in xy_sources:
         cutout_slices = get_cutout_slices(xy_position, fitshape)
 
-        gridded_model.left.x_0 = xy_position[0] + np.random.uniform(-0.1, 0.1)
-        gridded_model.left.y_0 = xy_position[1] + np.random.uniform(-0.1, 0.1)
+        setattr(fit_model.left, xname, xy_position[0] + np.random.uniform(-0.1, 0.1))
+        setattr(fit_model.left, yname, xy_position[1] + np.random.uniform(-0.1, 0.1))
 
-        fitted = fitter(gridded_model, x[cutout_slices], y[cutout_slices], img[cutout_slices], acc=fit_accuracy)
-        res.add_row((xy_position[0], xy_position[1], fitted.left.x_0, fitted.left.y_0, fitted.left.flux))
+        fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices], acc=fit_accuracy, maxiter=1_000_000)
+        res.add_row((xy_position[0],
+                     xy_position[1],
+                     getattr(fitted.left, xname),
+                     getattr(fitted.left, yname),
+                     getattr(fitted.left, fluxname)))
 
     res['x_dev'] = res['x']-res['x_fit']
     res['y_dev'] = res['y']-res['y_fit']
-    return Result(img, res, pixelphase, fitshape, noise, model_oversampling, model_degree, fit_accuracy)
+    res['dev']   = np.sqrt(res['x_dev']**2 + res['y_dev']**2)
+    return Result(img, res, pixelphase, fitshape, noise, model_oversampling, model_degree, model_mode, fit_accuracy)
+
+
+def fit_models_dictarg(kwargs_dict):
+    return fit_models(**kwargs_dict)
 
 
 def make_anisocado_model(oversampling=8):
@@ -125,7 +171,7 @@ def make_anisocado_model(oversampling=8):
     return FittableImageModel(img, oversampling=oversampling, degree=3)  # linear interpolation
 
 
-class Repr():
+class Repr:
     def __repr__(self):
         items = [item for item in self.__dict__.items() if not item[0].startswith('__')]
         item_string = ', '.join([f'{item[0]} = {item[1]}' for item in items])
@@ -138,7 +184,7 @@ class GaussNoise(Repr):
         self.std = std
 
     def __call__(self, data):
-        return np.random.normal(self.center, self.std, data.shape)
+        return data + np.random.normal(self.center, self.std, data.shape)
 
 
 class PoissonNoise(Repr):
@@ -169,7 +215,6 @@ def plot_xy_deviation(results: List[Result], model):
         plt.ylabel('y deviation')
     plt.gca().axis('equal')
     plt.colorbar(ScalarMappable(norm=Normalize(0, np.sqrt(2)), cmap=cmap)).set_label('euclidean pixelphase')
-    return plt.gcf()
 
 
 def plot_phase_vs_deviation(results: List[Result], model):
@@ -178,7 +223,7 @@ def plot_phase_vs_deviation(results: List[Result], model):
 
 
     phases = [np.sqrt(res.pixelphase[0]**2+res.pixelphase[1]**2) for res in results]
-    sigmas = [np.sqrt(np.sum(res.tab['x_dev']**2+res.tab['y_dev']**2)/len(res.tab)) for res in results]
+    sigmas = [np.mean(res.tab['dev']) for res in results]
     plt.xlabel('euclidean pixelphase')
     plt.ylabel('euclidean xy-deviation')
 
@@ -193,7 +238,7 @@ def plot_phase_vs_deviation3d(results: List[Result], model):
     ax.set_title(repr(model))
 
     phases_3d = np.array([res.pixelphase for res in results])
-    sigmas = [np.sqrt(np.sum(res.tab['x_dev']**2+res.tab['y_dev']**2)/len(res.tab)) for res in results]
+    sigmas = [np.mean(res.tab['dev']) for res in results]
 
     fig.tight_layout()
     ax.plot_trisurf(phases_3d[:, 0], phases_3d[:, 1], sigmas, cmap='gist_earth')
@@ -209,22 +254,23 @@ if __name__ == '__main__':
     # model = Moffat2D(gamma=2.5, alpha=2.5)
     # model = make_anisocado_model()
 
-    size_1D = 50j
+    size_1D = 5j
     xy_pairs = np.mgrid[0:1:size_1D, 0:1:size_1D].transpose((1, 2, 0)).reshape(-1, 2)
 
-    #from thesis_lib.util import DebugPool
-    #with DebugPool() as p:
-    with mp.Pool(10) as p:
-
-        results = p.map(lambda phase: fit_models(model,
+    from thesis_lib.util import DebugPool
+    with DebugPool() as p:
+    #with mp.Pool(10) as p:
+        results = p.map(lambda phase: fit_models(input_model=model,
                                                  pixelphase=phase,
                                                  fitshape=(31, 31),
-                                                 noise=lambda data: CombinedNoise(0, 1e-10, 17_000)(data)),
+                                                 model_oversampling=2,
+                                                 model_degree=5,
+                                                 model_mode='same',
+                                                 fit_accuracy=1e-10,
+                                                 noise=lambda data: CombinedNoise(0, 1e-10, 20)(data)),
                         xy_pairs)
 
     plot_xy_deviation(results, model)
     plot_phase_vs_deviation(results, model)
     plot_phase_vs_deviation3d(results, model)
     plt.show()
-
-
