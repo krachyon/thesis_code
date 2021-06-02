@@ -35,8 +35,9 @@ from anisocado import AnalyticalScaoPsf
 
 
 Result = namedtuple('Result',
-                    ['img', 'tab', 'pixelphase', 'fitshape', 'noise',
-                     'model_oversampling', 'model_degree', 'model_mode',
+                    ['img', 'n_sources1d',
+                     'tab', 'pixelphase', 'fitshape', 'noise',
+                     'model_oversampling', 'model_degree', 'model_mode', 'model_name',
                      'fit_accuracy'])
 
 
@@ -139,6 +140,8 @@ def fit_models(input_model: Fittable2DModel,
         if name not in {xname, yname, fluxname}:
             fit_model.left.fixed[name] = True
 
+
+
     fitter = fitting.LevMarLSQFitter()
     y, x = np.indices(img.shape)
 
@@ -146,10 +149,14 @@ def fit_models(input_model: Fittable2DModel,
     for xy_position in xy_sources:
         cutout_slices = get_cutout_slices(xy_position, fitshape)
 
+        # initialize model parameters to sensible values +jitter and add +- 1.1 pixel bounds
+        # TODO fixing the parameters blows up the fit.
         setattr(fit_model.left, xname, xy_position[0] + np.random.uniform(-0.1, 0.1))
+        #getattr(fit_model.left, xname).bounds = (xy_position[0]-1.1, xy_position[0]+1.1)
         setattr(fit_model.left, yname, xy_position[1] + np.random.uniform(-0.1, 0.1))
+        #getattr(fit_model.left, yname).bounds = (xy_position[1]-1.1, xy_position[1]+1.1)
 
-        fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices], acc=fit_accuracy, maxiter=1_000_000)
+        fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices], acc=fit_accuracy, maxiter=100_000)
         res.add_row((xy_position[0],
                      xy_position[1],
                      getattr(fitted.left, xname),
@@ -159,16 +166,32 @@ def fit_models(input_model: Fittable2DModel,
     res['x_dev'] = res['x']-res['x_fit']
     res['y_dev'] = res['y']-res['y_fit']
     res['dev']   = np.sqrt(res['x_dev']**2 + res['y_dev']**2)
-    return Result(img, res, pixelphase, fitshape, noise, model_oversampling, model_degree, model_mode, fit_accuracy)
+    return Result(img,
+                  n_sources1d,
+                  res,
+                  pixelphase,
+                  fitshape,
+                  noise,
+                  model_oversampling,
+                  model_degree,
+                  model_mode,
+                  type(input_model).__name__,
+                  fit_accuracy)
 
 
 def fit_models_dictarg(kwargs_dict):
     return fit_models(**kwargs_dict)
 
 
+class AnisocadoModel(FittableImageModel):
+    pass
+
+
+# TODO oversampling=1 does not work...
+# TODO also with oversampling=8 the fit diverges...
 def make_anisocado_model(oversampling=8):
     img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=80*oversampling+1).psf_on_axis
-    return FittableImageModel(img, oversampling=oversampling, degree=3)  # linear interpolation
+    return AnisocadoModel(img, oversampling=oversampling, degree=3)
 
 
 class Repr:
@@ -245,6 +268,20 @@ def plot_phase_vs_deviation3d(results: List[Result], model):
     ax.set_xlabel('x phase')
     ax.set_ylabel('y phase')
     ax.set_zlabel('euclidean  deviation')
+
+
+def plot_fitshape(results: List[Result]):
+    dat = Table(rows=[(np.mean(res.tab['dev']), res.fitshape[0], res.model_name) for res in results],
+              names=['dev','fitshape','model_name']).group_by(['fitshape','model_name'])
+
+    mean = dat.groups.aggregate(np.mean).group_by('model_name').groups
+    std = dat.groups.aggregate(np.std).group_by('model_name').groups
+
+
+    fig, axes = plt.subplots(len(mean), sharex=True)
+    for i in range(len(mean)):
+        axes[i].errorbar(mean[i]['fitshape'], mean[i]['dev'], std[i]['dev'], fmt='o', label=mean.keys[i]['model_name'])
+        axes[i].legend()
 
 
 if __name__ == '__main__':
