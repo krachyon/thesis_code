@@ -250,6 +250,12 @@ class DebugPool:
     def map(self, function, args):
         return list(map(function, args))
 
+    def imap(self, function, args):
+        return map(function, args)
+
+    def imap_unordered(self, function, args):
+        return self.imap(function, args)
+
     def apply_async(self, function, args):
         future = self.Future(function(*args))
         return future

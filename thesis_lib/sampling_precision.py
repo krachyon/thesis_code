@@ -32,7 +32,8 @@ from matplotlib.colors import Normalize
 import os
 from anisocado import AnalyticalScaoPsf
 from itertools import product
-
+import pandas as pd
+import uuid
 
 class Repr:
     def __repr__(self):
@@ -137,7 +138,6 @@ def fit_models(input_model: Fittable2DModel,
     fitshape = np.array(fitshape)
     img, xy_sources = gen_image(input_model, n_sources1d, img_size, img_border, pixelphase, noise)
 
-
     if model_mode.startswith('grid'):
         y_init, x_init = np.mgrid[-fitshape[0]-2:fitshape[0]+2.001:1/model_oversampling,
                                   -fitshape[1]-2:fitshape[1]+2.001:1/model_oversampling]
@@ -179,8 +179,8 @@ def fit_models(input_model: Fittable2DModel,
     #weights = np.sqrt(img-np.min(img))
     #weights /= np.sum(weights)/weights.size
 
-    res = Table(names='x, y, x_fit, y_fit, flux_fit'.split(', '))
-    for xy_position in xy_sources:
+    res = np.full((len(xy_sources), 5), np.nan)
+    for i, xy_position in enumerate(xy_sources):
         cutout_slices = get_cutout_slices(xy_position, fitshape)
 
         # initialize model parameters to sensible values +jitter and add +- 1.1 pixel bounds
@@ -192,16 +192,16 @@ def fit_models(input_model: Fittable2DModel,
 
         fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices],
                         acc=fit_accuracy, maxiter=100_000)#, weights=weights[cutout_slices])
-        res.add_row((xy_position[0],
-                     xy_position[1],
-                     getattr(fitted.left, xname),
-                     getattr(fitted.left, yname),
-                     getattr(fitted.left, fluxname)))
-    # TODO this nested table stuff is shit
-    res['x_dev'] = res['x']-res['x_fit']
-    res['y_dev'] = res['y']-res['y_fit']
-    res['dev']   = np.sqrt(res['x_dev']**2 + res['y_dev']**2)
-    return {'img': img, 'tab': res}
+        res[i] = (xy_position[0], xy_position[1],
+                  getattr(fitted.left, xname).value, getattr(fitted.left, yname).value,
+                  getattr(fitted.left, fluxname).value)
+
+    x_dev = res[:, 0] - res[:, 2]
+    y_dev = res[:, 1] - res[:, 3]
+    dev = np.sqrt(x_dev**2 + y_dev**2)
+    return {'img': img, 'x': res[:, 0], 'y': res[:, 1],
+            'dev': dev, 'x_dev': x_dev, 'y_dev': y_dev,
+            'flux': res[:, 4], 'uuid': uuid.uuid4().hex}
 
 
 def fit_models_dictarg(kwargs_dict):
@@ -210,6 +210,20 @@ def fit_models_dictarg(kwargs_dict):
 
 def dictoflists_to_listofdicts(dict_of_list):
     return (dict(zip(dict_of_list.keys(), vals)) for vals in product(*dict_of_list.values()))
+
+
+def transform_dataframe(results: pd.DataFrame):
+    # we get a row for each call to fit_model. Each row contains possibly the results for multiple sources
+    # we want a row for each individual measurement, duplicating the parameters
+    multicolumns = pd.Index({'x', 'y', 'dev', 'x_dev', 'y_dev', 'flux'})
+    singlecolumns = results.columns.difference(multicolumns)
+    # turn each entry that is not supposed to be an array/list already into single element lists
+    results[singlecolumns] = results[singlecolumns].apply(lambda col: [[i] for i in col])
+    # magic to turn list in row -> multiple rows for each entry. single element entries are broadcast
+    results = results.apply(pd.Series.explode)
+    results[multicolumns] = results[multicolumns].astype(np.float64)
+    results = results.apply(lambda col: pd.to_numeric(col, errors='ignore'))  # restore lost types
+    return results
 
 
 class AnisocadoModel(FittableImageModel):
@@ -223,25 +237,29 @@ def make_anisocado_model(oversampling=8):
     return AnisocadoModel(img, oversampling=oversampling, degree=3)
 
 
-def plot_xy_deviation(results: List[dict]):
+def plot_xy_deviation(results: pd.DataFrame):
     cmap = get_cmap('turbo')
     plt.figure()
-    plt.title(repr(results[0]['input_model']))
-    for res in results:
-        phase = np.sqrt(res['pixelphase'][0]**2+res['pixelphase'][1]**2)
-        plt.plot(res['tab']['x_dev'], res['tab']['y_dev'], 'o', markeredgewidth=0, color=cmap(phase/np.sqrt(2)), alpha=0.5)
-        plt.xlabel('x deviation')
-        plt.ylabel('y deviation')
+    plt.title(''.join(results['input_model'].apply(repr).unique()))
+
+    phases = np.sqrt(np.sum(np.stack(results.pixelphase)**2, axis=1))
+
+    plt.scatter(results.x_dev, results.y_dev, marker='o', c=(phases/np.sqrt(2)), alpha=0.5, edgecolors='None')
+    plt.xlabel('x deviation')
+    plt.ylabel('y deviation')
     plt.gca().axis('equal')
     plt.colorbar(ScalarMappable(norm=Normalize(0, np.sqrt(2)), cmap=cmap)).set_label('euclidean pixelphase')
 
 
-def plot_phase_vs_deviation(results: List[dict]):
+def plot_phase_vs_deviation(results: pd.DataFrame):
     plt.figure()
-    plt.title(repr(results[0]['input_model']))
+    plt.title(''.join(results['input_model'].apply(repr).unique()))
 
-    phases = [np.sqrt(res['pixelphase'][0]**2+res['pixelphase'][1]**2) for res in results]
-    sigmas = [np.mean(res['tab']['dev']) for res in results]
+    grouped = results.groupby('uuid')
+
+    phases = np.stack(grouped.pixelphase.first())
+    phases = np.sum(phases**2, axis=1)
+    sigmas = grouped.dev.mean()
     plt.xlabel('euclidean pixelphase')
     plt.ylabel('euclidean xy-deviation')
 
@@ -250,13 +268,15 @@ def plot_phase_vs_deviation(results: List[dict]):
     plt.plot(phases[order], sigmas[order])
 
 
-def plot_phase_vs_deviation3d(results: List[dict]):
+def plot_phase_vs_deviation3d(results: pd.DataFrame):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
-    ax.set_title(repr(results[0]['input_model']))
+    ax.set_title(''.join(results['input_model'].apply(repr).unique()))
 
-    phases_3d = np.array([res['pixelphase'] for res in results])
-    sigmas = [np.mean(res['tab']['dev']) for res in results]
+    grouped = results.groupby('uuid')
+
+    phases_3d = np.stack(grouped.pixelphase.first())
+    sigmas = grouped.dev.mean()
 
     fig.tight_layout()
     ax.plot_trisurf(phases_3d[:, 0], phases_3d[:, 1], sigmas, cmap='gist_earth')
@@ -265,7 +285,7 @@ def plot_phase_vs_deviation3d(results: List[dict]):
     ax.set_zlabel('euclidean  deviation')
 
 
-def plot_fitshape(results: List[dict]):
+def plot_fitshape(results: pd.DataFrame):
     dat = Table(rows=[(np.mean(res['tab']['dev']), res['fitshape'][0], res['model_name']) for res in results],
               names=['dev', 'fitshape', 'model_name']).group_by(['fitshape', 'model_name'])
 
@@ -279,7 +299,7 @@ def plot_fitshape(results: List[dict]):
         axes[i].legend()
 
 
-def plot_deviation_vs_noise(results: List[dict], noise_type=GaussNoise):
+def plot_deviation_vs_noise(results: pd.DataFrame, noise_type=GaussNoise):
     if noise_type == GaussNoise:
         rows = [(np.abs(res['tab']['dev']), res['noise'].std, repr(res['input_model']))
                 for res in results if isinstance(res['noise'], noise_type)]
@@ -313,11 +333,11 @@ if __name__ == '__main__':
     # model = Moffat2D(gamma=2.5, alpha=2.5)
     # model = make_anisocado_model()
 
-    size_1D = 70j
+    size_1D = 10j
     xy_pairs = np.mgrid[0:1:size_1D, 0:1:size_1D].transpose((1, 2, 0)).reshape(-1, 2)
     dl = {'input_model': [model],
-          'n_sources1d': [1],
-          'img_border': [32],
+          'n_sources1d': [2],
+          'img_border': [16],
           'img_size': [64],
           'pixelphase': xy_pairs,
           'fitshape': [(21, 21)],
@@ -328,10 +348,12 @@ if __name__ == '__main__':
           'fit_accuracy': [1.49012e-08]
           }
 
-    #from thesis_lib.util import DebugPool
-    #with DebugPool() as p:
-    with mp.Pool(10) as p:
-        results = list(p.imap_unordered(fit_models_dictarg, tqdm(list(dictoflists_to_listofdicts(dl)))))
+    from thesis_lib.util import DebugPool
+    with DebugPool() as p:
+    #with mp.Pool(11) as p:
+        results = pd.DataFrame.from_records(p.imap_unordered(fit_models_dictarg, tqdm(list(dictoflists_to_listofdicts(dl)))))
+    results = transform_dataframe(results)
+
 
     plot_xy_deviation(results)
     plot_phase_vs_deviation(results)
