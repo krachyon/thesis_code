@@ -286,6 +286,7 @@ def plot_phase_vs_deviation3d(results: pd.DataFrame):
 
 
 def plot_fitshape(results: pd.DataFrame):
+    # TODO broken
     dat = Table(rows=[(np.mean(res['tab']['dev']), res['fitshape'][0], res['model_name']) for res in results],
               names=['dev', 'fitshape', 'model_name']).group_by(['fitshape', 'model_name'])
 
@@ -300,6 +301,7 @@ def plot_fitshape(results: pd.DataFrame):
 
 
 def plot_deviation_vs_noise(results: pd.DataFrame, noise_type=GaussNoise):
+    # TODO broken
     if noise_type == GaussNoise:
         rows = [(np.abs(res['tab']['dev']), res['noise'].std, repr(res['input_model']))
                 for res in results if isinstance(res['noise'], noise_type)]
