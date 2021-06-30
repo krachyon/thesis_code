@@ -19,7 +19,7 @@
 
 import numbers
 import os
-from itertools import product
+from itertools import product, count
 from typing import Union, Optional
 
 import matplotlib.pyplot as plt
@@ -36,60 +36,8 @@ from matplotlib.colors import Normalize
 from photutils import FittableImageModel
 
 
-class Repr:
-    def __repr__(self):
-        items = [item for item in self.__dict__.items() if not item[0].startswith('__')]
-        item_string = ', '.join([f'{item[0]} = {item[1]}' for item in items])
-        return f'{type(self)}({item_string})'
-
-
-class Noise(Repr):
-    def __call__(self, data):
-        raise NotImplementedError
-
-
-class CombinedNoise(Noise):
-    name = 'CombinedNoise'
-
-    def __init__(self, center, std, max_count):
-        self.gauss_center = center
-        self.gauss_std = std
-        self.max_count = max_count
-        if np.isinf(max_count):
-            self.poisson_std = 0
-        else:
-            self.poisson_std = np.sqrt(max_count)/max_count  # scale back to one
-
-        self.std = np.sqrt(self.gauss_std**2 + self.poisson_std**2)
-
-    def __call__(self, data):
-        # switch to disable poisson noise
-        if np.isinf(self.max_count):
-            poissoned = data
-        else:
-            poissoned = np.random.poisson(self.max_count * data) / self.max_count
-
-        gaussed = poissoned + (np.random.normal(self.gauss_center, self.gauss_std, data.shape)
-                               if (self.gauss_std != 0 or self.gauss_center != 0) else 0.)
-        return gaussed
-
-
-class GaussNoise(CombinedNoise):
-    name = 'GaussNoise'
-
-    def __init__(self, center, std):
-        super().__init__(center, std, np.inf)
-
-
-class PoissonNoise(CombinedNoise):
-    name = 'PoissonNoise'
-
-    def __init__(self, λ):
-        super().__init__(0, 0, λ)
-
-
-def gen_image(model, N1d, size, border, pixelphase, noise: Optional[Noise] = None):
-    # TODO could be improved by model.render
+def gen_image(model, N1d, size, border, pixelphase, σ=0, λ=100_000, rng=np.random.default_rng()):
+    # TODO Performance could be improved by model.render
     yx_sources = np.mgrid[0+border:size-border:N1d*1j, 0+border:size-border:N1d*1j].transpose((1, 2, 0)).reshape(-1, 2)
     # swap x and y and round to nearest integer
     xy_sources = np.round(np.roll(yx_sources, 1, axis=0))
@@ -102,7 +50,7 @@ def gen_image(model, N1d, size, border, pixelphase, noise: Optional[Noise] = Non
         assert pixelphase.shape == (2,) or pixelphase.shape == xy_sources.shape
         xy_sources += pixelphase
     elif pixelphase == 'random':
-        xy_sources += np.random.uniform(0, 1, xy_sources.shape)
+        xy_sources += rng.uniform(0, 1, xy_sources.shape)
 
     y, x = np.indices((size, size))
     data = np.zeros((size, size), dtype=np.float64)
@@ -114,8 +62,11 @@ def gen_image(model, N1d, size, border, pixelphase, noise: Optional[Noise] = Non
     # data /= np.sum(data)*(N1d**2)
     data /= np.max(data)
 
-    if noise:
-        data = noise(data)
+    # apply noise
+    if λ:
+        data = rng.poisson(λ*data).astype(np.float64)
+    data += rng.normal(0, σ, size=data.shape)
+
     return data, xy_sources
 
 
@@ -140,29 +91,34 @@ def fit_models(input_model: Fittable2DModel,
                n_sources1d=4,
                img_size=128,
                img_border=16,
-               noise=None,
+               σ=0,
+               λ=None,
                fitshape=(7, 7),
                model_oversampling=2,
                model_degree=5,
                model_mode='grid',
                fit_accuracy=1e-8,
                use_weights=False,
-               return_img=False) -> dict:
+               fitter_name='LM',
+               return_imgs=False,
+               seed=0) -> dict:
 
-    # it's pretty hard to get a different random state in each process...
-    np.random.seed(int.from_bytes(os.urandom(4), 'little'))
+    rng = np.random.default_rng(seed)
 
-    fitshape = np.array(fitshape)
-    img, xy_sources = gen_image(input_model, n_sources1d, img_size, img_border, pixelphase, noise)
-    if noise is None:
-        noise = CombinedNoise(0, 0, np.inf)
+    if fitter_name == 'LM':
+        iter_name = 'nfev'
+        fitter = fitting.LevMarLSQFitter()
+    elif fitter_name == 'Simplex':
+        iter_name = 'numiter'
+        fitter = fitting.SimplexLSQFitter()
+    else:
+        raise NotImplementedError
 
     if model_mode.startswith('grid'):
         y_init, x_init = np.mgrid[-fitshape[0]-2:fitshape[0]+2.001:1/model_oversampling,
                                   -fitshape[1]-2:fitshape[1]+2.001:1/model_oversampling]
         assert np.sum(y_init) == 0.  # arrays should be centered on zero
         assert np.sum(x_init) == 0.
-
 
         gridded_model = FittableImageModel(input_model(x_init, y_init),
                                            oversampling=model_oversampling,
@@ -171,12 +127,13 @@ def fit_models(input_model: Fittable2DModel,
             fit_model = gridded_model + Const2D(0)
         else:
             fit_model = gridded_model + DummyAdd2D()
-
-    if model_mode == 'same':
+    elif model_mode == 'same':
         fit_model = input_model.copy() + DummyAdd2D()
-
-    if model_mode == 'EPSF':
+    elif model_mode == 'EPSF':
         raise NotImplementedError
+
+    fitshape = np.array(fitshape)
+    img, xy_sources = gen_image(input_model, n_sources1d, img_size, img_border, pixelphase, σ, λ, rng)
 
     # todo So this is a lot more annoying than originally though as it will change the parameter names
     #  if we pass in a Gaussian2D we'd have to change x_0 to x_mean and flux to amplitude and
@@ -189,49 +146,48 @@ def fit_models(input_model: Fittable2DModel,
         if name not in {xname, yname, fluxname}:
             fit_model.left.fixed[name] = True
 
-
-
-    fitter = fitting.LevMarLSQFitter()
     y, x = np.indices(img.shape)
 
-    img_pos = img - np.min(img)
-    noise_img = np.sqrt(img_pos * noise.poisson_std**2 + noise.gauss_std ** 2)
+    img_variance = (img - img.min()) + 1 + σ ** 2
     if use_weights:
-        weights = noise_img
-        # scaling doesn't matter much, but probably should be around one on average for each pixel
-        weights /= np.sum(weights)/weights.size
+        weights = 1 / np.sqrt(img_variance)
     else:
         weights = np.ones_like(x)
 
-    res = np.full((len(xy_sources), 6), np.nan)
+    res = np.full((len(xy_sources), 7), np.nan)
+    residual = img.copy()
+
     for i, xy_position in enumerate(xy_sources):
         cutout_slices = get_cutout_slices(xy_position, fitshape)
 
         # initialize model parameters to sensible values +jitter and add +- 1.1 pixel bounds
         # TODO bound on the parameters blows up the fit.
-        setattr(fit_model.left, xname, xy_position[0] + np.random.uniform(-0.1, 0.1))
-        #getattr(fit_model.left, xname).bounds = (xy_position[0]-1.1, xy_position[0]+1.1)
-        setattr(fit_model.left, yname, xy_position[1] + np.random.uniform(-0.1, 0.1))
-        #getattr(fit_model.left, yname).bounds = (xy_position[1]-1.1, xy_position[1]+1.1)
+        setattr(fit_model.left, xname, xy_position[0] + rng.uniform(-0.1, 0.1))
+        # getattr(fit_model.left, xname).bounds = (xy_position[0]-0.5, xy_position[0]+0.5)
+        setattr(fit_model.left, yname, xy_position[1] + rng.uniform(-0.1, 0.1))
+        # getattr(fit_model.left, yname).bounds = (xy_position[1]-0.5, xy_position[1]+0.5)
+        flux = λ if λ else 1
+        setattr(fit_model.left, fluxname, flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux)))
 
-        snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(noise_img[cutout_slices]**2))
+        snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(img_variance[cutout_slices]))
 
         fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices],
-                        acc=fit_accuracy, maxiter=100_000, weights=weights[cutout_slices])
+                        acc=fit_accuracy, maxiter=10_000, weights=weights[cutout_slices])
         res[i] = (xy_position[0], xy_position[1],
                   getattr(fitted.left, xname).value, getattr(fitted.left, yname).value,
                   getattr(fitted.left, fluxname).value,
-                  snr)
-        residual = fitted(x[cutout_slices], y[cutout_slices]) - img[cutout_slices]
+                  snr, fitter.fit_info[iter_name])
+        residual -= fitted(x, y)
 
     x_dev = res[:, 0] - res[:, 2]
     y_dev = res[:, 1] - res[:, 3]
     dev = np.sqrt(x_dev**2 + y_dev**2)
     ret = {'x':    res[:, 0], 'y': res[:, 1],
            'dev':  dev, 'x_dev': x_dev, 'y_dev': y_dev,
-           'flux': res[:, 4], 'snr': res[:,5], 'residual': residual}
-    if return_img:
-        ret |= {'img': img}
+           'flux': res[:, 4], 'snr': res[:, 5], 'fititers': res[:, 6]}
+    if return_imgs:
+        ret |= {'img': img, 'residual': residual}
+
     return ret
 
 
@@ -240,13 +196,22 @@ def fit_models_dictarg(kwargs_dict):
 
 
 def dictoflists_to_listofdicts(dict_of_list):
-    return (dict(zip(dict_of_list.keys(), vals)) for vals in product(*dict_of_list.values()))
+    return [dict(zip(dict_of_list.keys(), vals)) for vals in product(*dict_of_list.values())]
+
+
+def create_arg_list(dict_of_lists):
+    dict_of_lists = dict_of_lists.copy()
+    seed_start = dict_of_lists.pop('seed_start', 0)
+    list_of_dict = dictoflists_to_listofdicts(dict_of_lists)
+    for i, entry in zip(count(seed_start), list_of_dict):
+        entry['seed'] = i
+    return list_of_dict
 
 
 def transform_dataframe(results: pd.DataFrame):
     # we get a row for each call to fit_model. Each row contains possibly the results for multiple sources
     # we want a row for each individual measurement, duplicating the parameters
-    multicolumns = pd.Index({'x', 'y', 'dev', 'x_dev', 'y_dev', 'flux', 'snr'})
+    multicolumns = pd.Index({'x', 'y', 'dev', 'x_dev', 'y_dev', 'flux', 'snr', 'fititers'})
     singlecolumns = results.columns.difference(multicolumns)
     # turn each entry that is not supposed to be an array/list already into single element lists
     results[singlecolumns] = results[singlecolumns].apply(lambda col: [[i] for i in col])
@@ -260,17 +225,15 @@ def transform_dataframe(results: pd.DataFrame):
 
 class AnisocadoModel(FittableImageModel):
     def __repr__(self):
-        return super().__repr__() + f'oversampling: {str(self.oversampling)}'
+        return super().__repr__() + f' oversampling: {self.oversampling}'
 
     def __str__(self):
-        return super().__str__() + f'oversampling: {str(self.oversampling)}'
+        return super().__str__() + f' oversampling: {self.oversampling}'
 
 
-# TODO oversampling=1 does not work...
-# TODO also with oversampling=8 the fit diverges...
-def make_anisocado_model(oversampling=8):
-    img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=80*oversampling+1).psf_on_axis
-    return AnisocadoModel(img, oversampling=oversampling, degree=3)
+def make_anisocado_model(oversampling=2, degree=5, seed=0):
+    img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=80*oversampling+1, seed=seed).psf_on_axis
+    return AnisocadoModel(img, oversampling=oversampling, degree=degree)
 
 
 def plot_xy_deviation(results: pd.DataFrame):
@@ -322,15 +285,16 @@ def plot_phase_vs_deviation3d(results: pd.DataFrame):
 
 
 def plot_fitshape(results: pd.DataFrame):
-    grouped = results.groupby(results.input_model.astype('str'), as_index=False)
+    grouped = results.groupby([results.input_model.astype('str'), 'use_weights'],
+                              as_index=False)
 
     #fig, axes = plt.subplots(len(grouped), sharex='all')
     plt.figure()
-    for model, modelgroup in grouped:
+    for (model, weight), modelgroup in grouped:
         mean = modelgroup.groupby('fitshape').mean()
         std = modelgroup.groupby('fitshape').std()
         plt.errorbar([i[0] for i in mean.index], mean.dev, std.dev,
-                     fmt='o', label=repr(modelgroup.input_model.iloc[0]))
+                     fmt='o', label=f'{modelgroup.input_model.iloc[0]!r} weights: {weight}')
     plt.legend()
 
 
@@ -338,46 +302,44 @@ def plot_deviation_vs_noise(results: pd.DataFrame):
 
     # issue: pickling destroys type identity, so we need to convert to strings
     # select all distinct models and distinct noise /types/
-    grouped = results.groupby([results.input_model.astype(str),
-                               results.noise.apply(lambda noise: noise.name)],
-                              as_index=False)
+    grouped = results.groupby([results.input_model.astype(str), results.σ], as_index=False)
 
     plt.figure()
-    for (model_str, noise_name), group in grouped:
+    for (model_str, σ), group in grouped:
         # for each noisetype, plot magnitude vs deviation
-        noisegroup = group.groupby(group.noise.apply(lambda noise: noise.std))
+        noisegroup = group.groupby('λ')
         plt.errorbar(noisegroup.first().index, noisegroup.mean().dev, noisegroup.std().dev,
-                     fmt='o', label=repr(group.input_model.iloc[0])+' '+noise_name)
+                     fmt='o', label=f'{repr(group.input_model.iloc[0])} σ={σ}')
 
     plt.legend(fontsize='small')
     plt.xscale('log')
     plt.yscale('log')
 
-    plt.xlabel('Noise σ')
+    plt.xlabel('Poisson λ')
 
-    plt.ylabel('Deviation in measured Position')
+    plt.ylabel('Mean Deviation in measured Position')
     plt.title("everything's a line on a loglog-plot lol")
 
 
 def plot_noise_vs_weights(results: pd.DataFrame):
-    grouped = results.groupby([results.noise.apply(lambda n: n.name),
+    grouped = results.groupby(['σ',
                                results.input_model.apply(lambda model: repr(model)),
                                results.use_weights],
                               as_index=False)
 
     fig = plt.figure()
 
-    for i, ((degree, model, weights), group) in enumerate(grouped):
+    for i, ((σ, model, weights), group) in enumerate(grouped):
         # for each noisetype, plot magnitude vs deviation
-        noisegroup = group.groupby(group.noise.apply(lambda noise: noise.std))
+        noisegroup = group.groupby('λ')
         model = noisegroup.input_model.first().iloc[0].__class__.__name__
         # plt.errorbar(noisegroup.first().index, noisegroup.mean().dev, noisegroup.std().dev,
         #             alpha=0.8, errorevery=(i,len(grouped)), fmt='o', label=f'input_model: {model}, modeldegree: {degree}, weights: {weights}')
         xs = noisegroup.first().index
         ys = noisegroup.dev.mean()
         errs = noisegroup.dev.std()/xs
-        plt.plot(xs, ys/xs, '-', alpha=0.9, label=f'input_model: {model}, modeldegree: {degree}, weights: {weights}')
-        plt.fill_between(xs, ys/xs - errs, ys/xs + errs, alpha=0.3) # TODO changeme back
+        plt.plot(xs, ys/xs, '-', alpha=0.9, label=f'input_model: {model}, σ: {σ}, weights: {weights}')
+        plt.fill_between(xs, ys/xs - errs, ys/xs + errs, alpha=0.3)
 
     # noise_σ = results.noise.apply(lambda noise: noise.std).sort_values()
     ## precision = α*fwhm/snr
@@ -388,10 +350,10 @@ def plot_noise_vs_weights(results: pd.DataFrame):
     # plt.plot(noise_σ, fwhm/results.snr, ':', label='SNR sum prediction')
 
     plt.legend(fontsize='small')
-    #plt.xscale('log')
+    plt.xscale('log')
     #plt.yscale('log')
 
-    plt.xlabel('Noise σ')
+    plt.xlabel('λ')
     plt.ylabel('Deviation in measured Position/σ')
     plt.title("everything's a line on a loglog-plot lol")
     plt.tight_layout()
@@ -401,12 +363,10 @@ if __name__ == '__main__':
     from tqdm.cli import tqdm
 
     gauss = Gaussian2D(x_stddev=5., y_stddev=5.)
+    #airy = AiryDisk2D(radius=5.)
 
-    size_1D = 3j
+    size_1D = 2j
     xy_pairs = np.mgrid[0:0.5:size_1D, 0:0.5:size_1D].transpose((1, 2, 0)).reshape(-1, 2)
-
-    noise = [PoissonNoise(λ) for λ in 1/np.linspace(1/np.sqrt(50), 1/np.sqrt(10000), 50)**2] + \
-            [GaussNoise(0, σ) for σ in np.linspace(5e-3, 1.5e-1, 50)]
 
     dl = {'input_model': [gauss],
           'n_sources1d': [4],
@@ -414,13 +374,14 @@ if __name__ == '__main__':
           'img_size': [30*6],
           'pixelphase': xy_pairs,
           'fitshape': [(31, 31)],
-          'noise': noise,
+          'σ': [0, 50],
+          'λ': np.linspace(100, 50_000, 3),
           'model_oversampling': [2],
           'model_degree': [3],
           'model_mode': ['same'],
           'fit_accuracy': [1.49012e-08],
           'use_weights': [False, True],
-          'return_img': [True]
+          'return_imgs': [True]
           }
 
     #from thesis_lib.util import DebugPool
@@ -434,9 +395,9 @@ if __name__ == '__main__':
     #results.noise = results.noise.transform(lambda n: (n.gauss_std, n.poisson_std))
 
     #plot_fitshape(results[results.n_sources1d == 1])
-    #plot_fitshape(results)
-    #plot_xy_deviation(results)
-    #plot_phase_vs_deviation(results)
-    #plot_phase_vs_deviation3d(results)
+    plot_fitshape(results)
+    plot_xy_deviation(results)
+    plot_phase_vs_deviation(results)
+    plot_phase_vs_deviation3d(results)
     plot_noise_vs_weights(results)
     plt.show()
