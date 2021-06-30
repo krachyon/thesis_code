@@ -124,6 +124,43 @@ def make_fit_model(input_model, model_mode, fitshape, model_degree, model_oversa
     return fit_model
 
 
+def fit_single_image(fit_model: Fittable2DModel,
+                     img: np.ndarray,
+                     x_grid: np.ndarray,
+                     y_grid: np.ndarray,
+                     xy_position: np.ndarray,
+                     fitter,
+                     fitshape=(7, 7),
+                     σ=0,
+                     λ=None,
+                     fit_accuracy=1e-8,
+                     use_weights=False,
+                     seed=0):
+
+    cutout_slices = get_cutout_slices(xy_position, fitshape)
+
+    rng = np.random.default_rng(seed)
+
+    img_variance = (img - img.min()) + 1 + σ ** 2
+    if use_weights:
+        weights = 1 / np.sqrt(img_variance)
+    else:
+        weights = np.ones_like(x_grid)
+
+    # initialize model parameters to sensible values +jitter and add +- 1.1 pixel bounds
+    # TODO bound on the parameters blows up the fit.
+    fit_model.x.value = xy_position[0] + rng.uniform(-0.1, 0.1)
+    # getattr(fit_model.left, xname).bounds = (xy_position[0]-0.5, xy_position[0]+0.5)
+    fit_model.y.value = xy_position[1] + rng.uniform(-0.1, 0.1)
+    # getattr(fit_model.left, yname).bounds = (xy_position[1]-0.5, xy_position[1]+0.5)
+    flux = λ if λ else 1
+    fit_model.flux.value = flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux))
+    fitted = fitter(fit_model, x_grid[cutout_slices], y_grid[cutout_slices], img[cutout_slices],
+                    acc=fit_accuracy, maxiter=10_000, weights=weights[cutout_slices])
+    fitted.snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(img_variance[cutout_slices]))
+    return fitted
+
+
 def fit_models(input_model: Fittable2DModel,
                pixelphase=0.,
                n_sources1d=4,
@@ -157,45 +194,39 @@ def fit_models(input_model: Fittable2DModel,
 
     fit_model = make_fit_model(input_model, model_mode, fitshape, model_degree, model_oversampling)
 
-    y, x = np.indices(img.shape)
-    
-    img_variance = (img - img.min()) + 1 + σ ** 2
-    if use_weights:
-        weights = 1 / np.sqrt(img_variance)
-    else:
-        weights = np.ones_like(x)
+    y_grid, x_grid = np.indices(img.shape)
 
     res = np.full((len(xy_sources), 7), np.nan)
     residual = img.copy()
 
     for i, xy_position in enumerate(xy_sources):
-        cutout_slices = get_cutout_slices(xy_position, fitshape)
 
-        # initialize model parameters to sensible values +jitter and add +- 1.1 pixel bounds
-        # TODO bound on the parameters blows up the fit.
-        fit_model.x.value = xy_position[0] + rng.uniform(-0.1, 0.1)
-        # getattr(fit_model.left, xname).bounds = (xy_position[0]-0.5, xy_position[0]+0.5)
-        fit_model.y.value = xy_position[1] + rng.uniform(-0.1, 0.1)
-        # getattr(fit_model.left, yname).bounds = (xy_position[1]-0.5, xy_position[1]+0.5)
-        flux = λ if λ else 1
-        fit_model.flux.value = flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux))
+        fitted = fit_single_image(fit_model,
+                                  img,
+                                  x_grid,
+                                  y_grid,
+                                  xy_position,
+                                  fitter,
+                                  fitshape,
+                                  σ,
+                                  λ,
+                                  fit_accuracy,
+                                  use_weights,
+                                  seed)
 
-        snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(img_variance[cutout_slices]))
-
-        fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices],
-                        acc=fit_accuracy, maxiter=10_000, weights=weights[cutout_slices])
         res[i] = (xy_position[0], xy_position[1],
                   fitted.x.value, fitted.y.value,
-                  fitted.flux.value,
-                  snr, fitter.fit_info[iter_name])
-        residual -= fitted(x, y)
+                  fitted.flux.value, fitted.snr,
+                  fitter.fit_info[iter_name])
+        residual -= fitted(x_grid, y_grid)
 
     x_dev = res[:, 0] - res[:, 2]
     y_dev = res[:, 1] - res[:, 3]
     dev = np.sqrt(x_dev**2 + y_dev**2)
     ret = {'x':    res[:, 0], 'y': res[:, 1],
            'dev':  dev, 'x_dev': x_dev, 'y_dev': y_dev,
-           'flux': res[:, 4], 'snr': res[:, 5], 'fititers': res[:, 6]}
+           'flux': res[:, 4], 'snr': res[:, 5],
+           'fititers': res[:, 6]}
     if return_imgs:
         ret |= {'img': img, 'residual': residual}
 
