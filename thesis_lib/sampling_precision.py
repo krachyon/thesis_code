@@ -135,11 +135,9 @@ def fit_single_image(fit_model: Fittable2DModel,
                      λ=None,
                      fit_accuracy=1e-8,
                      use_weights=False,
-                     seed=0):
+                     rng=np.random.default_rng):
 
     cutout_slices = get_cutout_slices(xy_position, fitshape)
-
-    rng = np.random.default_rng(seed)
 
     img_variance = (img - img.min()) + 1 + σ ** 2
     if use_weights:
@@ -155,9 +153,11 @@ def fit_single_image(fit_model: Fittable2DModel,
     # getattr(fit_model.left, yname).bounds = (xy_position[1]-0.5, xy_position[1]+0.5)
     flux = λ if λ else 1
     fit_model.flux.value = flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux))
+
     fitted = fitter(fit_model, x_grid[cutout_slices], y_grid[cutout_slices], img[cutout_slices],
                     acc=fit_accuracy, maxiter=10_000, weights=weights[cutout_slices])
     fitted.snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(img_variance[cutout_slices]))
+
     return fitted
 
 
@@ -212,7 +212,7 @@ def fit_models(input_model: Fittable2DModel,
                                   λ,
                                   fit_accuracy,
                                   use_weights,
-                                  seed)
+                                  rng)
 
         res[i] = (xy_position[0], xy_position[1],
                   fitted.x.value, fitted.y.value,
@@ -404,23 +404,24 @@ def plot_noise_vs_weights(results: pd.DataFrame):
 if __name__ == '__main__':
     from tqdm.cli import tqdm
 
-    gauss = Gaussian2D(x_stddev=5., y_stddev=5.)
+    #gauss = Gaussian2D(x_stddev=5., y_stddev=5.)
     #airy = AiryDisk2D(radius=5.)
+    anisocado = make_anisocado_model(2,5)
 
     size_1D = 2j
     xy_pairs = np.mgrid[0:0.5:size_1D, 0:0.5:size_1D].transpose((1, 2, 0)).reshape(-1, 2)
 
-    dl = {'input_model': [gauss],
+    dl = {'input_model': [anisocado],
           'n_sources1d': [4],
           'img_border': [30],
           'img_size': [30*6],
           'pixelphase': xy_pairs,
           'fitshape': [(31, 31)],
           'σ': [0, 50],
-          'λ': np.linspace(100, 50_000, 3),
+          'λ': np.linspace(30_000, 200_000, 3),
           'model_oversampling': [2],
           'model_degree': [3],
-          'model_mode': ['same'],
+          'model_mode': ['grid'],
           'fit_accuracy': [1.49012e-08],
           'use_weights': [False, True],
           'return_imgs': [True]
@@ -430,9 +431,9 @@ if __name__ == '__main__':
     with DebugPool() as p:
     #with mp.Pool() as p:
         results = pd.DataFrame.from_records(
-            p.imap_unordered(fit_models_dictarg, tqdm(list(dictoflists_to_listofdicts(dl)))))
+            p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
     results = transform_dataframe(results)
-
+    print(results.dev.describe())
     #results = results[['noise', 'residual', 'use_weights', 'pixelphase']]
     #results.noise = results.noise.transform(lambda n: (n.gauss_std, n.poisson_std))
 
