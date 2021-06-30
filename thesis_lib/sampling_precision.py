@@ -86,6 +86,44 @@ class DummyAdd2D(Fittable2DModel):
         return np.zeros_like(x)
 
 
+def make_fit_model(input_model, model_mode, fitshape, model_degree, model_oversampling):
+    if model_mode.startswith('grid'):
+        y_init, x_init = np.mgrid[-fitshape[0]-2:fitshape[0]+2.001:1/model_oversampling,
+                                  -fitshape[1]-2:fitshape[1]+2.001:1/model_oversampling]
+        # assert np.sum(y_init) == 0.  # arrays should be centered on zero
+        # assert np.sum(x_init) == 0.
+
+        gridded_model = FittableImageModel(input_model(x_init, y_init),
+                                           oversampling=model_oversampling,
+                                           degree=model_degree)
+        if '+const' in model_mode:
+            fit_model = gridded_model + Const2D(0)
+        else:
+            fit_model = gridded_model + DummyAdd2D()
+    elif model_mode == 'same':
+        fit_model = input_model.copy() + DummyAdd2D()
+    elif model_mode == 'EPSF':
+        raise NotImplementedError
+
+    # todo So this is a lot more annoying than originally though as it will change the parameter names
+    #  if we pass in a Gaussian2D we'd have to change x_0 to x_mean and flux to amplitude and
+    #  mess around with getattr(model, parname)/setattr. Already the .left is bugging me
+    xname = [name for name in ['x_0', 'x_mean'] if hasattr(fit_model.left, name)][0]  # should always be one, yolo
+    yname = [name for name in ['y_0', 'y_mean'] if hasattr(fit_model.left, name)][0]
+    fluxname = [name for name in ['flux', 'amplitude'] if hasattr(fit_model.left, name)][0]
+    # nail down everything extra that could be changed by the fit, we only want to optimize position and flux
+    for name in fit_model.left.param_names:
+        if name not in {xname, yname, fluxname}:
+            fit_model.left.fixed[name] = True
+
+    # unify names to alias so we can refer to parameters directly
+    fit_model.x = getattr(fit_model.left, xname)
+    fit_model.y = getattr(fit_model.left, yname)
+    fit_model.flux = getattr(fit_model.left, fluxname)
+
+    return fit_model
+
+
 def fit_models(input_model: Fittable2DModel,
                pixelphase=0.,
                n_sources1d=4,
@@ -114,40 +152,13 @@ def fit_models(input_model: Fittable2DModel,
     else:
         raise NotImplementedError
 
-    if model_mode.startswith('grid'):
-        y_init, x_init = np.mgrid[-fitshape[0]-2:fitshape[0]+2.001:1/model_oversampling,
-                                  -fitshape[1]-2:fitshape[1]+2.001:1/model_oversampling]
-        assert np.sum(y_init) == 0.  # arrays should be centered on zero
-        assert np.sum(x_init) == 0.
-
-        gridded_model = FittableImageModel(input_model(x_init, y_init),
-                                           oversampling=model_oversampling,
-                                           degree=model_degree)
-        if '+const' in model_mode:
-            fit_model = gridded_model + Const2D(0)
-        else:
-            fit_model = gridded_model + DummyAdd2D()
-    elif model_mode == 'same':
-        fit_model = input_model.copy() + DummyAdd2D()
-    elif model_mode == 'EPSF':
-        raise NotImplementedError
-
     fitshape = np.array(fitshape)
     img, xy_sources = gen_image(input_model, n_sources1d, img_size, img_border, pixelphase, σ, λ, rng)
 
-    # todo So this is a lot more annoying than originally though as it will change the parameter names
-    #  if we pass in a Gaussian2D we'd have to change x_0 to x_mean and flux to amplitude and
-    #  mess around with getattr(model, parname)/setattr. Already the .left is bugging me
-    xname = [name for name in ['x_0', 'x_mean'] if hasattr(fit_model.left, name)][0]  # should always be one, yolo
-    yname = [name for name in ['y_0', 'y_mean'] if hasattr(fit_model.left, name)][0]
-    fluxname = [name for name in ['flux', 'amplitude'] if hasattr(fit_model.left, name)][0]
-    # nail down everything extra that could be changed by the fit, we only want to optimize position and flux
-    for name in fit_model.left.param_names:
-        if name not in {xname, yname, fluxname}:
-            fit_model.left.fixed[name] = True
+    fit_model = make_fit_model(input_model, model_mode, fitshape, model_degree, model_oversampling)
 
     y, x = np.indices(img.shape)
-
+    
     img_variance = (img - img.min()) + 1 + σ ** 2
     if use_weights:
         weights = 1 / np.sqrt(img_variance)
@@ -162,20 +173,20 @@ def fit_models(input_model: Fittable2DModel,
 
         # initialize model parameters to sensible values +jitter and add +- 1.1 pixel bounds
         # TODO bound on the parameters blows up the fit.
-        setattr(fit_model.left, xname, xy_position[0] + rng.uniform(-0.1, 0.1))
+        fit_model.x.value = xy_position[0] + rng.uniform(-0.1, 0.1)
         # getattr(fit_model.left, xname).bounds = (xy_position[0]-0.5, xy_position[0]+0.5)
-        setattr(fit_model.left, yname, xy_position[1] + rng.uniform(-0.1, 0.1))
+        fit_model.y.value = xy_position[1] + rng.uniform(-0.1, 0.1)
         # getattr(fit_model.left, yname).bounds = (xy_position[1]-0.5, xy_position[1]+0.5)
         flux = λ if λ else 1
-        setattr(fit_model.left, fluxname, flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux)))
+        fit_model.flux.value = flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux))
 
         snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(img_variance[cutout_slices]))
 
         fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices],
                         acc=fit_accuracy, maxiter=10_000, weights=weights[cutout_slices])
         res[i] = (xy_position[0], xy_position[1],
-                  getattr(fitted.left, xname).value, getattr(fitted.left, yname).value,
-                  getattr(fitted.left, fluxname).value,
+                  fitted.x.value, fitted.y.value,
+                  fitted.flux.value,
                   snr, fitter.fit_info[iter_name])
         residual -= fitted(x, y)
 
@@ -384,9 +395,9 @@ if __name__ == '__main__':
           'return_imgs': [True]
           }
 
-    #from thesis_lib.util import DebugPool
-    #with DebugPool() as p:
-    with mp.Pool() as p:
+    from thesis_lib.util import DebugPool
+    with DebugPool() as p:
+    #with mp.Pool() as p:
         results = pd.DataFrame.from_records(
             p.imap_unordered(fit_models_dictarg, tqdm(list(dictoflists_to_listofdicts(dl)))))
     results = transform_dataframe(results)
