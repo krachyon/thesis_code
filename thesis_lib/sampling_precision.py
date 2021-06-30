@@ -101,7 +101,7 @@ def fit_models(input_model: Fittable2DModel,
                use_weights=False,
                fitter_name='LM',
                return_imgs=False,
-               seed=0) -> dict:
+               seed=0) -> pd.DataFrame:
 
     rng = np.random.default_rng(seed)
 
@@ -154,7 +154,7 @@ def fit_models(input_model: Fittable2DModel,
     else:
         weights = np.ones_like(x)
 
-    res = np.full((len(xy_sources), 7), np.nan)
+    result_records = []
     residual = img.copy()
 
     for i, xy_position in enumerate(xy_sources):
@@ -173,26 +173,31 @@ def fit_models(input_model: Fittable2DModel,
 
         fitted = fitter(fit_model, x[cutout_slices], y[cutout_slices], img[cutout_slices],
                         acc=fit_accuracy, maxiter=10_000, weights=weights[cutout_slices])
-        res[i] = (xy_position[0], xy_position[1],
-                  getattr(fitted.left, xname).value, getattr(fitted.left, yname).value,
-                  getattr(fitted.left, fluxname).value,
-                  snr, fitter.fit_info[iter_name])
+        result_records.append(
+            {'x': xy_position[0], 'y': xy_position[1],
+             'x_fit': getattr(fitted.left, xname).value, 'y_fit': getattr(fitted.left, yname).value,
+             'flux_fit': getattr(fitted.left, fluxname).value, 'snr': snr,
+             'fititers': fitter.fit_info[iter_name], 'fitted_model': fitted}
+        )
         residual -= fitted(x, y)
 
-    x_dev = res[:, 0] - res[:, 2]
-    y_dev = res[:, 1] - res[:, 3]
-    dev = np.sqrt(x_dev**2 + y_dev**2)
-    ret = {'x':    res[:, 0], 'y': res[:, 1],
-           'dev':  dev, 'x_dev': x_dev, 'y_dev': y_dev,
-           'flux': res[:, 4], 'snr': res[:, 5], 'fititers': res[:, 6]}
+    ret = pd.DataFrame.from_records(result_records)
+    ret['x_dev'] = ret.x - ret.x_fit
+    ret['y_dev'] = ret.y - ret.y_fit
+    ret['dev'] = np.sqrt(ret.x_dev**2 + ret.y_dev**2)
     if return_imgs:
-        ret |= {'img': img, 'residual': residual}
+        ret['img'] = [img]*len(ret)
+        ret['residual'] = [residual]*len(ret)
+    else:
+        del ret['fitted_model']
 
     return ret
 
 
 def fit_models_dictarg(kwargs_dict):
-    return kwargs_dict | fit_models(**kwargs_dict)
+    ret = fit_models(**kwargs_dict)
+    ret[list(kwargs_dict.keys())] = list(kwargs_dict.values())
+    return ret
 
 
 def dictoflists_to_listofdicts(dict_of_list):
@@ -384,12 +389,12 @@ if __name__ == '__main__':
           'return_imgs': [True]
           }
 
-    #from thesis_lib.util import DebugPool
-    #with DebugPool() as p:
-    with mp.Pool() as p:
-        results = pd.DataFrame.from_records(
-            p.imap_unordered(fit_models_dictarg, tqdm(list(dictoflists_to_listofdicts(dl)))))
-    results = transform_dataframe(results)
+    from thesis_lib.util import DebugPool
+    with DebugPool() as p:
+    #with mp.Pool() as p:
+        dfs = p.map(fit_models_dictarg, tqdm(list(dictoflists_to_listofdicts(dl))))
+        results = pd.concat(dfs)
+    #results = transform_dataframe(results)
 
     #results = results[['noise', 'residual', 'use_weights', 'pixelphase']]
     #results.noise = results.noise.transform(lambda n: (n.gauss_std, n.poisson_std))
