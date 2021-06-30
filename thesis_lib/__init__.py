@@ -1,11 +1,10 @@
 # This is needed as the default method 'fork' sometimes borks the ipython kernel...
 import multiprocess
-try:
-    multiprocess.set_start_method('forkserver')
-except RuntimeError:
-    assert (multiprocess.get_start_method() == 'forkserver'), \
-        'This package only works with the forkserver process startup method'
-
+# try:
+#     multiprocess.set_start_method('forkserver')
+# except RuntimeError:
+#     assert (multiprocess.get_start_method() == 'forkserver'), \
+#         'This package only works with the forkserver process startup method'
 try:
     import bottleneck
     raise ImportError('bottleneck is installed, which is numerically inaccurate. '
