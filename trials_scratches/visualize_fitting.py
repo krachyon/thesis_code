@@ -89,6 +89,7 @@ def doit(input_model: Fittable2DModel,
          use_weights=False,
          fitter_name='Simplex',
          return_imgs=False,
+         fit_bounds=None,
          seed=0):
 
     rng = np.random.default_rng(seed)
@@ -126,6 +127,7 @@ def doit(input_model: Fittable2DModel,
                                   λ,
                                   fit_accuracy,
                                   use_weights,
+                                  fit_bounds,
                                   rng)
 
         history = np.core.records.fromrecords(fitted.history, names=fitted.param_names)
@@ -144,13 +146,14 @@ def doit(input_model: Fittable2DModel,
 
     #plotfig.colorbar(sc, ax=plotax)
 
-model = make_anisocado_model(2)
-#from astropy.modeling.functional_models import Gaussian2D
+#model = make_anisocado_model(2)
+from astropy.modeling.functional_models import Gaussian2D, AiryDisk2D
 #model = Gaussian2D()
+model = AiryDisk2D(radius=3)
 
 doit(model,
      pixelphase=0.,
-     n_sources1d=2,
+     n_sources1d=1,
      img_size=128,
      img_border=32,
      σ=10,
@@ -163,5 +166,6 @@ doit(model,
      use_weights=False,
      fitter_name='LM',
      return_imgs=False,
+     fit_bounds=(0.1, 0.1),
      seed=0)
 plt.show()

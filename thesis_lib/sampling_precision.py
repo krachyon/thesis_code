@@ -135,7 +135,8 @@ def fit_single_image(fit_model: Fittable2DModel,
                      λ=None,
                      fit_accuracy=1e-8,
                      use_weights=False,
-                     rng=np.random.default_rng):
+                     fit_bounds=None,
+                     rng=np.random.default_rng()):
 
     cutout_slices = get_cutout_slices(xy_position, fitshape)
 
@@ -146,16 +147,20 @@ def fit_single_image(fit_model: Fittable2DModel,
         weights = np.ones_like(x_grid)
 
     # initialize model parameters to sensible values +jitter and add +- 1.1 pixel bounds
+
+    fit_model.x.value = xy_position[0] + rng.uniform(-0.2, 0.2)
+    fit_model.y.value = xy_position[1] + rng.uniform(-0.2, 0.2)
+
     # TODO bound on the parameters blows up the fit.
-    fit_model.x.value = xy_position[0] + rng.uniform(-0.1, 0.1)
-    # getattr(fit_model.left, xname).bounds = (xy_position[0]-0.5, xy_position[0]+0.5)
-    fit_model.y.value = xy_position[1] + rng.uniform(-0.1, 0.1)
-    # getattr(fit_model.left, yname).bounds = (xy_position[1]-0.5, xy_position[1]+0.5)
+    if fit_bounds:
+        fit_model.x.bounds = (xy_position[0]-fit_bounds[0], xy_position[0]+fit_bounds[0])
+        fit_model.y.bounds = (xy_position[1]-fit_bounds[1], xy_position[1]+fit_bounds[1])
+
     flux = λ if λ else 1
     fit_model.flux.value = flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux))
 
     fitted = fitter(fit_model, x_grid[cutout_slices], y_grid[cutout_slices], img[cutout_slices],
-                    acc=fit_accuracy, maxiter=10_000, weights=weights[cutout_slices])
+                    acc=fit_accuracy, maxiter=1000, weights=weights[cutout_slices])
     fitted.snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(img_variance[cutout_slices]))
 
     return fitted
@@ -173,9 +178,10 @@ def fit_models(input_model: Fittable2DModel,
                model_degree=5,
                model_mode='grid',
                fit_accuracy=1e-8,
-               use_weights=False,
+               use_weights=True,
                fitter_name='LM',
                return_imgs=False,
+               fit_bounds=None,
                seed=0) -> dict:
 
     rng = np.random.default_rng(seed)
@@ -212,6 +218,7 @@ def fit_models(input_model: Fittable2DModel,
                                   λ,
                                   fit_accuracy,
                                   use_weights,
+                                  fit_bounds,
                                   rng)
 
         res[i] = (xy_position[0], xy_position[1],
@@ -273,8 +280,8 @@ class AnisocadoModel(FittableImageModel):
         return super().__str__() + f' oversampling: {self.oversampling}'
 
 
-def make_anisocado_model(oversampling=2, degree=5, seed=0):
-    img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=80*oversampling+1, seed=seed).psf_on_axis
+def make_anisocado_model(oversampling=2, degree=5, seed=0, offaxis=(0, 0)):
+    img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=80*oversampling+1, seed=seed).shift_off_axis(*offaxis)
     return AnisocadoModel(img, oversampling=oversampling, degree=degree)
 
 
@@ -327,7 +334,9 @@ def plot_phase_vs_deviation3d(results: pd.DataFrame):
 
 
 def plot_fitshape(results: pd.DataFrame):
-    grouped = results.groupby([results.input_model.astype('str'), 'use_weights'],
+    grouped = results.groupby([results.input_model.astype('str'),
+                               'use_weights',
+                               'n_sources1d'],
                               as_index=False)
 
     #fig, axes = plt.subplots(len(grouped), sharex='all')
