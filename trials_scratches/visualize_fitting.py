@@ -76,7 +76,7 @@ def set_call_trace(model):
 
 def doit(input_model: Fittable2DModel,
          pixelphase=0.,
-         n_sources1d=2,
+         n_sources=2,
          img_size=128,
          img_border=16,
          σ=0,
@@ -103,7 +103,7 @@ def doit(input_model: Fittable2DModel,
         raise NotImplementedError
 
     fitshape = np.array(fitshape)
-    img, xy_sources = gen_image(input_model, n_sources1d, img_size, img_border, pixelphase, σ, λ, rng)
+    img, xy_sources = gen_image(input_model, n_sources, img_size, img_border, pixelphase, σ, λ, rng)
 
     y_grid, x_grid = np.indices(img.shape)
 
@@ -153,7 +153,7 @@ model = AiryDisk2D(radius=3)
 
 doit(model,
      pixelphase=0.,
-     n_sources1d=1,
+     n_sources=1,
      img_size=128,
      img_border=32,
      σ=10,

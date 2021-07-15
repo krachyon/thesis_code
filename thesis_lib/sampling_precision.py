@@ -36,11 +36,13 @@ from matplotlib.colors import Normalize
 from photutils import FittableImageModel
 
 
-def gen_image(model, N1d, size, border, pixelphase, σ=0, λ=100_000, rng=np.random.default_rng()):
-    # TODO Performance could be improved by model.render
+def gen_image(model, N, size, border, pixelphase, σ=0, λ=100_000, rng=np.random.default_rng()):
+
+    # TODO Performance could be improved by model.render, but that needs bounding box
+    N1d = int(np.ceil(np.sqrt(N)))
     yx_sources = np.mgrid[0+border:size-border:N1d*1j, 0+border:size-border:N1d*1j].transpose((1, 2, 0)).reshape(-1, 2)
-    # swap x and y and round to nearest integer
-    xy_sources = np.round(np.roll(yx_sources, 1, axis=0))
+    # swap x and y and round to nearest integer; only take N entries
+    xy_sources = np.round(np.roll(yx_sources, 1, axis=0))[:N]
 
     # constant pixelphase for both x and y
     if isinstance(pixelphase, numbers.Number):
@@ -102,7 +104,9 @@ def make_fit_model(input_model, model_mode, fitshape, model_degree, model_oversa
             fit_model = gridded_model + DummyAdd2D()
     elif model_mode == 'same':
         fit_model = input_model.copy() + DummyAdd2D()
+
     elif model_mode == 'EPSF':
+        # TODO it makes more sense to externalize the EPSF creation and just allow using a different fit and input model
         raise NotImplementedError
 
     # todo So this is a lot more annoying than originally though as it will change the parameter names
@@ -168,7 +172,7 @@ def fit_single_image(fit_model: Fittable2DModel,
 
 def fit_models(input_model: Fittable2DModel,
                pixelphase=0.,
-               n_sources1d=4,
+               n_sources=4,
                img_size=128,
                img_border=16,
                σ=0,
@@ -196,7 +200,7 @@ def fit_models(input_model: Fittable2DModel,
         raise NotImplementedError
 
     fitshape = np.array(fitshape)
-    img, xy_sources = gen_image(input_model, n_sources1d, img_size, img_border, pixelphase, σ, λ, rng)
+    img, xy_sources = gen_image(input_model, n_sources, img_size, img_border, pixelphase, σ, λ, rng)
 
     fit_model = make_fit_model(input_model, model_mode, fitshape, model_degree, model_oversampling)
 
@@ -336,7 +340,7 @@ def plot_phase_vs_deviation3d(results: pd.DataFrame):
 def plot_fitshape(results: pd.DataFrame):
     grouped = results.groupby([results.input_model.astype('str'),
                                'use_weights',
-                               'n_sources1d'],
+                               'n_sources'],
                               as_index=False)
 
     #fig, axes = plt.subplots(len(grouped), sharex='all')
@@ -426,7 +430,7 @@ if __name__ == '__main__':
     xy_pairs = np.mgrid[0:0.5:size_1D, 0:0.5:size_1D].transpose((1, 2, 0)).reshape(-1, 2)
 
     dl = {'input_model': [anisocado],
-          'n_sources1d': [4],
+          'n_sources': [4],
           'img_border': [30],
           'img_size': [30*6],
           'pixelphase': xy_pairs,
