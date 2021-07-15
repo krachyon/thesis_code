@@ -417,6 +417,33 @@ def verify_methods_with_grid(filename='output_files/grid_16.fits'):
 
     return epsf_fit, epsf_combine, table_fit, table_combine
 
+def get_cutout(image, position, cutout_size):
+    assert position.shape == (2,)
+
+    # clip values less than 0 to 0, greater does not matter, that's ignored
+    low = np.clip(np.round(position - cutout_size/2+0.5).astype(int), 0, None)
+    high = np.clip(np.round(position + cutout_size/2+0.5).astype(int), 0, None)
+
+    # xy swap
+    return image[low[1]:high[1], low[0]:high[0]]
+
+def test_get_cutout():
+    testimg = np.arange(0, 100).reshape(10, -1)
+
+    assert np.all(get_cutout(testimg, np.array((0, 0)), 1) == np.array([[0]]))
+    assert np.all(get_cutout(testimg, np.array((0, 0)), 2) == np.array([[0,1], [10,11]]))
+    # goin of the edge to the upper right
+    assert np.all(get_cutout(testimg, np.array((0, 0)), 3) == np.array([[0,1], [10,11]]))
+
+    assert np.all(get_cutout(testimg, np.array((1, 1)), 1) == np.array([[11]]))
+
+    assert np.all(get_cutout(testimg, np.array((0.9, 0.9)), 2) == np.array([[0,1], [10,11]]))
+    assert np.all(get_cutout(testimg, np.array((1., 1.)), 2) == np.array([[0,1], [10,11]]))
+
+    assert np.all(get_cutout(testimg, np.array((1.1, 1.1)), 2) == np.array([[11,12], [21,22]]))
+
+    assert np.all(get_cutout(testimg, np.array((5,5)),1000) == testimg)
+
 if __name__ == '__main__':
     from astropy.io import fits
 
@@ -429,3 +456,4 @@ if __name__ == '__main__':
     plt.show()
     # table_psf = do_photometry_epsf(epsf, img)
     # table_basic = do_photometry_basic(img,3)
+
