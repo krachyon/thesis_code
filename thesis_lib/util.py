@@ -45,6 +45,12 @@ def make_gauss_kernel(σ=1.0):
     return gauss_kernel/np.sum(gauss_kernel)
 
 
+def airy_fwhm(r):
+    """FWHM= 1.028λ/d ; θ~=r=1.22 λ/d"""
+    fwhm = r * 0.8426229508196722
+    return fwhm
+
+
 @np.vectorize
 def flux_to_magnitude(flux):
     return -2.5 * np.log10(flux)

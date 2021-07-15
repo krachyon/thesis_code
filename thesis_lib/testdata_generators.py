@@ -145,6 +145,7 @@ def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
 
 def convolved_grid(N1d: int = 16,
                    border: int = 64,
+                   size: int = 1024,
                    kernel: Union[Kernel2D, None] = Gaussian2DKernel(x_stddev=1, x_size=201, y_size=201),
                    perturbation: float = 0.,
                    seed: int = 1000) -> Tuple[np.ndarray, Table]:
@@ -162,7 +163,6 @@ def convolved_grid(N1d: int = 16,
     # Kernel should always be an odd image or else we introduce some shift in the image
     np.random.seed(seed)
 
-    size = 1024
     data = np.zeros((size, size))
 
     idx_float = np.linspace(0 + border, size - border, N1d)
@@ -186,6 +186,7 @@ def convolved_grid(N1d: int = 16,
     if kernel is not None:
         # noinspection PyTypeChecker
         data = convolve_fft(data, kernel)
+    # TODO the no-zeros seem like an awful hack
     data = data / np.max(data) + 0.001  # normalize and add tiny offset to have no zeros in data
 
     table = Table((x_float.ravel(), y_float.ravel(), np.ones(x.size)), names=names)
@@ -198,7 +199,7 @@ def _centered_grid(size, border):
     start = -stop + border
     step = 1j*size
 
-    # y,x =
+    # y, x =
     return np.mgrid[start:stop:step, start:stop:step]
 
 import numba
