@@ -8,7 +8,6 @@ from matplotlib.colors import LogNorm
 import numpy as np
 
 scopesim_helper.download()
-plt.ion()
 
 name = 'gausscluster_N2000_mag22'
 recipe = testdata_generators.benchmark_images[name]
@@ -62,16 +61,18 @@ plt.imshow(img, cmap='Greys_r', norm=LogNorm())
 plt.colorbar()
 chisquares = np.array(all_stars_refined['model_chisquare'])
 chisquares[np.isnan(chisquares)] = np.nanmax(chisquares)*1.2
-plt.plot(input_table['x']+0.5, input_table['y']+0.5, 'o', fillstyle='none', markersize=4, markeredgewidth=0.3, markeredgecolor='green')
-plt.scatter(all_stars_refined['xcentroid'], all_stars_refined['ycentroid'], s=2, c=chisquares, cmap='inferno')
+plt.plot(input_table['x']+0.5, input_table['y']+0.5, 'o', fillstyle='none', markersize=4, markeredgewidth=0.3, markeredgecolor='green', label='input positions')
+plt.scatter(all_stars_refined['xcentroid'], all_stars_refined['ycentroid'], s=2, c=np.log(chisquares), cmap='inferno', label='detections with $χ^2$')
+plt.legend()
 plt.colorbar()
-
+import pickle
+with open('culler_performance.mplf', 'wb') as f:
+    pickle.dump(plt.gcf(), f)
 
 plt.figure()
 plt.imshow(epsf.data, norm=LogNorm())
 plt.figure()
 plt.imshow(epsf_refined.data, norm=LogNorm())
-
 
 plt.show()
 

@@ -26,4 +26,6 @@ fitted_epsf = fitter(to_fit_epsf, x, y, data)
 
 residual = data - fitted_epsf(x, y)
 
+plt.imshow(residual)
+plt.show()
 pass
