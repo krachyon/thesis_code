@@ -139,7 +139,7 @@ def plot_lambda_vs_precission(results):
 
         plt.plot(xs, ys, label=weightname)
         plt.fill_between(xs, ys - errs, ys + errs, alpha=0.4)
-        plt.xlabel('Poisson λ')
+        plt.xlabel('Pixel Counts')
         plt.ylabel('Mean deviation')
         plt.ylim(1e-4, 1e-2)
         plt.yscale('log')
@@ -166,7 +166,7 @@ def plot_lambda_vs_precission_relative(results):
         plt.axhline(1, ls=':', color='k')
         plt.text(5000, 1.25, 'worse')
         plt.text(5000, 0.75, 'better')
-        plt.xlabel('Poisson λ')
+        plt.xlabel('Pixel Counts')
         plt.ylim(0, 2)
         plt.ylabel('Relative deviation between weights and unweighted fit')
 
@@ -196,7 +196,7 @@ def plot_weightshape(results, model):
             axs[i].plot(xs, 10 * (res.fitted(xs) - current_model(xs)), label='10x deviation of fitted')
             axs[i].plot(xs, weights / weights.max() * noise.max(), label='scaled weights')
             axs[i].plot(xs, effective_weights/effective_weights.max() * noise.max(), label='effective weights scaled')
-            axs[i].set_title(f'poisson_λ={λ}, gauss_σ={σ}')
+            axs[i].set_title(f'counts={λ}, gauss_σ={σ}')
             axs[i].legend()
         plt.suptitle(wcal)
         plt.tight_layout()

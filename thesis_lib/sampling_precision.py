@@ -341,11 +341,16 @@ def plot_fitshape(results: pd.DataFrame):
 
     #fig, axes = plt.subplots(len(grouped), sharex='all')
     plt.figure()
-    for (model, weight), modelgroup in grouped:
-        mean = modelgroup.groupby('fitshape').mean()
-        std = modelgroup.groupby('fitshape').std()
-        plt.errorbar([i[0] for i in mean.index], mean.dev, std.dev,
-                     fmt='o', label=f'{modelgroup.input_model.iloc[0]!r} weights: {weight}')
+    for i, ((model, weight, n_sources), modelgroup) in enumerate(grouped):
+        xs = [i[0] for i in modelgroup.groupby('fitshape').mean().index]
+        ys = modelgroup.groupby('fitshape').mean().dev
+        errs = modelgroup.groupby('fitshape').std().dev
+        plt.plot(xs, ys,
+                 label=f'{type(modelgroup.input_model.iloc[0]).__name__} weights: {weight}, N: {n_sources}')
+        plt.fill_between(xs, ys - errs, ys + errs, alpha=0.3)
+
+    plt.xlabel('Cutout size of fit around star')
+    plt.ylabel('mean position deviation')
     plt.legend()
 
 
@@ -366,7 +371,7 @@ def plot_deviation_vs_noise(results: pd.DataFrame):
     plt.xscale('log')
     plt.yscale('log')
 
-    plt.xlabel('Poisson λ')
+    plt.xlabel('Peak pixel count')
 
     plt.ylabel('Mean Deviation in measured Position')
     plt.title("everything's a line on a loglog-plot lol")
@@ -388,9 +393,9 @@ def plot_noise_vs_weights(results: pd.DataFrame):
         #             alpha=0.8, errorevery=(i,len(grouped)), fmt='o', label=f'input_model: {model}, modeldegree: {degree}, weights: {weights}')
         xs = noisegroup.first().index
         ys = noisegroup.dev.mean()
-        errs = noisegroup.dev.std()/xs
-        plt.plot(xs, ys/xs, '-', alpha=0.9, label=f'input_model: {model}, σ: {σ}, weights: {weights}')
-        plt.fill_between(xs, ys/xs - errs, ys/xs + errs, alpha=0.3)
+        errs = noisegroup.dev.std()
+        plt.plot(xs, ys, '-', alpha=0.9, label=f'input_model: {model}, σ: {σ}, weights: {weights}')
+        plt.fill_between(xs, ys - errs, ys + errs, alpha=0.3)
 
     # noise_σ = results.noise.apply(lambda noise: noise.std).sort_values()
     ## precision = α*fwhm/snr
@@ -402,11 +407,11 @@ def plot_noise_vs_weights(results: pd.DataFrame):
 
     plt.legend(fontsize='small')
     plt.xscale('log')
-    #plt.yscale('log')
+    plt.yscale('log')
 
     plt.xlabel('λ')
-    plt.ylabel('Deviation in measured Position/σ')
-    plt.title("everything's a line on a loglog-plot lol")
+    plt.ylabel('Deviation in measured Position')
+    plt.title("")
     plt.tight_layout()
 
 
