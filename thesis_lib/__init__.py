@@ -24,3 +24,4 @@ from . import config
 from . import photometry_daophot
 from . import parameter_tuning
 from . import sampling_precision
+from . import convolution_vs_model
