@@ -1,0 +1,6 @@
+*.ipynb
+out_initial_astrometry/
+output_files_lowpass/
+test_images/
+*.zip
+
