@@ -11,6 +11,8 @@ from typing import List, Any
 from dataclasses import dataclass
 import re
 import astropy.io.fits
+import pickle
+import os
 
 
 class ClassRepr(type):
@@ -368,3 +370,9 @@ def getdata_safer(filename, *args, **kwargs):
     assert data.flags.c_contiguous
 
     return data
+
+
+def save_plot(outdir, name, dpi=250):
+    plt.savefig(os.path.join(outdir, name+'.pdf'), dpi=dpi)
+    with open(os.path.join(outdir, name+'.mplf'), 'wb') as f:
+        pickle.dump(plt.gcf(), f)
