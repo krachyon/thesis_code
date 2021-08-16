@@ -79,7 +79,7 @@ def plot_input_vs_photometry_positions(matched_table: Table,
 
     plt.figure()
 
-    plt.title('offset between measured and input')
+    plt.title('offset between measured and input position')
     plt.xlabel('x offsets [pixel]')
     plt.ylabel('y offsets [pixel]')
     xs = matched_table['x_fit'] - matched_table['x_orig']

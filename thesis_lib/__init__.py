@@ -25,3 +25,4 @@ from . import photometry_daophot
 from . import parameter_tuning
 from . import sampling_precision
 from . import convolution_vs_model
+from . import accuracy_of_epsf_derivation
