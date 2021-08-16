@@ -58,13 +58,13 @@ plt.colorbar()
 
 plt.figure()
 plt.imshow(img, cmap='Greys_r', norm=LogNorm())
-plt.colorbar()
+plt.colorbar(label="pixel count")
 chisquares = np.array(all_stars_refined['model_chisquare'])
 chisquares[np.isnan(chisquares)] = np.nanmax(chisquares)*1.2
-plt.plot(input_table['x']+0.5, input_table['y']+0.5, 'o', fillstyle='none', markersize=4, markeredgewidth=0.3, markeredgecolor='green', label='input positions')
-plt.scatter(all_stars_refined['xcentroid'], all_stars_refined['ycentroid'], s=2, c=np.log(chisquares), cmap='inferno', label='detections with $χ^2$')
+plt.plot(input_table['x']+0.5, input_table['y']+0.5, 'o', fillstyle='none', markersize=7, markeredgewidth=0.6, markeredgecolor='green', label='input positions')
+plt.scatter(all_stars_refined['xcentroid'], all_stars_refined['ycentroid'], s=4, c=np.log(chisquares), cmap='inferno', label='detections with $χ^2$')
 plt.legend()
-plt.colorbar()
+plt.colorbar(label='log $χ^2$')
 import pickle
 with open('culler_performance.mplf', 'wb') as f:
     pickle.dump(plt.gcf(), f)
