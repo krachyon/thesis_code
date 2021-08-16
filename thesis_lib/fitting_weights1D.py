@@ -163,12 +163,9 @@ def plot_lambda_vs_precission_relative(results):
 
         plt.plot(xs, ys, label=weightname)
         # plt.fill_between(xs, ys - errs, ys + errs, alpha=0.4)
-        plt.axhline(1, ls=':', color='k')
-        plt.text(5000, 1.25, 'worse')
-        plt.text(5000, 0.75, 'better')
-        plt.xlabel('Pixel Counts')
-        plt.ylim(0, 2)
-        plt.ylabel('Relative deviation between weights and unweighted fit')
+    plt.axhline(1, ls=':', color='k')
+    plt.xlabel('Peak pixel count')
+    plt.ylabel('Relative deviation between weighted and unweighted fit')
 
     plt.legend()
     return [plt.gcf()]

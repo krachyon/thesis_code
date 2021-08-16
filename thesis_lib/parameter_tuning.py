@@ -37,16 +37,18 @@ def plot_shape(result: skopt.utils.OptimizeResult, dimensions=None) -> matplotli
     :param dimensions: Names for function parameters that where optimized
     :return:
     """
-    space = result.space
-    n_dims = space.n_dims
 
     x = np.array(result.x_iters)
     y = np.array(result.func_vals)
     if dimensions:
-        assert len(dimensions) == n_dims
+        n_dims = len(dimensions)
+        assert n_dims <= result.space.n_dims
     else:
         dimensions = result.space.dimension_names
+        n_dims = result.space.n_dims
+
         #dimensions = [f'$X_{i}$' for i in range(n_dims)]
+    
 
     fig, ax = plt.subplots(n_dims, n_dims,
                            figsize=(2 * n_dims, 2 * n_dims))

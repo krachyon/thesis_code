@@ -349,7 +349,8 @@ def plot_fitshape(results: pd.DataFrame):
         xs = [i[0] for i in modelgroup.groupby('fitshape').mean().index]
         ys = modelgroup.groupby('fitshape').mean().dev
         errs = modelgroup.groupby('fitshape').std().dev
-        plt.plot(xs, ys,
+        style = '-' if weight==True else '--'
+        plt.plot(xs, ys, style,
                  label=f'{type(modelgroup.input_model.iloc[0]).__name__} weights: {weight}, N: {n_sources}')
         plt.fill_between(xs, ys - errs, ys + errs, alpha=0.3)
 
@@ -365,10 +366,11 @@ def plot_deviation_vs_noise(results: pd.DataFrame):
     grouped = results.groupby([results.input_model.astype(str), results.σ], as_index=False)
 
     plt.figure()
-    for (model_str, σ), group in grouped:
+    for i, ((model_str, σ), group) in enumerate(grouped):
         # for each noisetype, plot magnitude vs deviation
         noisegroup = group.groupby('λ')
         plt.errorbar(noisegroup.first().index, noisegroup.mean().dev, noisegroup.std().dev,
+                     errorevery=(i, len(grouped)),
                      fmt='o', label=f'{repr(group.input_model.iloc[0])} σ={σ}')
 
     plt.legend(fontsize='small')
@@ -378,7 +380,7 @@ def plot_deviation_vs_noise(results: pd.DataFrame):
     plt.xlabel('Peak pixel count')
 
     plt.ylabel('Mean Deviation in measured Position')
-    plt.title("everything's a line on a loglog-plot lol")
+    #plt.title("everything's a line on a loglog-plot lol")
 
 
 def plot_noise_vs_weights(results: pd.DataFrame):
