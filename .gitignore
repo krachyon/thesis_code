@@ -13,3 +13,7 @@ test_images*/*
 *.pkl
 *.pickle
 *.egg-info/
+*.mplf
+src/
+**/test_images/
+
