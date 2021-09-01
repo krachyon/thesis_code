@@ -174,7 +174,7 @@ def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] =
     axes[1,1].set_xlabel('[pixel]')
 
     if output_path:
-        save(output_path, plt.gcf())
+        plot_image_with_source_and_measured(output_path, plt.gcf())
     return plt.gcf()
 
 

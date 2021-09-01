@@ -235,9 +235,27 @@ photometry_result_lpc = photometry.run_photometry(
     image_lpc, input_table_lpc, image_name_lpc, lowpass_config)
 
 # %%
-fig = plots_and_sanitycheck.plot_image_with_source_and_measured(
-    photometry_result_lpc.image, photometry_result_lpc.input_table, photometry_result_lpc.result_table)
+input_table = photometry_result_lpc.input_table
+result_table=photometry_result_lpc.result_table
+def ref_phot_plot():
+    plt.figure()
+    plt.imshow(photometry_result_lpc.image, norm=LogNorm())
+    plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none', 
+             markeredgewidth=1, markeredgecolor='red', label=f'reference N={len(input_table)}')
+    plt.plot(result_table['x_fit'], result_table['y_fit'], '.', markersize=5,
+             markeredgecolor='orange', label=f'photometry N={len(result_table)}')
+    plt.legend()
 
+ref_phot_plot()
+plt.xlim((333.0414029362044, 371.33596286811064))
+plt.ylim((280.9350859599385, 244.97388631062154))
+
+save_plot(outdir, 'lowpass_astrometry_groupissue')
+
+# %%
+ref_phot_plot()
+xlim((66.41381370421695, 396.3265565090578))
+ylim((995.3013431030644, 644.769053872921))
 save_plot(outdir, 'lowpass_astrometry')
 
 # %%
