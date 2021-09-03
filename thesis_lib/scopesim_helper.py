@@ -33,7 +33,7 @@ def to_pixel_scale(as_coord):
         as_coord *= u.arcsec
 
     shifted_pixel_coord = as_coord / pixel_scale
-    pixel = shifted_pixel_coord + max_pixel_coord / 2
+    pixel = shifted_pixel_coord + max_pixel_coord / 2 - 0.5 * u.pixel
     return pixel.value
 
 
@@ -45,7 +45,7 @@ def pixel_to_mas(px_coord):
         px_coord *= u.pixel
 
     # shift bounds (0,1023) to (-511.5,511.5)
-    coord_shifted = px_coord - max_pixel_coord / 2
+    coord_shifted = px_coord - max_pixel_coord / 2 + 0.5 * u.pixel
     mas = coord_shifted * pixel_scale
     return mas.value
 
@@ -86,14 +86,12 @@ def make_psf(psf_wavelength: float = 2.15,
     # convolve_mode=''
 
 
-def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None) -> scopesim.OpticalTrain:
+def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,
+                        use_custom_subpixel: bool = True) -> scopesim.OpticalTrain:
     """
     Create a Micado optical train with custom PSF
     :return: OpticalTrain object
     """
-    if not psf_effect:
-        psf_effect = make_psf()
-
     # TODO Multiprocessing sometimes seems to cause some issues in scopesim, probably due to shared connection object
     # #  File "ScopeSim/scopesim/effects/ter_curves.py", line 247, in query_server
     # #     tbl.columns[i].name = colname
@@ -102,11 +100,15 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None) ->
     with scopesim_lock:
         micado = scopesim.OpticalTrain('MICADO')
 
-    # the previous psf had that optical element so put it in the same spot.
-    # Todo This way of looking up the index is pretty stupid. Is there a better way?
-    element_idx = [element.meta['name'] for element in micado.optics_manager.optical_elements].index('default_ro')
+    if not use_custom_subpixel:
+        # the previous psf had that optical element so put it in the same spot.
+        # Todo This way of looking up the index is pretty stupid. Is there a better way?
+        element_idx = [element.meta['name'] for element in micado.optics_manager.optical_elements].index('default_ro')
+        if not psf_effect:
+            psf_effect = make_psf()
 
-    micado.optics_manager.add_effect(psf_effect, ext=element_idx)
+        micado.optics_manager.add_effect(psf_effect, ext=element_idx)
+
 
     # disable old psf
     # TODO - why is there no remove_effect with a similar interface?
@@ -120,8 +122,10 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None) ->
     micado['armazones_atmo_dispersion'].include = False
     micado['micado_adc_3D_shift'].include = False
 
-    # TODO does this also apply to the custom PSF?
-    micado.cmds["!SIM.sub_pixel.flag"] = True
+    if use_custom_subpixel:
+        micado.cmds["!SIM.sub_pixel.flag"] = "psf_eval"
+    else:
+        micado.cmds["!SIM.sub_pixel.flag"] = True
 
     return micado
 
