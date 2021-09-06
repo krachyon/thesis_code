@@ -78,7 +78,7 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
                      image_name_template: str,
                      n_images: int,
                      config=Config.instance(),
-                     threads: Union[int, None]=None) -> Table:
+                     threads: Union[int, None, bool]=None) -> Table:
     """
     apply EPSF fitting photometry to a testimage
     :param image_recipe: function to generate test image
@@ -96,11 +96,11 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
             (image, input_table, estimate_fwhm(result.epsf))
         return util.match_observation_to_source(input_table, result.result_table)
 
-    if threads:
+    if threads is False:
+        partial_results = list(map(inner, range(n_images)))
+    else:
         with mp.Pool(threads) as pool:
             partial_results = pool.map(inner, range(n_images))
-    else:
-        partial_results = list(map(inner, range(n_images)))
 
     matched_result = astropy.table.vstack(partial_results)
 
