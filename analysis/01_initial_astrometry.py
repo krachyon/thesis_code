@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.3
+#       jupytext_version: 1.11.4
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -40,6 +40,7 @@ from photutils.psf import EPSFModel
 from copy import copy
 from IPython.display import clear_output
 from thesis_lib.util import save_plot
+from thesis_lib.scopesim_helper import make_anisocado_model
 import os
 
 ## use these for interactive, disable for export
@@ -226,7 +227,7 @@ lowpass_config.create_dirs()
 # %%
 # use an image with less sources to not have to filter the input positions
 image_name_lpc = 'gausscluster_N2000_mag22'
-image_recipe_lpc = testdata_generators.lowpass_images[image_name_lpc]
+image_recipe_lpc = testdata_generators.benchmark_images[image_name_lpc]
 image_lpc, input_table_lpc = testdata_generators.read_or_generate_image(image_recipe_lpc,
                                                                         image_name_lpc,
                                                                         lowpass_config.image_folder)
@@ -285,8 +286,27 @@ def recipe_template(seed):
         return scopesim_grid(seed=seed, N1d=25, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: np.random.uniform(18, 24, N))
     return inner
 
-result_table_multi = astrometry_benchmark.photometry_multi(recipe_template, 'mag18-24_grid', n_images=12, config=no_overlap_config, threads=12)
+result_table_multi = astrometry_benchmark.photometry_multi(recipe_template, 'mag18-24_grid', n_images=12, config=no_overlap_config, threads=None)
 clear_output()
+
+# %%
+# if something goes wrong here, check the stdout of the jupyter notebook server for hints
+no_overlap_config = copy(lowpass_config)
+no_overlap_config.separation_factor = 0.1  # No groups in this case
+
+
+def recipe_template(seed):
+    def inner():
+        # These imports are necessary to be able to execute in a forkserver context; it does not copy the full memory space, so
+        # we'd have to rely on the target to know the imports
+        from thesis_lib.testdata_generators import scopesim_grid, lowpass
+        import numpy as np
+        return scopesim_grid(seed=seed, N1d=10, perturbation=2., custom_subpixel_psf=make_anisocado_model(lowpass=5), magnitude=lambda N: np.random.uniform(18, 24, N))
+    return inner
+
+#result_table_multi = astrometry_benchmark.photometry_multi(recipe_template, 'mag18-24_grid_subpixel', n_images=75, config=no_overlap_config)
+#clear_output()
+
 
 # %%
 fig = plots_and_sanitycheck.plot_input_vs_photometry_positions(result_table_multi)
@@ -342,3 +362,5 @@ plt.ylabel('deviation [pixel]')
 #plt.ylim(0,dists_std.max()*5)
 plt.legend()
 save_plot(outdir, 'multi_astrometry_noisefloor')
+
+# %%
