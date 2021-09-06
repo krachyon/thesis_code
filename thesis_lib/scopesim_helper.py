@@ -4,6 +4,10 @@ import tempfile
 from typing import Callable, Tuple, Optional
 
 import anisocado
+from anisocado import AnalyticalScaoPsf
+from photutils import FittableImageModel
+from astropy.modeling.functional_models import Gaussian2D
+
 import numpy as np
 import scopesim
 
@@ -86,12 +90,38 @@ def make_psf(psf_wavelength: float = 2.15,
     # convolve_mode=''
 
 
+class AnisocadoModel(FittableImageModel):
+    def __repr__(self):
+        return super().__repr__() + f' oversampling: {self.oversampling}'
+
+    def __str__(self):
+        return super().__str__() + f' oversampling: {self.oversampling}'
+
+    @property
+    # TODO base this on a cutoff for included flux or something...
+    def bounding_box(self):
+        return ((self.y_0-200, self.y_0+200), (self.x_0-200, self.x_0+200))
+
+
+def make_anisocado_model(oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowpass = 0):
+    img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=400*oversampling+1, seed=seed).shift_off_axis(*offaxis)
+    if lowpass != 0:
+        y, x = np.indices(img.shape)
+        img = img * Gaussian2D(x_stddev=lowpass, y_stddev=lowpass)(x-x.mean(), y-y.mean())
+        img /= np.sum(img)
+
+    return AnisocadoModel(img, oversampling=oversampling, degree=degree)
+
+
 def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,
-                        use_custom_subpixel: bool = True) -> scopesim.OpticalTrain:
+                        custom_subpixel_psf: Optional[Callable] = None) -> scopesim.OpticalTrain:
     """
     Create a Micado optical train with custom PSF
     :return: OpticalTrain object
     """
+
+    assert not (psf_effect and custom_subpixel_psf), 'PSF effect can only be applied if custom_subpixel_psf is None'
+
     # TODO Multiprocessing sometimes seems to cause some issues in scopesim, probably due to shared connection object
     # #  File "ScopeSim/scopesim/effects/ter_curves.py", line 247, in query_server
     # #     tbl.columns[i].name = colname
@@ -100,7 +130,12 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,
     with scopesim_lock:
         micado = scopesim.OpticalTrain('MICADO')
 
-    if not use_custom_subpixel:
+    if custom_subpixel_psf:
+        micado.cmds["!SIM.sub_pixel.flag"] = "psf_eval"
+        scopesim.rc.__currsys__['!SIM.sub_pixel.psf'] = custom_subpixel_psf
+
+    else:
+        micado.cmds["!SIM.sub_pixel.flag"] = True
         # the previous psf had that optical element so put it in the same spot.
         # Todo This way of looking up the index is pretty stupid. Is there a better way?
         element_idx = [element.meta['name'] for element in micado.optics_manager.optical_elements].index('default_ro')
@@ -121,11 +156,6 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,
     # TODO Apparently atmospheric dispersion is messed up. Ignore both dispersion and correction for now
     micado['armazones_atmo_dispersion'].include = False
     micado['micado_adc_3D_shift'].include = False
-
-    if use_custom_subpixel:
-        micado.cmds["!SIM.sub_pixel.flag"] = "psf_eval"
-    else:
-        micado.cmds["!SIM.sub_pixel.flag"] = True
 
     return micado
 

@@ -19,7 +19,8 @@ from astropy.table import Table
 import astropy.units as u
 
 from .config import Config
-from .scopesim_helper import setup_optical_train, pixel_scale, filter_name, to_pixel_scale, make_psf, max_pixel_coord, pixel_to_mas
+from .scopesim_helper import setup_optical_train, pixel_scale, filter_name, to_pixel_scale, make_psf, max_pixel_coord,\
+    pixel_to_mas, make_anisocado_model
 from .util import getdata_safer
 
 # all generators defined here should return a source table with the following columns
@@ -33,7 +34,8 @@ def scopesim_grid(N1d: int = 16,
                   border=64,
                   perturbation: float = 0.,
                   magnitude=lambda N: N * [18],
-                  psf_transform=lambda x: x) \
+                  psf_transform=lambda x: x,
+                  custom_subpixel_psf=None) \
         -> Tuple[np.ndarray, Table]:
     """
     Use scopesim to create a regular grid of stars
@@ -61,7 +63,10 @@ def scopesim_grid(N1d: int = 16,
                                                   amplitudes=m,
                                                   spec_types=spectral_types,
                                                   x=x.ravel(), y=y.ravel())
-    detector = setup_optical_train(make_psf(transform=psf_transform))
+    if custom_subpixel_psf:
+        detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
+    else:
+        detector = setup_optical_train(psf_effect=make_psf(transform=psf_transform))
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -73,7 +78,8 @@ def scopesim_grid(N1d: int = 16,
 def gaussian_cluster(N: int = 1000,
                      seed: int = 9999,
                      magnitude=lambda N: np.random.normal(21, 2, N),
-                     psf_transform=lambda x: x) -> Tuple[np.ndarray, Table]:
+                     psf_transform=lambda x: x,
+                     custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
     """
     Emulates custom cluster creation from initial simcado script.
     Stars with gaussian position and magnitude distribution
@@ -110,7 +116,10 @@ def gaussian_cluster(N: int = 1000,
                                                   spec_types=spectral_types,
                                                   x=x, y=y)
 
-    detector = setup_optical_train(make_psf(transform=psf_transform))
+    if custom_subpixel_psf:
+        detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
+    else:
+        detector = setup_optical_train(psf_effect=make_psf(transform=psf_transform))
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -119,7 +128,7 @@ def gaussian_cluster(N: int = 1000,
     return observed_image, table
 
 
-def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
+def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
     """
     Use the scopesim_template to create an image of a star cluster that matches the interfaces of the
     other functions here
@@ -130,7 +139,8 @@ def scopesim_cluster(seed: int = 9999) -> Tuple[np.ndarray, Table]:
                                                     distance=50000,  # parsec
                                                     core_radius=0.3,  # parsec
                                                     seed=seed)
-    detector = setup_optical_train()
+
+    detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -273,7 +283,7 @@ def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=max_pixel_
     return Kernel2D(array=kernel)
 
 
-def make_single_star_image(seed: int = 9999) -> Tuple[np.ndarray, Table]:
+def make_single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
     """
     Emulates custom cluster creation from initial simcado script.
     Stars with gaussian position and magnitude distribution
@@ -293,7 +303,8 @@ def make_single_star_image(seed: int = 9999) -> Tuple[np.ndarray, Table]:
                                                   spec_types=spectral_types,
                                                   x=x, y=y)
 
-    detector = setup_optical_train()
+
+    detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -317,7 +328,8 @@ def scopesim_groups(N1d: int = 16,
                     magnitude=lambda N: N * [18],
                     group_size=2,
                     group_radius=5,
-                    psf_transform=lambda x: x) \
+                    psf_transform=lambda x: x,
+                    custom_subpixel_psf=None) \
         -> Tuple[np.ndarray, Table]:
     np.random.seed(seed)
 
@@ -346,7 +358,10 @@ def scopesim_groups(N1d: int = 16,
                                                   amplitudes=m,
                                                   spec_types=spectral_types,
                                                   x=x, y=y)
-    detector = setup_optical_train(make_psf(transform=psf_transform))
+    if custom_subpixel_psf:
+        detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
+    else:
+        detector = setup_optical_train(psf_effect=make_psf(transform=psf_transform))
 
     detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
@@ -402,7 +417,6 @@ def get_lock(filename_base):
             os.remove(name)
         except:
             pass
-
 
 
 def read_or_generate_image(recipe: Callable[[], Tuple[np.ndarray, Table]],
@@ -542,4 +556,9 @@ benchmark_images = {
         lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N)),
     'gausscluster_N2000_mag22_lowpass':
         lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N), psf_transform=lowpass()),
+    'gausscluster_N2000_mag22_subpixel':
+        lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N),
+                                 custom_subpixel_psf=make_anisocado_model()),
+    'gausscluster_N2000_mag22_lowpass_subpixel':
+        lambda: gaussian_cluster(2000, magnitude=lambda N: np.random.normal(22, 2, N), custom_subpixel_psf=make_anisocado_model(lowpass=5)),
 }
