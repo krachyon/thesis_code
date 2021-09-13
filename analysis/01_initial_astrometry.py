@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.4
+#       jupytext_version: 1.11.3
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -226,7 +226,7 @@ lowpass_config.create_dirs()
 
 # %%
 # use an image with less sources to not have to filter the input positions
-image_name_lpc = 'gausscluster_N2000_mag22'
+image_name_lpc = 'gausscluster_N2000_mag22_lowpass'
 image_recipe_lpc = testdata_generators.benchmark_images[image_name_lpc]
 image_lpc, input_table_lpc = testdata_generators.read_or_generate_image(image_recipe_lpc,
                                                                         image_name_lpc,
