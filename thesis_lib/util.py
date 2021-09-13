@@ -141,7 +141,10 @@ def match_observation_to_source(reference_catalog: Table, photometry_result: Tab
         row['x_orig'] = x_y_pixel[index, 0]
         row['y_orig'] = x_y_pixel[index, 1]
         row['m_orig'] = x_y_pixel[index, 2]
-        row['offset'] = dist
+
+    photometry_result['x_offset'] = photometry_result['x_fit'] - photometry_result['x_orig']
+    photometry_result['y_offset'] = photometry_result['y_fit'] - photometry_result['y_orig']
+    photometry_result['offset'] = np.sqrt(photometry_result['x_offset']**2 + photometry_result['y_offset']**2)
 
     return photometry_result
 
