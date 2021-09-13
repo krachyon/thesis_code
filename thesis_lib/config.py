@@ -3,6 +3,7 @@ import dataclasses
 from typing import Optional, Union, Tuple
 import numpy as np
 import os
+import appdirs
 
 import matplotlib.pyplot as plt
 
@@ -41,7 +42,6 @@ class Config(metaclass=ClassRepr):
     roundhi: float = 1.0
     exclude_border: bool = True
 
-
     # magic parameters for EPSFBuilder
     stars_to_keep: int = 200
     cutout_size: int = 50  # TODO PSF is pretty huge, right?
@@ -56,12 +56,20 @@ class Config(metaclass=ClassRepr):
     use_catalogue_positions: bool = False
     photometry_iterations: int = 3
 
+    # TODO implement these
+    disable_detector_saturation: bool = False
+    save_plots: bool = False
+    known_psf_model: Optional[EPSFModel] = None
+    scopesim_working_dir: str = appdirs.user_cache_dir('scopesim_workspace')
+
+
     def create_dirs(self):
         for dirname in [self.image_folder, self.output_folder]:
             if not os.path.exists(dirname):
                 os.mkdir(dirname)
 
 
+# TODO where should that go?
 # matplotlib
 plt.rcParams['figure.figsize'] = (8.3, 5.8)  # A5 paper. Friggin inches...
 plt.rcParams['figure.dpi'] = 200
