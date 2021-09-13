@@ -5,7 +5,7 @@ import multiprocess
 from collections import defaultdict
 from os.path import exists, join
 from os import mkdir, remove
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, Optional
 from contextlib import contextmanager
 
 import anisocado
@@ -18,10 +18,13 @@ from astropy.modeling.functional_models import Gaussian2D
 from astropy.table import Table
 import astropy.units as u
 
+from tqdm.auto import tqdm
+
 from .config import Config
 from .scopesim_helper import setup_optical_train, pixel_scale, filter_name, to_pixel_scale, make_psf, max_pixel_coord,\
     pixel_to_mas, make_anisocado_model
 from .util import getdata_safer
+from .saturation_model import SaturationModel, read_scopesim_linearity
 
 # all generators defined here should return a source table with the following columns
 # x,y are in pixel scale
@@ -74,20 +77,14 @@ def scopesim_grid(N1d: int = 16,
     table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
     return observed_image, table
 
+max_count = 20000
+noise = 57
 
-def gaussian_cluster(N: int = 1000,
-                     seed: int = 9999,
-                     magnitude=lambda N: np.random.normal(21, 2, N),
-                     psf_transform=lambda x: x,
-                     custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
-    """
-    Emulates custom cluster creation from initial simcado script.
-    Stars with gaussian position and magnitude distribution
-    :param N: how many stars
-    :param seed: RNG initializer
-    :param psf_transform: function modifying the psf array
-    :return: image and input catalogue
-    """
+
+def _gaussian_cluster_coords(N: int = 1000,
+                             seed: int = 9999,
+                             magnitude=lambda N: np.random.normal(21, 2, N)
+                             ):
     np.random.seed(seed)
     x = np.random.normal(0, 1, N)
     y = np.random.normal(0, 1, N)
@@ -101,6 +98,59 @@ def gaussian_cluster(N: int = 1000,
     m = m[mask]
 
     assert (len(x) == len(y) and len(m) == len(x))
+
+    return x, y, m
+
+
+def gaussian_cluster_modeladd(N: int = 1000,
+                     seed: int = 9999,
+                     magnitude=lambda N: np.random.normal(21, 2, N),
+                     psf_model: Optional[Callable] = None,
+                     saturation:bool = True):
+    xs, ys, ms = _gaussian_cluster_coords(N, seed, magnitude)
+
+    img = np.zeros((1024,1024))
+    if not psf_model:
+        psf_model = make_anisocado_model()
+
+    normalize = np.sum(psf_model.oversampling)
+
+    fluxes = 6.55328584e+11 * 10**(-0.4*ms) * 15  # the 15 is pulled from thin air
+    xs = to_pixel_scale(xs) + 0.5  # cancel scopesim pixel convention
+    ys = to_pixel_scale(ys) + 0.5
+
+    for x, y, f in tqdm(list(zip(xs, ys, fluxes))):
+        psf_model.x_0 = x
+        psf_model.y_0 = y
+        psf_model.flux = f*normalize  # TODO That's not really the correct value for mag->flux
+
+        psf_model.render(img)
+
+    # taken from statistics on empty scopesim image
+    img = np.random.poisson(img) + np.random.normal(3164.272322010335, 58, img.shape)
+    if saturation:
+        img = SaturationModel(read_scopesim_linearity('../MICADO/FPA_linearity.dat')).evaluate(img)
+
+    table = Table((to_pixel_scale(xs).ravel(), to_pixel_scale(ys).ravel(), ms), names=names)
+    return img, table
+
+
+# TODO I want this with simple model eval
+def gaussian_cluster(N: int = 1000,
+                     seed: int = 9999,
+                     magnitude=lambda N: np.random.normal(21, 2, N),
+                     psf_transform=lambda x: x,
+                     custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
+    """
+    Emulates custom cluster creation from initial simcado script.
+    Stars with gaussian position and magnitude distribution
+    :param N: how many stars
+    :param seed: RNG initializer
+    :param psf_transform: function modifying the psf array
+    :return: image and input catalogue
+    """
+    x, y, m = _gaussian_cluster_coords(N, seed, magnitude)
+
     Nprime = len(x)
     filter_name = 'MICADO/filters/TC_filter_K-cont.dat'  # TODO: how to make system find this?
 
@@ -225,6 +275,8 @@ def gauss2d(σ_x=1., σ_y=1., a=1.):
 
 def model_add_grid(model: Callable,
                    N1d: int = 16,
+                   flux_func = lambda N: N*[15000],
+                   noise_σ = 0,
                    size: int = 1024,
                    border: int = 64,
                    perturbation: float = 0.,
@@ -241,11 +293,11 @@ def model_add_grid(model: Callable,
     """
     np.random.seed(seed)
 
-    # shape [xvalues, yvalues] -> feed to model as (y[1],y[0])
-    y, x = np.indices((size, size))
     # list of sources to generate, shape: [[y0,y1...], [x0,x1...]]
     yx_sources = np.mgrid[0+border:size-border:N1d*1j, 0+border:size-border:N1d*1j].transpose((1, 2, 0)).reshape(-1, 2)
     yx_sources += np.random.uniform(0, perturbation, (N1d**2, 2))
+
+    fluxes = flux_func(N1d**2)
 
     # Too much memory...
     ## magic: Marry (2, size, size) to (2, N1D) to allow broadcasting
@@ -256,14 +308,19 @@ def model_add_grid(model: Callable,
 
     data = np.zeros((size, size))
 
-    for yshift, xshift in yx_sources:
-        data += model(x-xshift, y-yshift)
+    normalize = np.sum(model.oversampling)/np.max(model.data)
 
-    table = Table((yx_sources[:, 1], yx_sources[:, 0], np.ones(N1d**2)), names=names)
+    for (y, x), flux in zip(yx_sources, fluxes):
+        model.x_0 = x
+        model.y_0 = y
+        model.flux = flux*normalize
+        model.render(data)
+
+    data = np.random.poisson(data) + np.random.normal(0, noise_σ, data.shape)
+
+    table = Table((yx_sources[:, 1], yx_sources[:, 0], fluxes), names=names)
 
     return data, table
-
-
 
 
 def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=max_pixel_coord.value):
