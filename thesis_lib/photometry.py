@@ -18,7 +18,7 @@ from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, Integrate
 from photutils.psf import EPSFModel
 
 from .config import Config
-from .util import flux_to_magnitude
+from .util import flux_to_magnitude, match_observation_to_source
 config = Config.instance()
 
 
@@ -332,9 +332,9 @@ def run_photometry(image: np.ndarray,
 
     # TODO should this also be done using the catalogue positions?
     # TODO can we somehow sort the stars according to usefulness?
-    star_guesses = make_stars_guess(image, finder, cutout_size=config.cutout_size)[:config.stars_to_keep]
+    star_guesses = make_stars_guess(image, finder, cutout_size=config.cutout_size)[:config.max_epsf_stars]
 
-    if len(star_guesses) < config.stars_to_keep:
+    if len(star_guesses) < config.max_epsf_stars:
         print('Warning: found less stars than config.stars_to_keep')
 
     epsf = make_epsf_fit(star_guesses,

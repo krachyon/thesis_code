@@ -60,6 +60,9 @@ class Config(metaclass=ClassRepr):
     disable_detector_saturation: bool = False
     save_plots: bool = False
     known_psf_model: Optional[EPSFModel] = None
+    # TODO it would be nice to use this for starfinder/epsfstarfinding
+    detector_saturation: float = np.inf
+    # TODO do this with chdir context manager
     scopesim_working_dir: str = appdirs.user_cache_dir('scopesim_workspace')
 
 
