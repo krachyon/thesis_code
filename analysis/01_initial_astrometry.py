@@ -148,7 +148,7 @@ mean, median, std = sigma_clipped_stats(image_sg, sigma=gauss_config.clip_sigma)
 threshold = median + gauss_config.threshold_factor * std
 
 finder = DAOStarFinder(threshold=threshold, fwhm=gauss_config.fwhm_guess)
-star_guesses = photometry.make_stars_guess(image_sg, finder, cutout_size=gauss_config.cutout_size)[:gauss_config.stars_to_keep]
+star_guesses = photometry.make_stars_guess(image_sg, finder, cutout_size=gauss_config.cutout_size)[:gauss_config.max_epsf_stars]
 
 smooth_epsf = photometry.make_epsf_fit(
     star_guesses, iters=5, oversampling=4, smoothing_kernel=util.make_gauss_kernel())
