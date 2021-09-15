@@ -19,3 +19,9 @@ def extract_epsf_stars(image: np.ndarray, image_stats: ImageStats, stars_tbl: Ta
     #stars_tbl_filtered = stars_tbl[stars_tbl['flux'] < config.detector_saturation]
     stars = extract_stars(NDData(image_no_background), stars_tbl, size=config.cutout_size)
     return stars[:config.max_epsf_stars]
+
+
+def perturb_guess_table(input_table: Table, seed=0):
+    rng = np.random.default_rng(seed=seed)
+    input_table['x'] += rng.uniform(-0.2, +0.2, size=len(input_table['x']))
+    input_table['y'] += rng.uniform(-0.2, +0.2, size=len(input_table['y']))
