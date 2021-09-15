@@ -6,8 +6,6 @@ Paranal
 .idea
 *.fits
 *.reg
-output*/*
-test_images*/*
 *.txt
 !requirements.txt
 *.pkl
@@ -15,5 +13,6 @@ test_images*/*
 *.egg-info/
 *.mplf
 src/
-**/test_images/
+**/test_images*/
+**/output_files*/
 
