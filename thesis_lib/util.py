@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pathlib
 from scipy.optimize import curve_fit
-from typing import Tuple
+from typing import Tuple, Union
 from astropy.table import Table
 from astropy.stats import sigma_clipped_stats
 from photutils.utils.errors import calc_total_error
@@ -13,6 +14,8 @@ import re
 import astropy.io.fits
 import pickle
 import os
+import contextlib
+
 
 
 class ClassRepr(type):
@@ -31,6 +34,21 @@ class ClassRepr(type):
 
     def __str__(cls):
         return repr(cls)
+
+
+@contextlib.contextmanager
+def work_in(path: Union[str, pathlib.Path]):
+    """A context manager which changes the working directory to the given
+    path, and then changes it back to its previous value on exit.
+    LICENSE: MIT
+    from: https://code.activestate.com/recipes/576620-changedirectory-context-manager/
+    """
+    prev_cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev_cwd)
 
 
 def gauss(x, a, x0, σ):

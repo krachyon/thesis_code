@@ -1,5 +1,7 @@
+from __future__ import annotations  # makes the "-> __class__" annotation work...
+
 from . import config
-from .astrometry_types import ImageStats,  adapt_table_names, \
+from .astrometry_types import ImageStats, adapt_table_names, \
     INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, PHOTOMETRY_TABLE_NAMES, GUESS_TABLE_NAMES
 from . astrometry_functions import calc_image_stats, extract_epsf_stars, perturb_guess_table
 
@@ -15,6 +17,7 @@ from astropy.modeling.fitting import LevMarLSQFitter
 from .testdata_generators import read_or_generate_image
 
 
+
 class Session:
     """responsibility: initialize, dispatch and keep photutils classes/parameters in sync """
 
@@ -28,13 +31,13 @@ class Session:
 
         # internals of properties
         self._image = None
-        self._input_table = None
+        self._input_table = input_table
         self._finder_table = None
         self._result_table = None
 
         if config.use_catalogue_positions:
             assert input_table, 'Need an input catalogue to if we want to use catalogue positions'
-        self.input_table = input_table
+
 
         if image:
             self.image = image
@@ -50,6 +53,7 @@ class Session:
         self.grouper = DAOGroup(config.separation_factor*config.fwhm_guess)
         self.fitter = LevMarLSQFitter()
         self.background = MMMBackground()
+        self.photometry = None
 
         self.epsfstars = None
         self.epsf = None
@@ -75,7 +79,7 @@ class Session:
         return self._input_table
     @input_table.setter
     def input_table(self, value: Table):
-        for name in INPUT_TABLE_NAMES:
+        for name in INPUT_TABLE_NAMES.values():
             assert name in value.colnames
         self._input_table = value
 
@@ -84,7 +88,7 @@ class Session:
         return self._finder_table
     @finder_table.setter
     def finder_table(self, value: Table):
-        for name in STARFINDER_TABLE_NAMES:
+        for name in STARFINDER_TABLE_NAMES.values():
             assert name in value.colnames
         self._finder_table = value
 
@@ -93,7 +97,7 @@ class Session:
         return self._result_table
     @result_table.setter
     def result_table(self, value: Table):
-        for name in PHOTOMETRY_TABLE_NAMES:
+        for name in PHOTOMETRY_TABLE_NAMES.values():
             assert name in value.colnames
         self._result_table = value
 
@@ -141,7 +145,7 @@ class Session:
 
     def do_astrometry(self, initial_guess: Optional[Table] = None) -> __class__:
         assert self.epsf, 'Need to create an EPSF model before photometry is possible'
-        photometry = IterativelySubtractedPSFPhotometry(
+        self.photometry = IterativelySubtractedPSFPhotometry(
             finder=self.starfinder,
             group_maker=self.grouper,
             bkg_estimator=self.background,
@@ -162,7 +166,7 @@ class Session:
         else:
             raise ValueError('No star positions known yet')
         guess_table = adapt_table_names(guess_table, to_names=GUESS_TABLE_NAMES)
-        self.result_table = photometry.do_photometry(self.image, init_guesses=guess_table)
+        self.result_table = self.photometry.do_photometry(self.image, init_guesses=guess_table)
         return self
 
     def do_it_all(self) -> __class__:

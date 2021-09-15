@@ -67,9 +67,9 @@ class Config(metaclass=ClassRepr):
 
 
     def create_dirs(self):
-        for dirname in [self.image_folder, self.output_folder]:
+        for dirname in [self.image_folder, self.output_folder, self.scopesim_working_dir]:
             if not os.path.exists(dirname):
-                os.mkdir(dirname)
+                os.makedirs(dirname)
 
 
 # TODO where should that go?

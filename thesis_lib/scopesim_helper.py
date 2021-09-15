@@ -12,9 +12,8 @@ import numpy as np
 import scopesim
 
 from .config import Config
+from .util import work_in
 import astropy.units as u
-
-config = Config.instance()
 
 # globals
 # TODO get these from scopesim?
@@ -82,7 +81,7 @@ def make_psf(psf_wavelength: float = 2.15,
 
     # Todo: passing a filename that does not end in .fits causes a weird parsing error
     return scopesim.effects.FieldConstantPSF(
-        name=config.psf_name,
+        name=Config.instance().psf_name,
         filename=filename,
         wavelength=psf_wavelength,
         psf_side_length=N,
@@ -160,19 +159,13 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,
     return micado
 
 
-def download(ask: bool = True) -> None:
+def download(to_directory=Config.instance().scopesim_working_dir) -> None:
     """
     get scopesim files if not present in current directory
-    :return:
+    :return: No
     """
-    if not os.path.exists('./MICADO'):
-        # TODO is it really necessary to always throw shit into the current wdir?
-        if ask:
-            print('''Scopesim data missing. Do you want to download?
-            Attention: Will write into current working dir!''')
-            choice = input('[y/N] ')
-            if not (choice == 'y' or choice == 'Y'):
-                exit(-1)
-        scopesim.download_package(["locations/Armazones",
-                                   "telescopes/ELT",
-                                   "instruments/MICADO"])
+    with work_in(to_directory):
+        if not os.path.exists('./MICADO'):
+            scopesim.download_package(["locations/Armazones",
+                                       "telescopes/ELT",
+                                       "instruments/MICADO"])

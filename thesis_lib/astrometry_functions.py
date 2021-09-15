@@ -1,6 +1,9 @@
 from .config import Config
 from .astrometry_types import ImageStats
+
 import numpy as np
+import warnings
+
 from astropy.stats import sigma_clipped_stats
 from photutils import extract_stars, EPSFStars
 from astropy.nddata import NDData
@@ -18,6 +21,8 @@ def extract_epsf_stars(image: np.ndarray, image_stats: ImageStats, stars_tbl: Ta
     # TODO to enable this, need to convert input table magnitude to flux also
     #stars_tbl_filtered = stars_tbl[stars_tbl['flux'] < config.detector_saturation]
     stars = extract_stars(NDData(image_no_background), stars_tbl, size=config.cutout_size)
+    if len(stars) == 0:
+        warnings.warn('No stars extracted')
     return stars[:config.max_epsf_stars]
 
 
