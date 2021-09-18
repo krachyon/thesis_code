@@ -17,8 +17,13 @@ from photutils import FittableImageModel
 from .saturation_model import SaturationModel, read_scopesim_linearity
 from .scopesim_helper import to_pixel_scale, pixel_scale, setup_optical_train, make_anisocado_model, filter_name, \
     pixel_to_mas, max_pixel_coord, make_psf
+from .util import flux_to_magnitude, magnitude_to_flux
+from .astrometry_types import X,Y,FLUX,MAGNITUDE, INPUT_TABLE_NAMES
 
-names = ('x', 'y', 'm')
+COLUMN_NAMES = (INPUT_TABLE_NAMES[X],
+                INPUT_TABLE_NAMES[Y],
+                INPUT_TABLE_NAMES[FLUX],
+                INPUT_TABLE_NAMES[MAGNITUDE])
 
 
 def scopesim_grid(N1d: int = 16,
@@ -61,7 +66,7 @@ def scopesim_grid(N1d: int = 16,
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
+    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
 
@@ -119,7 +124,7 @@ def gaussian_cluster_modeladd(N: int = 1000,
     if saturation:
         img = SaturationModel(read_scopesim_linearity('../MICADO/FPA_linearity.dat')).evaluate(img)
 
-    table = Table((to_pixel_scale(xs).ravel(), to_pixel_scale(ys).ravel(), ms), names=names)
+    table = Table((to_pixel_scale(xs).ravel(), to_pixel_scale(ys).ravel(), fluxes, ms), names=COLUMN_NAMES)
     return img, table
 
 
@@ -162,7 +167,7 @@ def gaussian_cluster(N: int = 1000,
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
+    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
 
@@ -183,12 +188,14 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = source.fields[0]
-    table['x'] = to_pixel_scale(table['x']).ravel()
-    table['y'] = to_pixel_scale(table['y']).ravel()
-    table['m'] = table['weight']  # TODO these don't really correspond, do they?
+    source_table = source.fields[0]
+    xs = to_pixel_scale(source_table['x']).ravel()
+    ys = to_pixel_scale(source_table['y']).ravel()
+    ms = source_table['weight']  # TODO these don't really correspond, do they?
+    fluxes = magnitude_to_flux(ms)
+    return_table = Table((xs,ys,fluxes,ms), names=COLUMN_NAMES)
 
-    return observed_image, table
+    return observed_image, return_table
 
 
 def convolved_grid(N1d: int = 16,
@@ -236,8 +243,8 @@ def convolved_grid(N1d: int = 16,
         data = convolve_fft(data, kernel)
     # TODO the no-zeros seem like an awful hack
     data = data / np.max(data) + 0.001  # normalize and add tiny offset to have no zeros in data
-
-    table = Table((x_float.ravel(), y_float.ravel(), np.ones(x.size)), names=names)
+    fluxes = np.ones(x.size)
+    table = Table((x_float.ravel(), y_float.ravel(), fluxes, flux_to_magnitude(fluxes)), names=COLUMN_NAMES)
     return data, table
 
 
@@ -287,7 +294,7 @@ def model_add_grid(model: FittableImageModel,
 
     data = np.random.poisson(data) + np.random.normal(0, noise_σ, data.shape)
 
-    table = Table((yx_sources[:, 1], yx_sources[:, 0], fluxes), names=names)
+    table = Table((yx_sources[:, 1], yx_sources[:, 0], fluxes, flux_to_magnitude(fluxes)), names=COLUMN_NAMES)
 
     return data, table
 
@@ -325,7 +332,7 @@ def empty_image(seed: int = 1000) -> Tuple[np.ndarray, Table]:
     detector = setup_optical_train()
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
-    return observed_image, Table()
+    return observed_image, Table(names=COLUMN_NAMES)
 
 
 def scopesim_groups(N1d: int = 16,
@@ -373,11 +380,29 @@ def scopesim_groups(N1d: int = 16,
     detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), m), names=names)
+    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
 
-def test_dummy_img():
+def one_source_testimage():
     ygrid, xgrid = np.indices((41, 41))
     model = Gaussian2D(x_mean=20, y_mean=20, x_stddev=1.5, y_stddev=1.5)
-    return model(xgrid, ygrid), Table(([20], [20], [1]), names=names)
+    return model(xgrid, ygrid), Table(([20], [20], [1], [1]), names=COLUMN_NAMES)
+
+
+def multi_source_testimage():
+    img = np.zeros((301, 301))
+    xs = [50, 50, 120.1, 100, 20]
+    ys = [50,57,130,20.3,100.8]
+    fluxes = [10,20,20,10,30]
+    model = Gaussian2D(x_mean=0, y_mean=0, x_stddev=1.5, y_stddev=1.5)
+
+    for x, y, f in zip(xs,ys,fluxes):
+        model.x_mean = x
+        model.y_mean = y
+        model.amplitude = f
+        model.render(img)
+
+    tab = Table((xs,ys,fluxes,flux_to_magnitude(fluxes)), names=COLUMN_NAMES)
+
+    return img, tab

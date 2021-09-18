@@ -12,7 +12,7 @@ from .config import Config
 from .scopesim_helper import make_anisocado_model
 from .testdata_helpers import make_anisocado_kernel, lowpass, expmag
 from .testdata_recipes import gaussian_cluster, convolved_grid, scopesim_cluster, scopesim_grid, scopesim_groups, \
-    empty_image, single_star_image, test_dummy_img
+    empty_image, single_star_image, one_source_testimage, multi_source_testimage
 from .util import getdata_safer, work_in
 
 # make sure concurrent calls with the same filename don't tread on each other's toes.
@@ -20,7 +20,7 @@ from .util import getdata_safer, work_in
 
 manager = multiprocess.Manager()
 file_locks = manager.dict()
-#file_locks = dict()
+
 
 def get_lock(filename_base):
     lock: multiprocess.Lock = file_locks.setdefault(filename_base, manager.Lock())
@@ -118,8 +118,10 @@ misc_images = {
         lambda: scopesim_grid(N1d=16, perturbation=2.),
     'empty_image':
         lambda: empty_image(),
-    'testdummy':
-        lambda: test_dummy_img()
+    'testsingle':
+        lambda: one_source_testimage(),
+    'testmulti':
+        lambda: multi_source_testimage()
 }
 
 lowpass_images = {

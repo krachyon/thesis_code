@@ -1,35 +1,51 @@
-from collections import namedtuple
+from __future__ import annotations  # makes the "-> __class__" annotation work...
+
+from collections import namedtuple, OrderedDict
 from typing import Tuple, Optional, Union
 from astropy.table import Table
 
 ImageStats = namedtuple('ImageStats', ['mean', 'median', 'std', 'threshold'])
 
+X = 'X'
+Y = 'Y'
+FLUX = 'FLUX'
+MAGNITUDE = 'MAGNITUDE'
 
-XNAME = 'xname'
-YNAME = 'yname'
-FLUXNAME = 'fluxname'
-MAGNAME = 'magname'
 
-KEYSET = {XNAME, YNAME, FLUXNAME, MAGNAME}
+INPUT_TABLE_NAMES = {X: 'x', Y: 'y', MAGNITUDE: 'm', FLUX: 'f'}
+REFERENCE_NAMES = {X: 'x_orig', Y: 'y_orig', MAGNITUDE: 'm_orig', FLUX: 'flux_orig'}
+STARFINDER_TABLE_NAMES = {X: 'xcentroid', Y: 'ycentroid', FLUX: 'peak', MAGNITUDE: 'mag'}
+GUESS_TABLE_NAMES = {X: 'x_0', Y: 'y_0', FLUX: 'flux_0'}
+PHOTOMETRY_TABLE_NAMES = {X: 'x_fit', Y: 'y_fit', FLUX: 'flux_fit'}
 
-INPUT_TABLE_NAMES = {XNAME: 'x', YNAME: 'y', MAGNAME: 'm'}  # TODO maybe just calculate this in reference tables
-STARFINDER_TABLE_NAMES = {XNAME: 'xcentroid', YNAME: 'ycentroid', FLUXNAME: 'peak', MAGNAME: 'mag'}
-GUESS_TABLE_NAMES = {XNAME: 'x_0', YNAME: 'y_0', FLUXNAME: 'flux_0'}
-PHOTOMETRY_TABLE_NAMES = {XNAME: 'x_fit', YNAME: 'y_fit', FLUXNAME: 'flux_fit'}
+
+class TypeCheckedTable(Table):
+    required_columns: Optional[dict] = None
+
+    def __init__(self, other_table: Table, *args, **kwargs):
+        if not self.required_columns:
+            raise ValueError('Please instanciate a child class')
+        for name in self.required_columns.values():
+            if name not in other_table.colnames:
+                raise ValueError(f'required column {name} not present')
+        super().__init__(other_table, *args, **kwargs)
+
+    def typecast(self, to_table_kind: __class__) -> __class__:
+        return_table = self.copy()
+        for key in to_table_kind.required_columns.keys():
+            if key not in self.required_columns:
+                raise ValueError(f"Can't convert from {type(self)} to {to_table_kind}. Column type {key} not present")
+            return_table[to_table_kind.required_columns[key]] = self[self.required_columns[key]]
+
+        return return_table
+
+class StarfinderTable(TypeCheckedTable):
+    required_columns = STARFINDER_TABLE_NAMES
+class InputTable(TypeCheckedTable):
+    required_columns = INPUT_TABLE_NAMES
+class GuessTable(TypeCheckedTable):
+    required_columns = GUESS_TABLE_NAMES
+class ResultTable(TypeCheckedTable):
+    required_columns = PHOTOMETRY_TABLE_NAMES
 
 ALL_TABLE_NAMES = (INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, GUESS_TABLE_NAMES, PHOTOMETRY_TABLE_NAMES)
-
-
-def adapt_table_names(input_table: Table, to_names: dict[str, str] = INPUT_TABLE_NAMES):
-    for name_dict in ALL_TABLE_NAMES:
-        if set(name_dict.values()).issubset(input_table.colnames):
-            from_names = name_dict
-            break
-    else:
-        raise ValueError(f'could not match column names of {input_table}')
-
-    output_table = input_table.copy()
-    for key in set(from_names.keys()) & set(to_names.keys()):
-        output_table.rename_column(from_names[key], to_names[key])
-    return output_table
-
