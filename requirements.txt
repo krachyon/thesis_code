@@ -1,17 +1,27 @@
 -e .
-anisocado>=0.2
-astropy>=4.2
-matplotlib>=3.3.4
-numpy>=1.20.1
+anisocado
+astropy
+matplotlib
+numpy
 -e git+git://github.com/krachyon/photutils.git@working#egg=photutils
-scipy>=1.6.1
-scopesim>=0.1.0
+scipy
+scopesim
 scopesim_templates
 image_registration
 
-pytest>=6.2.2
-pyckles>=0.1.3
-astwro>=0.7.5
-multiprocess>=0.70.11.1
+pytest
+pyckles
+astwro
+multiprocess
 scikit-optimize
 pandas
+
+setuptools
+scikit-learn
+tqdm
+ipython
+ipywidgets
+appdirs
+dill
+numba
+pyFFTW

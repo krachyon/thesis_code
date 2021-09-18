@@ -4,6 +4,7 @@ from typing import Optional, Union, Tuple
 import numpy as np
 import os
 import appdirs
+import copy
 
 import matplotlib.pyplot as plt
 
@@ -26,8 +27,8 @@ class Config(metaclass=ClassRepr):
 
     # names
     psf_name: str = 'anisocado_psf'
-    image_folder: str = 'test_images'
-    output_folder: str = 'output_files'
+    image_folder: str = 'test_images'  # folder where to generate test images
+    output_folder: str = 'output_files'  # where plots, results etc. go
 
     # TODO allow choosing starfinder type, maybe background as well?
     # magic parameters for Starfinder
@@ -70,6 +71,9 @@ class Config(metaclass=ClassRepr):
         for dirname in [self.image_folder, self.output_folder, self.scopesim_working_dir]:
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
+
+    def copy(self):
+        return copy.deepcopy(self)
 
 
 # TODO where should that go?
