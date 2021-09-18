@@ -36,7 +36,7 @@ class TableSet(metaclass=util.ClassRepr):
     @finder_table.setter
     def finder_table(self, value: StarfinderTable):
         if not isinstance(value, StarfinderTable):
-            value = StarfinderTable(value)
+            value = StarfinderTable(value).validate()
         if self._input_table:
             value = match_finder_to_reference(finder_table=value, reference_table=self._input_table)
         self._finder_table = value
@@ -48,7 +48,7 @@ class TableSet(metaclass=util.ClassRepr):
     @result_table.setter
     def result_table(self, value: ResultTable):
         if not isinstance(value, ResultTable):
-            value = ResultTable(value)
+            value = ResultTable(value).validate()
         if set(REFERENCE_NAMES.values()).issubset(value.colnames):
             value = calc_extra_result_columns(value)
         self._result_table = value
@@ -60,7 +60,7 @@ class TableSet(metaclass=util.ClassRepr):
     @input_table.setter
     def input_table(self, value: InputTable):
         if not isinstance(value, InputTable):
-            value = InputTable(value)
+            value = InputTable(value).validate()
         if self._finder_table:
             self._finder_table = match_finder_to_reference(finder_table=self._finder_table, reference_table=value)
         self._input_table = value
@@ -69,19 +69,19 @@ class TableSet(metaclass=util.ClassRepr):
         if use_catalogue_positions:
             return self._input_table
         elif self._result_table:
-            return self._result_table.typecast(InputTable)
+            return self._result_table.convert(InputTable)
         elif self._finder_table:
-            return self._finder_table.typecast(InputTable)
+            return self._finder_table.convert(InputTable)
         else:
             raise ValueError("no star table to extract stars from. Run find_stars, photometry or provide input table")
 
     def select_table_for_photometry(self, use_catalogue_positions):
         if use_catalogue_positions:
-            return self._input_table.typecast(GuessTable)
+            return self._input_table.convert(GuessTable)
         elif self._result_table:
-            return self._result_table.typecast(GuessTable)
+            return self._result_table.convert(GuessTable)
         elif self._finder_table:
-            return self._finder_table.typecast(GuessTable)
+            return self._finder_table.convert(GuessTable)
         else:
             raise ValueError("Not star table to run photometry on")
 
@@ -193,8 +193,7 @@ class Session:
             guess_table = initial_guess
         else:
             guess_table = self.tables.select_table_for_photometry(self.config.use_catalogue_positions)
-            # TODO ugly hack to make custom tables sliceable
-        self.tables.result_table = self.photometry.do_photometry(self.image, init_guesses=Table(guess_table))
+        self.tables.result_table = self.photometry.do_photometry(self.image, init_guesses=guess_table)
         return self
 
     def do_it_all(self) -> __class__:
