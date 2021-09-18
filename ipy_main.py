@@ -7,6 +7,7 @@ from photutils.detection import IRAFStarFinder, DAOStarFinder
 from thesis_lib.plots_and_sanitycheck import *
 from thesis_lib.testdata_generators import *
 from thesis_lib.util import *
+from thesis_lib.util import estimate_fwhm, concat_star_images
 
 plt.ion()
 

@@ -7,8 +7,7 @@ import numpy as np
 from astropy.table import Table
 from matplotlib.colors import LogNorm
 
-import photutils
-from .util import flux_to_magnitude, match_observation_to_source
+from .util import flux_to_magnitude
 
 
 def save(filename_base: str, figure: matplotlib.pyplot.figure):
@@ -16,32 +15,6 @@ def save(filename_base: str, figure: matplotlib.pyplot.figure):
     figure.savefig(filename_base + '.png')
     with open(filename_base + '.mplf', 'wb') as outfile:
         pickle.dump(figure, outfile)
-
-
-def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
-    """
-    Create a large single image out of EPSFStars to verify cutouts
-    :param stars:
-    :return: The concatenated image
-    """
-    assert len(set(star.shape for star in stars)) == 1  # all stars need same shape
-    N = int(np.ceil(np.sqrt(len(stars))))
-    shape = stars[0].shape
-    out = np.zeros(np.array(shape, dtype=int) * N)
-
-    from itertools import product
-
-    for row, col in product(range(N), range(N)):
-        if (row + N * col) >= len(stars):
-            continue
-        xstart = row * shape[0]
-        ystart = col * shape[1]
-
-        xend = xstart + shape[0]
-        yend = ystart + shape[1]
-        i = row + N * col
-        out[xstart:xend, ystart:yend] = stars[i].data
-    return out
 
 
 def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, result_table: Table,

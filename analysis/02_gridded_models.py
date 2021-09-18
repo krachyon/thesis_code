@@ -8,11 +8,10 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.colors import LogNorm
 import os
 from scipy.signal import fftconvolve
-from thesis_lib.util import save_plot
+from thesis_lib.util import save_plot, estimate_fwhm
 from thesis_lib.sampling_precision import *
 from tqdm.auto import tqdm
 from scipy.stats import zscore
-from thesis_lib.photometry import estimate_fwhm
 import astropy.units as u
 
 ## use these for interactive, disable for export

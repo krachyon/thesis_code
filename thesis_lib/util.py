@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pathlib
+
+import photutils
 from scipy.optimize import curve_fit
 from typing import Tuple, Union
 from astropy.table import Table
@@ -397,3 +399,70 @@ def save_plot(outdir, name, dpi=250):
     plt.savefig(os.path.join(outdir, name+'.pdf'), dpi=dpi)
     with open(os.path.join(outdir, name+'.mplf'), 'wb') as f:
         pickle.dump(plt.gcf(), f)
+
+
+def center_of_image(img: np.ndarray) -> tuple[float, float]:
+    """in pixel coordinates, pixel center convention
+
+    (snippet to verify the numpy convention)
+    img=np.random.randint(1,10,(10,10))
+    y,x = np.indices(img.shape)
+    imshow(img)
+    plot(x.flatten(),y.flatten(),'ro')
+    """
+    assert len(img.shape) == 2
+    ycenter, xcenter = (np.array(img.shape)-1)/2
+
+    return xcenter, ycenter
+
+
+def estimate_fwhm(psf: photutils.psf.EPSFModel) -> float:
+    """
+    Use a 2D symmetric gaussian fit to estimate the FWHM of an empirical psf
+    :param psf: psfmodel to estimate
+    :return: FWHM in pixel coordinates, takes into account oversampling parameter of EPSF
+    """
+    from astropy.modeling import fitting
+    from astropy.modeling.functional_models import Gaussian2D
+
+    # Not sure if this would work for non-quadratic images
+    assert (psf.data.shape[0] == psf.data.shape[1])
+    assert (psf.oversampling[0] == psf.oversampling[1])
+
+    y, x = np.indices(psf.data.shape)
+    xcenter, ycenter = center_of_image(psf.data)
+
+    gauss_in = Gaussian2D(x_mean=xcenter, y_mean=ycenter, x_stddev=5, y_stddev=5)
+    # force a symmetric gaussian
+    gauss_in.y_stddev.tied = lambda model: model.x_stddev
+
+    gauss_out = fitting.LevMarLSQFitter()(gauss_in, x, y, psf.data)
+
+    # have to divide by oversampling to get back to original scale
+    return gauss_out.x_fwhm / psf.oversampling[0]
+
+
+def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
+    """
+    Create a large single image out of EPSFStars to verify cutouts
+    :param stars:
+    :return: The concatenated image
+    """
+    assert len(set(star.shape for star in stars)) == 1  # all stars need same shape
+    N = int(np.ceil(np.sqrt(len(stars))))
+    shape = stars[0].shape
+    out = np.zeros(np.array(shape, dtype=int) * N)
+
+    from itertools import product
+
+    for row, col in product(range(N), range(N)):
+        if (row + N * col) >= len(stars):
+            continue
+        xstart = row * shape[0]
+        ystart = col * shape[1]
+
+        xend = xstart + shape[0]
+        yend = ystart + shape[1]
+        i = row + N * col
+        out[xstart:xend, ystart:yend] = stars[i].data
+    return out

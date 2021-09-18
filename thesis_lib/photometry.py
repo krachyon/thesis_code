@@ -18,7 +18,8 @@ from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, Integrate
 from photutils.psf import EPSFModel
 
 from .config import Config
-from .util import flux_to_magnitude, match_observation_to_source
+from .util import flux_to_magnitude, estimate_fwhm
+
 config = Config.instance()
 
 
@@ -83,32 +84,6 @@ def cut_edges(peak_table: Table, cutout_size: int, image_size: int) -> Table:
     y = peak_table['y']
     mask = ((x > half) & (x < (image_size - half)) & (y > half) & (y < (image_size - half)))
     return peak_table[mask]
-
-
-def estimate_fwhm(psf: photutils.psf.EPSFModel) -> float:
-    """
-    Use a 2D symmetric gaussian fit to estimate the FWHM of an empirical psf
-    :param psf: psfmodel to estimate
-    :return: FWHM in pixel coordinates, takes into account oversampling parameter of EPSF
-    """
-    from astropy.modeling import fitting
-    from astropy.modeling.functional_models import Gaussian2D
-
-    # Not sure if this would work for non-quadratic images
-    assert (psf.data.shape[0] == psf.data.shape[1])
-    assert (psf.oversampling[0] == psf.oversampling[1])
-    dim = psf.data.shape[0]
-    center = int(dim / 2)
-    gauss_in = Gaussian2D(x_mean=center, y_mean=center, x_stddev=5, y_stddev=5)
-
-    # force a symmetric gaussian
-    gauss_in.y_stddev.tied = lambda model: model.x_stddev
-
-    x, y = np.mgrid[:dim, :dim]
-    gauss_out = fitting.LevMarLSQFitter()(gauss_in, x, y, psf.data)
-
-    # have to divide by oversampling to get back to original scale
-    return gauss_out.x_fwhm / psf.oversampling[0]
 
 
 def make_stars_guess(image: np.ndarray,

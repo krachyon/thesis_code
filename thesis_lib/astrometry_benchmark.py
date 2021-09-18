@@ -12,9 +12,10 @@ import astropy.table
 from .import testdata_generators
 from .import util
 from .config import Config
-from .photometry import run_photometry, PhotometryResult, cheating_astrometry, estimate_fwhm
+from .photometry import run_photometry, PhotometryResult, cheating_astrometry
+from thesis_lib.util import estimate_fwhm, concat_star_images
 from .plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
-    save, concat_star_images, plot_deviation_vs_magnitude, plot_deviation_histograms
+    save, plot_deviation_vs_magnitude, plot_deviation_histograms
 from .scopesim_helper import download
 from .testdata_generators import read_or_generate_image, read_or_generate_helper
 
