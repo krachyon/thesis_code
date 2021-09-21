@@ -4,7 +4,7 @@ from pylab import *
 from thesis_lib.astrometry_benchmark import *
 from thesis_lib.photometry import *
 from photutils.detection import IRAFStarFinder, DAOStarFinder
-from thesis_lib.plots_and_sanitycheck import *
+from thesis_lib.astrometry_plots import *
 from thesis_lib.testdata_generators import *
 from thesis_lib.util import *
 from thesis_lib.util import estimate_fwhm, concat_star_images
@@ -64,7 +64,7 @@ def foo():
 
     res = photometry(image, init_guesses=init_guesses)
     init_guesses.rename_columns(('x_0', 'y_0'), ('x', 'y'))
-    plot_input_vs_photometry_positions(init_guesses, res)
+    plot_xy_deviation(init_guesses, res)
 
 
 # plot_image_with_source_and_measured(image, input_table, peaks_tbl)
@@ -141,7 +141,7 @@ def baz():
 
     if len(result_table) != 0:
         plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
-        plot_input_vs_photometry_positions(input_table, result_table, output_path=plot_filename)
+        plot_xy_deviation(input_table, result_table, output_path=plot_filename)
     else:
         print(f"No sources found for {filename} with {config}")
 

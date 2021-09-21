@@ -23,7 +23,7 @@ from thesis_lib import util
 from thesis_lib.photometry import run_photometry
 from thesis_lib.parameter_tuning import run_optimizer
 
-from thesis_lib.plots_and_sanitycheck import plot_input_vs_photometry_positions
+from thesis_lib.astrometry_plots import plot_xy_deviation
 from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm
 

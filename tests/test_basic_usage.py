@@ -1,70 +1,53 @@
-from thesis_lib.config import Config
+import pytest
+
 from thesis_lib.testdata_generators import read_or_generate_image
-import thesis_lib.astrometry_wrapper as astrometry_wrapper
-from thesis_lib.scopesim_helper import download
 
 
+def test_oneline(session_single):
+    session_single.do_it_all()
 
-class TestSession:
-
-    @classmethod
-    def setup_class(cls):
-        config = Config()
-        config.cutout_size = 9
-        config.fitshape = 9
-        config.create_dirs()
-
-        cls.config = config
-        download()
+    assert session_single.tables.result_table
+    assert len(session_single.tables.result_table) == 1
 
 
-    def test_oneline(self):
+def test_session(session_single):
 
-        session = astrometry_wrapper.Session(self.config, 'testsingle')
-        session.do_it_all()
+    # equivalent way of
+    session_single.image = 'testsingle'
 
-        assert session.tables.result_table
-        assert len(session.tables.result_table) == 1
+    image, input_table = read_or_generate_image('testsingle')
+    session_single.image = image
+    session_single.input_table = input_table
 
+    session_single.find_stars()
+    session_single.select_epsfstars_auto()
+    session_single.make_epsf()
+    # Here we could e.g. change starfinder and re_run find_stars()
+    # TODO
+    # session.cull_detections()
+    # session.select_epsfstars_qof()
+    session_single.make_epsf()
+    session_single.do_astrometry()
 
-    def test_session(self):
-
-        session = astrometry_wrapper.Session(self.config, 'testsingle')
-
-        # equivalent way of
-        session.image = 'testsingle'
-
-        image, input_table = read_or_generate_image('testsingle')
-        session.image = image
-        session.input_table = input_table
-
-        session.find_stars()
-        session.select_epsfstars_auto()
-        session.make_epsf()
-        # Here we could e.g. change starfinder and re_run find_stars()
-        # TODO
-        # session.cull_detections()
-        # session.select_epsfstars_qof()
-        session.make_epsf()
-        session.do_astrometry()
-
-        assert session.tables.result_table
-        assert len(session.tables.result_table) == 1
+    assert session_single.tables.result_table
+    assert len(session_single.tables.result_table) == 1
 
 
-    def test_builder_session(self):
-        session = astrometry_wrapper.Session(self.config, 'testsingle')
-        session.find_stars().select_epsfstars_auto().make_epsf().do_astrometry()
+def test_builder_session(session_single):
+    session_single.find_stars().select_epsfstars_auto().make_epsf().do_astrometry()
 
-        assert session.tables.result_table
-        assert len(session.tables.result_table) == 1
+    assert session_single.tables.result_table
+    assert len(session_single.tables.result_table) == 1
 
 
-    def test_multi_image(self):
-        config = self.config.copy()
-        config.photometry_iterations = 1
-        session = astrometry_wrapper.Session(config, 'testmulti')
-        session.find_stars()
-        assert len(session.input_table) == len(session.tables.finder_table)
-        session.select_epsfstars_auto().make_epsf().do_astrometry()
-        assert len(session.tables.result_table) == len(session.input_table)
+def test_multi_image(session_multi):
+    session_multi.find_stars()
+    assert len(session_multi.tables.input_table) == len(session_multi.tables.finder_table)
+    session_multi.select_epsfstars_auto().make_epsf().do_astrometry()
+    assert len(session_multi.tables.result_table) == len(session_multi.tables.input_table)
+
+
+def test_multi_twice(session_multi):
+    session_multi.do_it_all()
+    assert session_multi.tables.result_table
+    session_multi.do_it_all()

@@ -155,13 +155,13 @@ result_table_multi = astrometry_benchmark.photometry_multi(recipe_template, 'gau
 clear_output()
 
 # %%
-fig = plots_and_sanitycheck.plot_input_vs_photometry_positions(result_table_multi)
+fig = astrometry_plots.plot_xy_deviation(result_table_multi)
 save_plot(outdir, 'multi_astrometry_xy')
 
 # %%
 result_table_multi_recenter = result_table_multi.copy()
 result_table_multi_recenter['offset']-= np.mean(result_table_multi_recenter['offset'])
-fig = plots_and_sanitycheck.plot_deviation_vs_magnitude(result_table_multi_recenter)
+fig = astrometry_plots.plot_deviation_vs_magnitude(result_table_multi_recenter)
 plt.ylim(-0.07,0.07)
 plt.title(plt.gca().get_title()+' (subtracted systematic error)')
 save_plot(outdir, 'multi_astrometry_mag')
@@ -235,10 +235,10 @@ photometry_result_modelgrid = photometry.run_photometry(
 modelgrid_matched = match_observation_to_source(photometry_result_modelgrid.input_table, photometry_result_modelgrid.result_table)
 
 # %%
-fig = plots_and_sanitycheck.plot_input_vs_photometry_positions(modelgrid_matched)
+fig = astrometry_plots.plot_xy_deviation(modelgrid_matched)
 
 # %%
-plots_and_sanitycheck.plot_image_with_source_and_measured(img_modelgrid, tab_modelgrid, modelgrid_matched)
+astrometry_plots.plot_image_with_source_and_measured(img_modelgrid, tab_modelgrid, modelgrid_matched)
 
 # %%
 figure()

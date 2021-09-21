@@ -1,10 +1,11 @@
 from .config import Config
 from .astrometry_types import ImageStats, INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, REFERENCE_NAMES, InputTable,\
-    X,Y,FLUX,MAGNITUDE
+    X,Y,FLUX,MAGNITUDE, ResultTable
 
 import numpy as np
 import warnings
 from scipy.spatial import cKDTree
+from typing import Optional
 
 from astropy.stats import sigma_clipped_stats
 from photutils import extract_stars, EPSFStars
@@ -28,10 +29,13 @@ def extract_epsf_stars(image: np.ndarray, image_stats: ImageStats, stars_tbl: In
     return stars[:config.max_epsf_stars]
 
 
-def perturb_guess_table(input_table: Table, seed=0):
-    rng = np.random.default_rng(seed=seed)
-    input_table['x'] += rng.uniform(-0.2, +0.2, size=len(input_table['x']))
-    input_table['y'] += rng.uniform(-0.2, +0.2, size=len(input_table['y']))
+def perturb_guess_table(input_table: Table, perturb_catalogue_guess: Optional[float] = 0.1, seed=0) -> Table:
+    if perturb_catalogue_guess:
+        rng = np.random.default_rng(seed=seed)
+        pm = perturb_catalogue_guess/2
+        input_table['x'] += rng.uniform(-pm, +pm, size=len(input_table['x']))
+        input_table['y'] += rng.uniform(-pm, +pm, size=len(input_table['y']))
+    return input_table
 
 
 def match_finder_to_reference(finder_table: Table, reference_table: Table):
@@ -61,7 +65,9 @@ def match_finder_to_reference(finder_table: Table, reference_table: Table):
     return finder_table
 
 
-def calc_extra_result_columns(result_table):
+# TODO may be a bit overkill but would be nice if the additional names had their own type
+def calc_extra_result_columns(result_table: ResultTable) -> ResultTable:
     result_table['x_offset'] = result_table['x_fit'] - result_table['x_orig']
     result_table['y_offset'] = result_table['y_fit'] - result_table['y_orig']
     result_table['offset'] = np.sqrt(result_table['x_offset'] ** 2 + result_table['y_offset'] ** 2)
+    return result_table

@@ -99,7 +99,7 @@ clear_output()
 # %%
 # the cluster template generates a lot of very faint sources, only show the ones that could reasonably be detected
 filtered_table_scc = photometry_result_scc.input_table[photometry_result_scc.input_table['weight']>1e-12]
-fig = plots_and_sanitycheck.plot_image_with_source_and_measured(
+fig = astrometry_plots.plot_image_with_source_and_measured(
     photometry_result_scc.image, filtered_table_scc, photometry_result_scc.result_table)
 plt.xlim(0,1024)
 plt.ylim(0,1024)
@@ -261,12 +261,12 @@ save_plot(outdir, 'lowpass_astrometry')
 
 # %%
 matched_result_lpc = util.match_observation_to_source(photometry_result_lpc.input_table, photometry_result_lpc.result_table)
-fig = plots_and_sanitycheck.plot_input_vs_photometry_positions(matched_result_lpc)
+fig = astrometry_plots.plot_xy_deviation(matched_result_lpc)
 
 save_plot(outdir,'lowpass_astrometry_xy')
 
 # %%
-fig = plots_and_sanitycheck.plot_deviation_vs_magnitude(matched_result_lpc)
+fig = astrometry_plots.plot_deviation_vs_magnitude(matched_result_lpc)
 plt.xlim(-16,-12)
 save_plot(outdir, 'lowpass_astrometry_magvdev')
 
@@ -309,13 +309,13 @@ def recipe_template(seed):
 
 
 # %%
-fig = plots_and_sanitycheck.plot_input_vs_photometry_positions(result_table_multi)
+fig = astrometry_plots.plot_xy_deviation(result_table_multi)
 save_plot(outdir, 'multi_astrometry_xy')
 
 # %%
 result_table_multi_recenter = result_table_multi.copy()
 result_table_multi_recenter['offset']-= np.mean(result_table_multi_recenter['offset'])
-fig = plots_and_sanitycheck.plot_deviation_vs_magnitude(result_table_multi_recenter)
+fig = astrometry_plots.plot_deviation_vs_magnitude(result_table_multi_recenter)
 plt.ylim(-0.07,0.07)
 plt.title(plt.gca().get_title()+' (subtracted systematic error)')
 save_plot(outdir, 'multi_astrometry_mag')

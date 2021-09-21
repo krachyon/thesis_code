@@ -30,6 +30,8 @@ class Config(metaclass=ClassRepr):
     image_folder: str = 'test_images'  # folder where to generate test images
     output_folder: str = 'output_files'  # where plots, results etc. go
 
+    seed: int = 0  # Seed for RNGs
+
     # TODO allow choosing starfinder type, maybe background as well?
     # magic parameters for Starfinder
     clip_sigma: float = 3.0  # sigma_clipping to apply for star guessing
@@ -55,16 +57,16 @@ class Config(metaclass=ClassRepr):
     # photometry
     # use known star positions from input catalogue as initial guess for photometry?
     use_catalogue_positions: bool = False
+    perturb_catalogue_guess: Optional[float] = 0.1  # by how many pixels to randomize when using initial guess
     photometry_iterations: int = 3
+
+    scopesim_working_dir: str = appdirs.user_cache_dir('scopesim_workspace')
 
     # TODO implement these
     disable_detector_saturation: bool = False
-    save_plots: bool = False
     known_psf_model: Optional[EPSFModel] = None
     # TODO it would be nice to use this for starfinder/epsfstarfinding
     detector_saturation: float = np.inf
-    # TODO do this with chdir context manager
-    scopesim_working_dir: str = appdirs.user_cache_dir('scopesim_workspace')
 
 
     def create_dirs(self):

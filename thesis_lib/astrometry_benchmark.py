@@ -14,7 +14,7 @@ from .import util
 from .config import Config
 from .photometry import run_photometry, PhotometryResult, cheating_astrometry
 from thesis_lib.util import estimate_fwhm, concat_star_images
-from .plots_and_sanitycheck import plot_image_with_source_and_measured, plot_input_vs_photometry_positions, \
+from .astrometry_plots import plot_image_with_source_and_measured, plot_xy_deviation, \
     save, plot_deviation_vs_magnitude, plot_deviation_histograms
 from .scopesim_helper import download
 from .testdata_generators import read_or_generate_image, read_or_generate_helper
@@ -30,7 +30,7 @@ def run_plots(photometry_result: PhotometryResult):
 
     if len(result_table) != 0:
         plot_filename = os.path.join(config.output_folder, filename + '_measurement_offset')
-        plot_input_vs_photometry_positions(offsets, output_path=plot_filename)
+        plot_xy_deviation(offsets, output_path=plot_filename)
         plot_filename = os.path.join(config.output_folder, filename + '_magnitude_v_offset')
         plot_deviation_vs_magnitude(offsets, output_path=plot_filename)
         plot_filename = os.path.join(config.output_folder, filename + '_histogram')
@@ -106,7 +106,7 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
     matched_result = astropy.table.vstack(partial_results)
 
     plot_filename = os.path.join(config.output_folder, image_name_template + '_measurement_offset')
-    plot_input_vs_photometry_positions(matched_result, output_path=plot_filename)
+    plot_xy_deviation(matched_result, output_path=plot_filename)
     plot_filename = os.path.join(config.output_folder, image_name_template + '_magnitude_v_offset')
     plot_deviation_vs_magnitude(matched_result, output_path=plot_filename)
 

@@ -4,8 +4,8 @@ import photutils
 
 from . import config
 from .astrometry_types import ImageStats,\
-    INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, PHOTOMETRY_TABLE_NAMES, GUESS_TABLE_NAMES, REFERENCE_NAMES, INPUT_TABLE_NAMES,\
-    StarfinderTable, InputTable, ResultTable, TypeCheckedTable, GuessTable
+    INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, RESULT_TABLE_NAMES, GUESS_TABLE_NAMES, REFERENCE_NAMES, INPUT_TABLE_NAMES,\
+    StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable
 from . astrometry_functions import calc_image_stats, extract_epsf_stars, perturb_guess_table, match_finder_to_reference, calc_extra_result_columns
 
 import numpy as np
@@ -25,6 +25,8 @@ class TableSet(metaclass=util.ClassRepr):
     """responsibility: Keep different tables coherent, calculate extra columns"""
 
     def __init__(self, input_table: Optional[Table] = None):
+        if input_table is not None:
+            input_table = InputTable(input_table).validate()
         self._input_table: Optional[InputTable] = input_table
         self._finder_table: Optional[StarfinderTable] = None
         self._result_table: Optional[ResultTable] = None
@@ -75,16 +77,17 @@ class TableSet(metaclass=util.ClassRepr):
         else:
             raise ValueError("no star table to extract stars from. Run find_stars, photometry or provide input table")
 
-    def select_table_for_photometry(self, use_catalogue_positions):
-        if use_catalogue_positions:
-            return self._input_table.convert(GuessTable)
+    def select_table_for_photometry(self, config: config.Config):
+        if config.use_catalogue_positions:
+            # This is an ugly hack to make sure x_orig etc exists. Makes me question the whole tableType approach...
+            ret = self._input_table.convert(ReferenceTable).convert(GuessTable)
+            return perturb_guess_table(ret, config.perturb_catalogue_guess, config.seed)
         elif self._result_table:
             return self._result_table.convert(GuessTable)
         elif self._finder_table:
             return self._finder_table.convert(GuessTable)
         else:
             raise ValueError("Not star table to run photometry on")
-
 
 
 class Session:
@@ -94,14 +97,15 @@ class Session:
                  image: Union[str, np.ndarray],
                  input_table: Optional[Table] = None):
         self.config = config
-        self.random_seed = 0
+
         self.tables = TableSet(input_table)
 
         if config.use_catalogue_positions:
             assert input_table, 'Need an input catalogue to if we want to use catalogue positions'
 
         self._image = None
-        if image:
+        self.image_name = 'unnamed'
+        if image is not None:
             self.image = image
 
         self.starfinder = DAOStarFinder(threshold=self.image_stats.threshold,
@@ -121,7 +125,7 @@ class Session:
         self.epsf: Optional[photutils.EPSFModel] = None
         self.fwhm: Optional[float] = None
 
-    ### Properties ###
+    # ## Properties ## #
     @property
     def image(self) -> np.ndarray:
         return self._image
@@ -129,19 +133,19 @@ class Session:
     def image(self, value: Union[str, np.ndarray]):
         if isinstance(value, str):
             image, input_table = read_or_generate_image(value)
+            self.image_name = value
             self._image = image
-            self.input_table = input_table
+            # TODO This is done twice now. Could this have deleted something?
+            self.tables.input_table = input_table
         elif isinstance(value, np.ndarray):
             self._image = value
         else:
             raise TypeError("image needs to be array or string (for predefined images)")
         self.image_stats = calc_image_stats(self._image, self.config)
 
+    # ## End properties ## #
 
-
-    ### End properties ###
-
-    ### User Interface ###
+    # ## User Interface ## #
 
     def find_stars(self) -> __class__:
         if self._image is None:
@@ -162,7 +166,8 @@ class Session:
         raise NotImplementedError
 
     def make_epsf(self, epsf_guess=None) -> __class__:
-        assert self.epsfstars, "call to select_epsfstars* method required"
+        if not self.epsfstars:
+            raise ValueError("call to select_epsfstars* method required")
         try:
             builder = EPSFBuilder(oversampling=self.config.oversampling,
                                   maxiters=self.config.epsfbuilder_iters,
@@ -179,7 +184,8 @@ class Session:
         return self
 
     def do_astrometry(self, initial_guess: Optional[GuessTable] = None) -> __class__:
-        assert self.epsf, 'Need to create an EPSF model before photometry is possible'
+        if not self.epsf:
+            raise ValueError('Need to create an EPSF model before photometry is possible')
         self.photometry = IterativelySubtractedPSFPhotometry(
             finder=self.starfinder,
             group_maker=self.grouper,
@@ -192,7 +198,7 @@ class Session:
         if initial_guess:
             guess_table = initial_guess
         else:
-            guess_table = self.tables.select_table_for_photometry(self.config.use_catalogue_positions)
+            guess_table = self.tables.select_table_for_photometry(self.config)
         self.tables.result_table = self.photometry.do_photometry(self.image, init_guesses=guess_table)
         return self
 

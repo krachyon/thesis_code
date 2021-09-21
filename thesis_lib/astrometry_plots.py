@@ -1,24 +1,32 @@
 import pickle
+import warnings
 from typing import Optional
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import photutils
 from astropy.table import Table
 from matplotlib.colors import LogNorm
+import os.path as p
 
-from .util import flux_to_magnitude
+from .util import flux_to_magnitude, concat_star_images
+from . import astrometry_wrapper
+from .astrometry_types import REFERENCE_NAMES, RESULT_TABLE_NAMES, INPUT_TABLE_NAMES,\
+    X, Y, MAGNITUDE, FLUX,\
+    ResultTable
 
 
 def save(filename_base: str, figure: matplotlib.pyplot.figure):
-    """Save a matplotlib figure as png and a pickle it to a mlpf file"""
+    """Save a matplotlib figure as png and a pickle it to a mplf file"""
     figure.savefig(filename_base + '.png')
     with open(filename_base + '.mplf', 'wb') as outfile:
         pickle.dump(figure, outfile)
 
 
-def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, result_table: Table,
-                                        output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
+def plot_image_with_source_and_measured(image: np.ndarray,
+                                        input_table: Table,
+                                        result_table: Table) -> matplotlib.pyplot.figure:
     """
     Plot catalogue and photometry positions on an image
     :param image:
@@ -27,22 +35,19 @@ def plot_image_with_source_and_measured(image: np.ndarray, input_table: Table, r
     :param output_path: optionally save the figure to this base filename
     :return:
     """
-    plt.figure()
+    fig = plt.figure()
     plt.imshow(image, norm=LogNorm())
 
-    plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none',
+    plt.plot(input_table[INPUT_TABLE_NAMES[X]], input_table[INPUT_TABLE_NAMES[Y]], 'o', fillstyle='none',
              markeredgewidth=0.5, markeredgecolor='red', label=f'reference N={len(input_table)}')
-    plt.plot(result_table['x_fit'], result_table['y_fit'], '.', markersize=1,
+    plt.plot(result_table[RESULT_TABLE_NAMES[X]], result_table[RESULT_TABLE_NAMES[Y]], '.', markersize=1,
              markeredgecolor='orange', label=f'photometry N={len(result_table)}')
     plt.legend()
 
-    if output_path:
-        save(output_path, plt.gcf())
-    return plt.gcf()
+    return fig
 
 
-def plot_input_vs_photometry_positions(matched_table: Table,
-                                       output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
+def plot_xy_deviation(matched_table: ResultTable) -> matplotlib.pyplot.figure:
     """
     Plot the x and y offsets between two catalogues as scatterplot
     :param matched_table: Table with columns 'x_fit', 'y_fit', 'x_orig', 'y_orig', 'offset'
@@ -50,24 +55,21 @@ def plot_input_vs_photometry_positions(matched_table: Table,
     :return:
     """
 
-    plt.figure()
+    fig = plt.figure()
 
     plt.title('offset between measured and input position')
     plt.xlabel('x offsets [pixel]')
     plt.ylabel('y offsets [pixel]')
-    xs = matched_table['x_fit'] - matched_table['x_orig']
-    ys = matched_table['y_fit'] - matched_table['y_orig']
+    xs = matched_table['x_offset']
+    ys = matched_table['y_offset']
     plt.plot(xs, ys, '.', markersize=2, markeredgecolor='orange')
     text = f'$σ_x={np.std(xs):.3f}$\n$σ_y={np.std(ys):.3f}$'
     plt.annotate(text, xy=(0.01, 0.9), xycoords='axes fraction')
 
-    if output_path:
-        save(output_path, plt.gcf())
-    return plt.gcf()
+    return fig
 
 
-def plot_deviation_vs_magnitude(matched_table: Table,
-                                output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
+def plot_deviation_vs_magnitude(matched_table: Table) -> matplotlib.pyplot.figure:
     """
     Plot the absolute deviation between input and photometry as a function of magnitude
     :param matched_table: Table with columns 'x_fit', 'y_fit', 'x_orig', 'y_orig', 'offset'
@@ -75,12 +77,14 @@ def plot_deviation_vs_magnitude(matched_table: Table,
     :return:
     """
 
-    plt.figure()
+    # TODO make names refer to types.
+    # TODO refactor out calculations
+
+    fig = plt.figure()
 
     dists = matched_table['offset']
 
-    #magnitudes = flux_to_magnitude(matched_table['flux_fit'])
-    magnitudes = matched_table['m']
+    magnitudes = flux_to_magnitude(matched_table[RESULT_TABLE_NAMES[FLUX]])
 
     order = np.argsort(magnitudes)
     dists = dists[order]
@@ -105,12 +109,13 @@ def plot_deviation_vs_magnitude(matched_table: Table,
              label=f'sliding σ, window_size={window_size}')
     plt.legend()
 
-    if output_path:
-        save(output_path, plt.gcf())
-    return plt.gcf()
+    return fig
 
 
-def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] = None) -> matplotlib.pyplot.figure:
+def plot_deviation_histograms(matched_table: Table) -> matplotlib.pyplot.figure:
+
+    # TODO make names refer to types.
+    # TODO refactor out calculations
 
     fig, axes = plt.subplots(2, 2, sharex='all')
 
@@ -121,8 +126,7 @@ def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] =
     axes[0,0].legend()
     axes[0,0].set_xlabel('[pixel]')
 
-    # TODO m is the original value or the starfinder value;
-    #  need to calculate from flux_fit
+
     magnitude_diff = np.array(matched_table['m'] - flux_to_magnitude(matched_table['flux_fit']))
     magnitude_diff = magnitude_diff - np.nanmean(magnitude_diff)
     axes[0,1].hist(magnitude_diff, bins=60)
@@ -146,9 +150,54 @@ def plot_deviation_histograms(matched_table: Table, output_path: Optional[str] =
     axes[1,1].legend()
     axes[1,1].set_xlabel('[pixel]')
 
-    if output_path:
-        save(output_path, plt.gcf())
-    return plt.gcf()
+    return fig
+
+
+def plot_epsf(epsf: photutils.EPSFModel) -> matplotlib.pyplot.figure:
+    fig = plt.figure()
+    plt.imshow(epsf.data)
+    return fig
+
+
+def plot_epsfstars(epsfstars: photutils.EPSFStars) -> matplotlib.pyplot.figure:
+    fig = plt.figure()
+    img = concat_star_images(epsfstars)
+    plt.title('epfs stars')
+    plt.imshow(img)
+    return fig
+
+
+def make_all_plots(astrometry_session: astrometry_wrapper.Session, save_files: bool = False) -> None:
+    """"""
+
+    tables = astrometry_session.tables
+
+    source_measured = plot_image_with_source_and_measured(astrometry_session.image,
+                                                          tables.input_table,
+                                                          tables.result_table)
+    xy_dev = plot_xy_deviation(tables.result_table)
+
+    dev_v_mag = plot_deviation_vs_magnitude(tables.result_table)
+
+    deviation_histograms = plot_deviation_histograms(tables.result_table)
+    epsf = plot_epsf(astrometry_session.epsf)
+    epsf_stars = plot_epsfstars(astrometry_session.epsfstars)
+
+    if save_files:
+        outdir = astrometry_session.config.output_folder
+
+        image_name = astrometry_session.image_name
+        if image_name == 'unnamed':
+            warnings.warn('creating output for unnamed image. May overwrite previous plots of unnamed')
+        outname = p.join(outdir, image_name)
+
+        save(outname+'_source_measured', source_measured)
+        save(outname+'_xy_dev', xy_dev)
+        save(outname+'_deviation_vs_magnitude', dev_v_mag)
+        save(outname+'_deviation_histograms', deviation_histograms)
+        save(outname+'_epsf', epsf)
+        save(outname+'_epsfstars', epsf_stars)
+
 
 
 

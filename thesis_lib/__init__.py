@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 from . import astrometry_benchmark
 from . import photometry
-from . import plots_and_sanitycheck
+from . import astrometry_plots
 from . import util
 from . import testdata_generators
 from . import scopesim_helper

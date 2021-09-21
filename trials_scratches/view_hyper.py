@@ -3,7 +3,7 @@ from thesis_lib import testdata_generators
 from thesis_lib.photometry import run_photometry
 from thesis_lib.config import Config
 from thesis_lib import util
-from thesis_lib.plots_and_sanitycheck import *
+from thesis_lib.astrometry_plots import *
 
 image_name = 'gausscluster_N2000_mag22_lowpass'
 image_recipe = testdata_generators.benchmark_images[image_name]
@@ -24,7 +24,7 @@ def view_objective(cutout_size: int, fitshape_half: int, sigma: float, iters:int
     result = run_photometry(image, input_table, image_name, config)
     result_table = util.match_observation_to_source(input_table, result.result_table)
 
-    plot_input_vs_photometry_positions(result_table)
+    plot_xy_deviation(result_table)
     plot_deviation_vs_magnitude(result_table)
     plot_image_with_source_and_measured(image, input_table, result_table)
     return result, result_table

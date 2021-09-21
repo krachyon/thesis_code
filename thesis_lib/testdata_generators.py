@@ -12,7 +12,7 @@ from .config import Config
 from .scopesim_helper import make_anisocado_model
 from .testdata_helpers import make_anisocado_kernel, lowpass, expmag
 from .testdata_recipes import gaussian_cluster, convolved_grid, scopesim_cluster, scopesim_grid, scopesim_groups, \
-    empty_image, single_star_image, one_source_testimage, multi_source_testimage
+    empty_image, single_star_image, one_source_testimage, multi_source_testimage, model_add_grid
 from .util import getdata_safer, work_in
 
 # make sure concurrent calls with the same filename don't tread on each other's toes.
@@ -121,7 +121,7 @@ misc_images = {
     'testsingle':
         lambda: one_source_testimage(),
     'testmulti':
-        lambda: multi_source_testimage()
+        lambda: multi_source_testimage(),
 }
 
 lowpass_images = {
