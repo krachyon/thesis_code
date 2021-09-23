@@ -100,13 +100,14 @@ class Session:
 
         self.tables = TableSet(input_table)
 
-        if config.use_catalogue_positions:
-            assert input_table, 'Need an input catalogue to if we want to use catalogue positions'
-
         self._image = None
         self.image_name = 'unnamed'
         if image is not None:
             self.image = image
+
+        if config.use_catalogue_positions:
+            if self.tables.input_table is None:
+                raise ValueError('Need an input catalogue to if we want to use catalogue positions')
 
         self.starfinder = DAOStarFinder(threshold=self.image_stats.threshold,
                                         fwhm=config.fwhm_guess,
@@ -181,6 +182,7 @@ class Session:
 
     def determine_psf_parameters(self) -> __class__:
         self.fwhm = util.estimate_fwhm(self.epsf)
+        self.grouper = DAOGroup(self.config.separation_factor*self.fwhm)
         return self
 
     def do_astrometry(self, initial_guess: Optional[GuessTable] = None) -> __class__:
@@ -207,7 +209,7 @@ class Session:
         # equivalent
         self.find_stars().select_epsfstars_auto().make_epsf()
         # TODO
-        # self.determine_psf_parameters()
+        self.determine_psf_parameters()
         # self.cull_detections()
         # self.select_epsfstars_qof()
         self.do_astrometry()
