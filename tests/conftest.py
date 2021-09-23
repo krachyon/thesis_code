@@ -3,7 +3,7 @@ import pytest
 from thesis_lib.config import Config
 import thesis_lib.astrometry_wrapper as astrometry_wrapper
 from thesis_lib.scopesim_helper import download
-from thesis_lib.testdata_recipes import convolved_grid
+from thesis_lib.testdata_recipes import convolved_grid, one_source_testimage, multi_source_testimage
 from thesis_lib.testdata_generators import read_or_generate_image
 
 import numpy as np
@@ -23,13 +23,15 @@ def config_for_tests() -> Config:
 
 @pytest.fixture
 def session_single(config_for_tests) -> astrometry_wrapper.Session:
-    session = astrometry_wrapper.Session(config_for_tests, 'testsingle')
+    image, table = read_or_generate_image('testsingle', config_for_tests, lambda: one_source_testimage())
+    session = astrometry_wrapper.Session(config_for_tests, image, table)
     return session
 
 
 @pytest.fixture
 def session_multi(config_for_tests) -> astrometry_wrapper.Session:
     config_for_tests.photometry_iterations = 1
+    image, table = read_or_generate_image('testsingle', config_for_tests, lambda: multi_source_testimage())
     session = astrometry_wrapper.Session(config_for_tests, 'testmulti')
     return session
 
