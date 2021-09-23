@@ -29,6 +29,7 @@
 # %pylab
 # use this to export to pdf instead
 # #%matplotlib inline
+import thesis_lib.testdata_definitions
 from thesis_lib import *
 import thesis_lib
 from pprint import pprint
@@ -85,7 +86,7 @@ print(def_config)
 default_config = config.Config()
 default_config.create_dirs()
 image_name_scc = 'scopesim_cluster'
-image_recipe_scc = testdata_generators.misc_images[image_name_scc]
+image_recipe_scc = thesis_lib.testdata_definitions.misc_images[image_name_scc]
 image_scc, input_table_scc = testdata_generators.read_or_generate_image(image_recipe_scc, 
                                                                         image_name_scc, 
                                                                         default_config.image_folder)
@@ -115,7 +116,7 @@ save_plot(outdir, 'standard_photutils')
 
 # %%
 image_name_sg = 'scopesim_grid_16_perturb2'
-image_recipe_sg = testdata_generators.misc_images[image_name_sg]
+image_recipe_sg = thesis_lib.testdata_definitions.misc_images[image_name_sg]
 image_sg, input_table_sg = testdata_generators.read_or_generate_image(image_recipe_sg,
                                                                       image_name_sg,
                                                                       default_config.image_folder)
@@ -227,7 +228,7 @@ lowpass_config.create_dirs()
 # %%
 # use an image with less sources to not have to filter the input positions
 image_name_lpc = 'gausscluster_N2000_mag22_lowpass'
-image_recipe_lpc = testdata_generators.benchmark_images[image_name_lpc]
+image_recipe_lpc = thesis_lib.testdata_definitions.benchmark_images[image_name_lpc]
 image_lpc, input_table_lpc = testdata_generators.read_or_generate_image(image_recipe_lpc,
                                                                         image_name_lpc,
                                                                         lowpass_config.image_folder)

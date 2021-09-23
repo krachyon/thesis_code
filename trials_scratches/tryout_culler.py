@@ -1,3 +1,4 @@
+import thesis_lib.testdata_definitions
 from thesis_lib import *
 from photutils import DAOStarFinder, extract_stars, EPSFBuilder
 from photutils.psf.culler import ChiSquareCuller, CorrelationCuller
@@ -20,7 +21,7 @@ scopesim_helper.download()
 
 #name = 'scopesim_grid_16_perturb2_mag18_24'
 name = 'gausscluster_N2000_mag22'
-recipe = testdata_generators.benchmark_images[name]
+recipe = thesis_lib.testdata_definitions.benchmark_images[name]
 
 img, input_table = testdata_generators.read_or_generate_image(recipe, name)
 

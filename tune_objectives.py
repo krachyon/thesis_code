@@ -12,7 +12,7 @@ from scipy.spatial import cKDTree
 from numpy.lib.recfunctions import structured_to_unstructured
 from typing import Optional, List
 
-
+import thesis_lib.testdata_definitions
 from photutils.detection import DAOStarFinder
 
 from astropy.stats import sigma_clipped_stats
@@ -74,7 +74,7 @@ from thesis_lib.parameter_tuning import make_starfinder_objective
 
 if __name__ == '__main__':
     name = 'gausscluster_N2000_mag22'
-    recipe = testdata_generators.benchmark_images[name]
+    recipe = thesis_lib.testdata_definitions.benchmark_images[name]
 
     img, input_table = testdata_generators.read_or_generate_image(recipe, name)
 

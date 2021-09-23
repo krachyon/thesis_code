@@ -1,4 +1,6 @@
 import numpy as np
+
+import thesis_lib.testdata_definitions
 from thesis_lib import *
 from photutils import extract_stars, EPSFBuilder, BasicPSFPhotometry, DAOGroup, MADStdBackgroundRMS, DAOStarFinder
 from astropy.nddata import NDData
@@ -7,7 +9,7 @@ from astropy.stats import sigma_clipped_stats
 cutout_size = 17
 
 name_grid = 'scopesim_grid_16_perturb2_mag18_24'
-recipe_grid = testdata_generators.benchmark_images[name_grid]
+recipe_grid = thesis_lib.testdata_definitions.benchmark_images[name_grid]
 img_grid, input_table_grid = testdata_generators.read_or_generate_image(recipe_grid, name_grid)
 
 name_group = 'scopesim_tight_group'

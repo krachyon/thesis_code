@@ -20,6 +20,7 @@
 # %pylab
 # use this to export to pdf instead
 # #%matplotlib inline
+import thesis_lib.testdata_definitions
 from thesis_lib import *
 import thesis_lib
 from pprint import pprint
@@ -73,7 +74,7 @@ lowpass_config.create_dirs()
 
 # %%
 image_name_lpc = 'gausscluster_N2000_mag22_lowpass_subpixel'
-image_recipe_lpc = testdata_generators.benchmark_images[image_name_lpc]
+image_recipe_lpc = thesis_lib.testdata_definitions.benchmark_images[image_name_lpc]
 image_lpc, input_table_lpc = testdata_generators.read_or_generate_image(image_recipe_lpc,
                                                                         image_name_lpc,
                                                                         lowpass_config.image_folder)
@@ -83,7 +84,7 @@ photometry_result_lpc = photometry.run_photometry(
 
 # %%
 image_name_lpsub = 'gausscluster_N2000_mag22_lowpass_subpixel'
-image_recipe_lpsub = testdata_generators.benchmark_images[image_name_lpsub]
+image_recipe_lpsub = thesis_lib.testdata_definitions.benchmark_images[image_name_lpsub]
 image_lpsub, input_table_lpsub = testdata_generators.read_or_generate_image(image_recipe_lpsub,
                                                                         image_name_lpsub,
                                                                         lowpass_config.image_folder)

@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+
+import thesis_lib.testdata_definitions
 from thesis_lib import testdata_generators
 from thesis_lib.photometry import run_photometry
 from thesis_lib.config import Config
@@ -6,7 +8,7 @@ from thesis_lib import util
 from thesis_lib.astrometry_plots import *
 
 image_name = 'gausscluster_N2000_mag22_lowpass'
-image_recipe = testdata_generators.benchmark_images[image_name]
+image_recipe = thesis_lib.testdata_definitions.benchmark_images[image_name]
 
 
 def view_objective(cutout_size: int, fitshape_half: int, sigma: float, iters:int):

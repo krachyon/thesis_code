@@ -5,7 +5,8 @@ import numpy as np
 from astropy.modeling import fitting
 from matplotlib.colors import LogNorm
 
-from thesis_lib.testdata_generators import read_or_generate_image, benchmark_images, convolved_grid, kernel_size, Gaussian2DKernel, gauss2d, model_add_grid
+from thesis_lib.testdata_generators import read_or_generate_image, convolved_grid, Gaussian2DKernel, gauss2d, model_add_grid
+from thesis_lib.testdata_definitions import kernel_size, benchmark_images
 from thesis_lib.photometry import make_epsf_fit, make_epsf_combine
 from thesis_lib.sampling_precision import get_cutout_slices
 

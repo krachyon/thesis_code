@@ -15,7 +15,8 @@ from scipy.spatial import cKDTree
 
 from photutils.detection import IRAFStarFinder, DAOStarFinder
 
-from thesis_lib.testdata_generators import read_or_generate_image, benchmark_images
+from thesis_lib.testdata_generators import read_or_generate_image
+from thesis_lib.testdata_definitions import benchmark_images
 from thesis_lib.util import DebugPool
 
 from scipy.interpolate import griddata

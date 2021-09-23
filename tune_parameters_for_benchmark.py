@@ -1,5 +1,5 @@
 from thesis_lib.parameter_tuning import *
-from thesis_lib.testdata_generators import benchmark_images
+from thesis_lib.testdata_definitions import benchmark_images
 
 import skopt
 from skopt.space import Real, Categorical, Integer
