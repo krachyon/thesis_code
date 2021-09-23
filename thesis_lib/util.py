@@ -12,11 +12,13 @@ from scipy.interpolate import RectBivariateSpline
 from photutils import CircularAperture
 from typing import List, Any
 from dataclasses import dataclass
+from termcolor import colored
 import re
 import astropy.io.fits
 import pickle
 import os
 import contextlib
+
 
 
 
@@ -271,7 +273,6 @@ class DebugPool:
         def ready(self):
             return True
 
-
     def __enter__(self):
         return self
 
@@ -283,6 +284,9 @@ class DebugPool:
 
     def imap(self, function, args):
         return map(function, args)
+
+    def starmap(self, function, args):
+        return [function(*arg) for arg in args]
 
     def imap_unordered(self, function, args):
         return self.imap(function, args)
@@ -296,6 +300,7 @@ class DebugPool:
         for arg_list in arg_lists:
             future.results.append(function(*arg_list))
         return future
+
 
 
 _number_regex = re.compile(r'''[+-]?\d+  # optional sign, mandatory digit(s) 
@@ -466,3 +471,16 @@ def concat_star_images(stars: photutils.psf.EPSFStars) -> np.ndarray:
         i = row + N * col
         out[xstart:xend, ystart:yend] = stars[i].data
     return out
+
+
+def red(text: str) -> str:
+    return colored(text, 'red')
+
+def green(text: str) -> str:
+    return colored(text, 'green')
+
+def yellow(text: str) -> str:
+    return colored(text, 'yellow')
+
+def blue(text: str) -> str:
+    return colored(text, 'blue')

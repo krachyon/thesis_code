@@ -25,3 +25,4 @@ appdirs
 dill
 numba
 pyFFTW
+termcolor
