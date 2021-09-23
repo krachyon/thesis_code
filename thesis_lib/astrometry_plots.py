@@ -127,7 +127,7 @@ def plot_deviation_histograms(matched_table: Table) -> matplotlib.pyplot.figure:
     axes[0,0].set_xlabel('[pixel]')
 
 
-    magnitude_diff = np.array(matched_table['m'] - flux_to_magnitude(matched_table['flux_fit']))
+    magnitude_diff = np.array(flux_to_magnitude(matched_table['flux_0']) - flux_to_magnitude(matched_table['flux_fit']))
     magnitude_diff = magnitude_diff - np.nanmean(magnitude_diff)
     axes[0,1].hist(magnitude_diff, bins=60)
     σ = np.nanstd(magnitude_diff)

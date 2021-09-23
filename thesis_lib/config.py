@@ -21,6 +21,7 @@ class Config(metaclass=ClassRepr):
 
     @classmethod
     def instance(cls):
+        # TODO i think this is more of a liability and config should be passed explicitly
         if not cls._instance:
             cls._instance = cls()
         return cls._instance
@@ -38,7 +39,7 @@ class Config(metaclass=ClassRepr):
     threshold_factor: float = 3.  # how many stds brighter than image for star to be detected?
     fwhm_guess: float = 7.  # estimate of PSF fwhm
     sigma_radius: float = 1.5  # clipping radius of starfinder kernel
-    separation_factor: float = 2.  # How far do stars need to be apart to be considered a group?
+    separation_factor: float = 2.  # How FWHMs do stars need to be apart to be considered a group?
     sharplo: float = 0.2
     sharphi: float = 1.0
     roundlo: float = -1.0
@@ -46,7 +47,7 @@ class Config(metaclass=ClassRepr):
     exclude_border: bool = True
 
     # magic parameters for EPSFBuilder
-    max_epsf_stars: int = 200
+    max_epsf_stars: int = 100
     cutout_size: int = 50  # TODO PSF is pretty huge, right?
     fitshape: Union[int, Tuple[int, int]] = 49  # this should probably be equal or slightly less than the epsf model dimension
     oversampling: int = 4
@@ -68,7 +69,7 @@ class Config(metaclass=ClassRepr):
     # TODO it would be nice to use this for starfinder/epsfstarfinding
     detector_saturation: float = np.inf
 
-
+    # todo these seem like a bad fit for this class responsibility wise
     def create_dirs(self):
         for dirname in [self.image_folder, self.output_folder, self.scopesim_working_dir]:
             if not os.path.exists(dirname):

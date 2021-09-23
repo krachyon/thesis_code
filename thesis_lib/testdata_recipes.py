@@ -397,12 +397,12 @@ def multi_source_testimage():
     fluxes = [10,20,20,10,30]
     model = Gaussian2D(x_mean=0, y_mean=0, x_stddev=1.5, y_stddev=1.5)
 
-    for x, y, f in zip(xs,ys,fluxes):
+    for x, y, f in zip(xs, ys, fluxes):
         model.x_mean = x
         model.y_mean = y
         model.amplitude = f
         model.render(img)
 
-    tab = Table((xs,ys,fluxes,flux_to_magnitude(fluxes)), names=COLUMN_NAMES)
+    tab = Table((xs, ys, fluxes, flux_to_magnitude(fluxes)), names=COLUMN_NAMES)
 
     return img, tab

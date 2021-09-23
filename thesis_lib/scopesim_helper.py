@@ -164,6 +164,8 @@ def download(to_directory=Config.instance().scopesim_working_dir) -> None:
     get scopesim files if not present in current directory
     :return: No
     """
+    if not os.path.exists(to_directory):
+        os.makedirs(to_directory)
     with work_in(to_directory):
         if not os.path.exists('./MICADO'):
             scopesim.download_package(["locations/Armazones",
