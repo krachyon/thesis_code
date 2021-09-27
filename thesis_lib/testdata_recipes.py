@@ -17,7 +17,7 @@ from photutils import FittableImageModel
 
 from .saturation_model import SaturationModel, read_scopesim_linearity
 from .scopesim_helper import to_pixel_scale, pixel_scale, setup_optical_train, make_anisocado_model, filter_name, \
-    pixel_to_mas, max_pixel_coord, make_psf
+    pixel_to_mas, max_pixel_coord, make_psf, cancel_psf_pixel_shift
 from .util import flux_to_magnitude, magnitude_to_flux
 from .astrometry_types import X,Y,FLUX,MAGNITUDE, INPUT_TABLE_NAMES
 from .config import Config
@@ -68,7 +68,9 @@ def scopesim_grid(N1d: int = 16,
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), magnitude_to_flux(m), m), names=COLUMN_NAMES)
+    table = Table((cancel_psf_pixel_shift(to_pixel_scale(x)).ravel(),
+                   cancel_psf_pixel_shift(to_pixel_scale(y)).ravel(),
+                   magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
 
@@ -165,7 +167,9 @@ def gaussian_cluster(N: int = 1000,
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), magnitude_to_flux(m), m), names=COLUMN_NAMES)
+    table = Table((cancel_psf_pixel_shift(to_pixel_scale(x)).ravel(),
+                   cancel_psf_pixel_shift(to_pixel_scale(y)).ravel(),
+                   magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
 
@@ -181,7 +185,7 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
                                                     core_radius=0.3,  # parsec
                                                     seed=seed)
 
-    detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
+    detector = setup_optical_train(psf_effect=make_psf(),custom_subpixel_psf=custom_subpixel_psf)
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -191,7 +195,7 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
     ys = to_pixel_scale(source_table['y']).ravel()
     ms = source_table['weight']  # TODO these don't really correspond, do they?
     fluxes = magnitude_to_flux(ms)
-    return_table = Table((xs, ys, fluxes, ms), names=COLUMN_NAMES)
+    return_table = Table((cancel_psf_pixel_shift(xs), cancel_psf_pixel_shift(ys), fluxes, ms), names=COLUMN_NAMES)
 
     return observed_image, return_table
 
@@ -299,10 +303,7 @@ def model_add_grid(model: FittableImageModel,
 
 def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
     """
-    Emulates custom cluster creation from initial simcado script.
-    Stars with gaussian position and magnitude distribution
-    :param seed: RNG initializer
-    :return: image and input catalogue
+    TODO This should return a table as well...
     """
 
     x = np.array([0.])
@@ -378,7 +379,9 @@ def scopesim_groups(N1d: int = 16,
     detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((to_pixel_scale(x).ravel(), to_pixel_scale(y).ravel(), magnitude_to_flux(m), m), names=COLUMN_NAMES)
+    table = Table((cancel_psf_pixel_shift(to_pixel_scale(x)).ravel(),
+                   cancel_psf_pixel_shift(to_pixel_scale(y)).ravel(),
+                   magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
 

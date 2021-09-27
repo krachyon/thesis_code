@@ -55,6 +55,11 @@ def pixel_to_mas(px_coord):
     return mas.value
 
 
+def cancel_psf_pixel_shift(input_coords):
+    """The PSF effects of scopesim convolve the image and shift it which is a bug imho"""
+    return input_coords+1
+
+
 # noinspection PyPep8Naming
 def make_psf(psf_wavelength: float = 2.15,
              shift: Tuple[int] = (0, 14), N: int = 512,

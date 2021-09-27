@@ -1,16 +1,3 @@
-- make photometry_benchmark able to run a subset (command line switch?)
-- histogram plot for x-y and mag deviation
+- Outlier rejection for photometry plots
 
-- add a way to start with a decent guess of the PSF in the process
-    * Get EPSF model from known PSF shape done by scopesim
-- Using 'x' and 'x_orig' for the tables is a bit awful as it makes the functions less generic
-- Calculate image stats only once and propagate
-
-- Main issue: How to tune starfinders?
-
-
-- Technical issue: Using spawn/forkserver plays nicely with notebooks and uses less memory,
-but causes issues with passing functions, e.g. if you pass
-lambda x: testdata_generators.generate()
-testdata_generators is not imported in the place that executes the lambda it errors
-Is there a way of avoiding that? Or warning the user?
+- The magnitude_to_flux conversion is all kinds of messed up for testdata generators
