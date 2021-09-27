@@ -31,6 +31,7 @@ scopesim_lock = multiprocessing.Lock()
 def to_pixel_scale(as_coord):
     """
     convert position of objects from arcseconds to pixel coordinates
+    Numpy/photutils center convention
     """
     if not isinstance(as_coord, u.Quantity):
         as_coord *= u.arcsec
@@ -43,6 +44,7 @@ def to_pixel_scale(as_coord):
 def pixel_to_mas(px_coord):
     """
     convert position of objects from pixel coordinates to arcseconds
+    Numpy/photutils center convention
     """
     if not isinstance(px_coord, u.Quantity):
         px_coord *= u.pixel

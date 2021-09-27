@@ -8,6 +8,7 @@ from typing import Tuple, Optional, Callable, Union
 import numpy as np
 from astropy.modeling.functional_models import Gaussian2D
 from tqdm import tqdm
+import os
 
 import scopesim_templates
 from astropy.convolution import Gaussian2DKernel, Kernel2D, convolve_fft
@@ -19,6 +20,7 @@ from .scopesim_helper import to_pixel_scale, pixel_scale, setup_optical_train, m
     pixel_to_mas, max_pixel_coord, make_psf
 from .util import flux_to_magnitude, magnitude_to_flux
 from .astrometry_types import X,Y,FLUX,MAGNITUDE, INPUT_TABLE_NAMES
+from .config import Config
 
 COLUMN_NAMES = (INPUT_TABLE_NAMES[X],
                 INPUT_TABLE_NAMES[Y],
@@ -109,8 +111,8 @@ def gaussian_cluster_modeladd(N: int = 1000,
     normalize = np.sum(psf_model.oversampling)
 
     fluxes = 6.55328584e+11 * 10 ** (-0.4 * ms) * 15  # the 15 is pulled from thin air
-    xs = to_pixel_scale(xs) + 0.5  # cancel scopesim pixel convention
-    ys = to_pixel_scale(ys) + 0.5
+    xs = to_pixel_scale(xs)
+    ys = to_pixel_scale(ys)
 
     for x, y, f in tqdm(list(zip(xs, ys, fluxes))):
         psf_model.x_0 = x
@@ -122,13 +124,13 @@ def gaussian_cluster_modeladd(N: int = 1000,
     # taken from statistics on empty scopesim image
     img = np.random.poisson(img) + np.random.normal(3164.272322010335, 58, img.shape)
     if saturation:
-        img = SaturationModel(read_scopesim_linearity('../MICADO/FPA_linearity.dat')).evaluate(img)
+        scopesim_wdir = Config.instance().scopesim_working_dir
+        img = SaturationModel(read_scopesim_linearity(os.path.join(scopesim_wdir, 'MICADO/FPA_linearity.dat'))).evaluate(img)
 
-    table = Table((to_pixel_scale(xs).ravel(), to_pixel_scale(ys).ravel(), fluxes, ms), names=COLUMN_NAMES)
+    table = Table((xs.ravel(), ys.ravel(), fluxes, ms), names=COLUMN_NAMES)
     return img, table
 
 
-# TODO I want this with simple model eval
 def gaussian_cluster(N: int = 1000,
                      seed: int = 9999,
                      magnitude=lambda N: np.random.normal(21, 2, N),
@@ -146,10 +148,6 @@ def gaussian_cluster(N: int = 1000,
 
     Nprime = len(x)
     filter_name = 'MICADO/filters/TC_filter_K-cont.dat'  # TODO: how to make system find this?
-
-    ## TODO: random spectral types, adapt this to a realistic cluster distribution or maybe just use
-    ## scopesim_templates.basic.stars.cluster
-    # random_spectral_types = np.random.choice(get_spectral_types(), Nprime)
 
     # That's what scopesim seemed to use for all stars.
     spectral_types = ['A0V'] * Nprime
@@ -193,7 +191,7 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
     ys = to_pixel_scale(source_table['y']).ravel()
     ms = source_table['weight']  # TODO these don't really correspond, do they?
     fluxes = magnitude_to_flux(ms)
-    return_table = Table((xs,ys,fluxes,ms), names=COLUMN_NAMES)
+    return_table = Table((xs, ys, fluxes, ms), names=COLUMN_NAMES)
 
     return observed_image, return_table
 
