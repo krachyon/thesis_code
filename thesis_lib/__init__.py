@@ -22,6 +22,7 @@ from . import testdata_generators
 from . import scopesim_helper
 from . import config
 from . import photometry_daophot
-from . import parameter_tuning
+# currently broken
+# from . import parameter_tuning
 from . import sampling_precision
 from . import accuracy_of_epsf_derivation
