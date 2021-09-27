@@ -21,9 +21,9 @@ def calc_image_stats(img: np.ndarray, config: Config) -> ImageStats:
 
 def extract_epsf_stars(image: np.ndarray, image_stats: ImageStats, stars_tbl: InputTable, config: Config) -> EPSFStars:
     image_no_background = image - image_stats.median
-    # TODO to enable this, need to convert input table magnitude to flux also
-    #stars_tbl_filtered = stars_tbl[stars_tbl['flux'] < config.detector_saturation]
-    stars = extract_stars(NDData(image_no_background), stars_tbl, size=config.cutout_size)
+
+    stars_tbl_filtered = stars_tbl[stars_tbl[INPUT_TABLE_NAMES[FLUX]] < config.detector_saturation]
+    stars = extract_stars(NDData(image_no_background), stars_tbl_filtered, size=config.cutout_size)
     if len(stars) == 0:
         warnings.warn('No stars extracted')
     return stars[:config.max_epsf_stars]
