@@ -81,6 +81,12 @@ class TableSet(metaclass=util.ClassRepr):
         if config.use_catalogue_positions:
             # This is an ugly hack to make sure x_orig etc exists. Makes me question the whole tableType approach...
             ret = self._input_table.convert(ReferenceTable).convert(GuessTable)
+            # TODO another hack to deal with the issue of different references/appertures for
+            #  flux. The reference fluxes are way to low, which makes the optimizer just lower
+            #  the model towards zero instead of increasing flux and adapting positions
+            # TODO imho this is a sign that the objective function is bad. It should penalize
+            #  a non-existent model if there's flux in the pixels
+            ret.remove_column('flux_0')
             return perturb_guess_table(ret, config.perturb_catalogue_guess, config.seed)
         elif self._result_table:
             return self._result_table.convert(GuessTable)

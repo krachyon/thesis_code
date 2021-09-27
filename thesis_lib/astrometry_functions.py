@@ -1,6 +1,7 @@
 from .config import Config
-from .astrometry_types import ImageStats, INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, REFERENCE_NAMES, InputTable,\
-    X,Y,FLUX,MAGNITUDE, ResultTable
+from .astrometry_types import ImageStats, INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, REFERENCE_NAMES, GUESS_TABLE_NAMES,\
+    X,Y,FLUX,MAGNITUDE,\
+    InputTable, ResultTable, GuessTable
 
 import numpy as np
 import warnings
@@ -29,12 +30,12 @@ def extract_epsf_stars(image: np.ndarray, image_stats: ImageStats, stars_tbl: In
     return stars[:config.max_epsf_stars]
 
 
-def perturb_guess_table(input_table: Table, perturb_catalogue_guess: Optional[float] = 0.1, seed=0) -> Table:
+def perturb_guess_table(input_table: GuessTable, perturb_catalogue_guess: Optional[float] = 0.25, seed=0) -> Table:
     if perturb_catalogue_guess:
         rng = np.random.default_rng(seed=seed)
         pm = perturb_catalogue_guess/2
-        input_table['x'] += rng.uniform(-pm, +pm, size=len(input_table['x']))
-        input_table['y'] += rng.uniform(-pm, +pm, size=len(input_table['y']))
+        input_table[GUESS_TABLE_NAMES[X]] += rng.uniform(-pm, +pm, size=len(input_table['x']))
+        input_table[GUESS_TABLE_NAMES[Y]] += rng.uniform(-pm, +pm, size=len(input_table['y']))
     return input_table
 
 
