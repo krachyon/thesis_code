@@ -23,45 +23,33 @@ from thesis_lib.astrometry_plots import make_all_plots
 from thesis_lib.util import make_gauss_kernel, green, blue, yellow
 
 
-# def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
-#                      image_name_template: str,
-#                      n_images: int,
-#                      config=Config.instance(),
-#                      threads: Union[int, None, bool]=None) -> Table:
-#     """
-#     apply EPSF fitting photometry to a testimage
-#     :param image_recipe: function to generate test image
-#     :param image_name: name to cache image and print status/errors
-#     :param config: instance of Config containing all processing parameters
-#     :return: table with results and matched input catalogue
-#     """
-#
-#     def inner(i):
-#         image_recipe = image_recipe_template(i)
-#         image_name = image_name_template+f'_{i}'
-#         image, input_table = read_or_generate_image(image_recipe, image_name, config.image_folder)
-#         result = run_photometry(image, input_table, image_name, config)
-#         result.result_table['σ_pos_estimated'] = util.estimate_photometric_precision_full\
-#             (image, input_table, estimate_fwhm(result.epsf))
-#         return util.match_observation_to_source(input_table, result.result_table)
-#
-#     if threads is False:
-#         partial_results = list(map(inner, range(n_images)))
-#     else:
-#         with mp.Pool(threads) as pool:
-#             partial_results = pool.map(inner, range(n_images))
-#
-#     matched_result = astropy.table.vstack(partial_results)
-#
-#     plot_filename = os.path.join(config.output_folder, image_name_template + '_measurement_offset')
-#     plot_xy_deviation(matched_result, output_path=plot_filename)
-#     plot_filename = os.path.join(config.output_folder, image_name_template + '_magnitude_v_offset')
-#     plot_deviation_vs_magnitude(matched_result, output_path=plot_filename)
-#
-#     plot_filename = os.path.join(config.output_folder, image_name_template + '_histogram')
-#     plot_deviation_histograms(matched_result, output_path=plot_filename)
-#     plt.close('all')
-#     return matched_result
+def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
+                     image_name_template: str,
+                     n_images: int,
+                     config=Config.instance(),
+                     threads: Union[int, None, bool]=None) -> list[Session]:
+    """
+    """
+
+    def inner(i):
+        image_recipe = image_recipe_template(i)
+        image_name = image_name_template+f'_{i}'
+        image, input_table = read_or_generate_image(image_name, config, image_recipe)
+        session = Session(config, image, input_table)
+        session.do_it_all()
+
+        # TODO maybe do this as part of the calc_additional function
+        session.tables.result_table['σ_pos_estimated'] = \
+            util.estimate_photometric_precision_full(image, input_table, session.fwhm)
+        return session
+
+    if threads is False:
+        sessions = list(map(inner, range(n_images)))
+    else:
+        with mp.Pool(threads) as pool:
+            sessions = pool.map(inner, range(n_images))
+
+    return sessions
 
 
 def runner(config, image_name) -> Session:
