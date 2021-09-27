@@ -31,8 +31,8 @@ def session_single(config_for_tests) -> astrometry_wrapper.Session:
 @pytest.fixture
 def session_multi(config_for_tests) -> astrometry_wrapper.Session:
     config_for_tests.photometry_iterations = 1
-    image, table = read_or_generate_image('testsingle', config_for_tests, lambda: multi_source_testimage())
-    session = astrometry_wrapper.Session(config_for_tests, 'testmulti')
+    image, table = read_or_generate_image('testmulti', config_for_tests, lambda: multi_source_testimage())
+    session = astrometry_wrapper.Session(config_for_tests, image, table)
     return session
 
 @pytest.fixture
