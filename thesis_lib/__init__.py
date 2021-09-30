@@ -14,15 +14,16 @@ except ModuleNotFoundError:
     pass
 
 
+from . import astrometry_wrapper
 from . import astrometry_benchmark
-from . import photometry
 from . import astrometry_plots
 from . import util
 from . import testdata_generators
 from . import scopesim_helper
 from . import config
-from . import photometry_daophot
+from . import sampling_precision
+from . import fitting_weights1D
 # currently broken
 # from . import parameter_tuning
 from . import sampling_precision
-from . import accuracy_of_epsf_derivation
+from . import experimental

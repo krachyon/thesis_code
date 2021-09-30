@@ -1,15 +1,19 @@
 from astwro.pydaophot import Daophot, Allstar
 from astwro.starlist import StarList, fileformats
 import astwro.starlist as starlist
+from collections import namedtuple
 from astropy.io import fits
 import astropy.table
 import astropy.io
 import numpy as np
 import os
 from typing import Optional
-from thesis_lib import testdata_generators
-from thesis_lib.photometry import PhotometryResult
-from thesis_lib.util import magnitude_to_flux
+
+from .. import testdata_generators
+from ..util import magnitude_to_flux
+
+DaophotPhotometryResult = namedtuple('DaophotPhotometryResult',
+                                     ('image', 'input_table', 'result_table'))
 
 
 def run_daophot_photometry(image: np.ndarray,
@@ -35,18 +39,16 @@ def run_daophot_photometry(image: np.ndarray,
     starlist_file_name = 'i.ap'
     detections_file_name = 'i.coo'
 
-
     find_res = dp.FInd(frames_av=1, frames_sum=1, starlist_file=detections_file_name)
     assert find_res.success
-
 
     if input_table:
         tab = input_table.copy()
         tab['x'] += np.random.uniform(-0.1, +0.1, size=len(tab['x']))
         tab['y'] += np.random.uniform(-0.1, +0.1, size=len(tab['y']))
-        tab.rename_columns(('m',),('rmag',))
-        tab.add_column(np.arange(len(tab))+1, name='id')
-        tab.add_column(np.ones(len(tab))*0.5, name='fsharp')
+        tab.rename_columns(('m',), ('rmag',))
+        tab.add_column(np.arange(len(tab)) + 1, name='id')
+        tab.add_column(np.ones(len(tab)) * 0.5, name='fsharp')
         tab.add_column(np.ones(len(tab)) * 0.5, name='round')
         tab.add_column(np.ones(len(tab)) * 0.5, name='mround')
 
@@ -90,17 +92,15 @@ def run_daophot_photometry(image: np.ndarray,
     alls_res = al.ALlstar(image_file=image_file_name, stars='i.ap', subtracted_image_file='is.fits')
     assert alls_res.success
 
-
     result_table = astropy.table.Table.from_pandas(alls_res.als_stars)
     result_table.rename_columns(('x', 'y', 'mag'), ('x_fit', 'y_fit', 'm'))
-    result_table['x_fit']-=1
-    result_table['y_fit']-=1
+    result_table['x_fit'] -= 1
+    result_table['y_fit'] -= 1
     result_table['flux_fit'] = magnitude_to_flux(result_table['m'])
-    return PhotometryResult(image, input_table, result_table=result_table, config=None, epsf=None, image_name=None, star_guesses=None)
+    return DaophotPhotometryResult(image, input_table, result_table=result_table)
 
 
 if __name__ == '__main__':
-    img, table = testdata_generators.read_or_generate_image(
-        testdata_generators.lowpass_images['scopesim_grid_30_perturb2_low_mag18-24'], 'scopesim_grid_30_perturb2_low_mag18-24')
+    img, table = testdata_generators.read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_lowpass')
 
     res = run_daophot_photometry(img, table)

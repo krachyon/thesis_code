@@ -15,11 +15,11 @@ from astropy.convolution import Gaussian2DKernel, Kernel2D, convolve_fft
 from astropy.table import Table
 from photutils import FittableImageModel
 
-from .saturation_model import SaturationModel, read_scopesim_linearity
+from .experimental.saturation_model import SaturationModel, read_scopesim_linearity
 from .scopesim_helper import to_pixel_scale, pixel_scale, setup_optical_train, make_anisocado_model, filter_name, \
     pixel_to_mas, max_pixel_coord, make_psf, cancel_psf_pixel_shift
 from .util import flux_to_magnitude, magnitude_to_flux
-from .astrometry_types import X,Y,FLUX,MAGNITUDE, INPUT_TABLE_NAMES
+from .astrometry_types import X, Y, FLUX, MAGNITUDE, INPUT_TABLE_NAMES
 from .config import Config
 
 COLUMN_NAMES = (INPUT_TABLE_NAMES[X],

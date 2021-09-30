@@ -145,6 +145,7 @@ def match_observation_to_source(reference_catalog: Table, photometry_result: Tab
     from scipy.spatial import cKDTree
 
     x_y_pixel = np.array((reference_catalog['x'], reference_catalog['y'], reference_catalog['m'])).T
+    # noinspection PyArgumentList
     lookup_tree = cKDTree(x_y_pixel[:, :2])  # only feed x and y to the lookup tree
 
     photometry_result = photometry_result.copy()
@@ -156,6 +157,7 @@ def match_observation_to_source(reference_catalog: Table, photometry_result: Tab
     seen_indices = set()
     for row in photometry_result:
 
+        # noinspection PyUnresolvedReferences
         dist, index = lookup_tree.query((row['x_fit'], row['y_fit']))
         # if index in seen_indices:
         #     print('Warning: multiple match for source')  # TODO make this message more useful/use warning module

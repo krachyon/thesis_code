@@ -4,7 +4,7 @@ from astropy.nddata import NDData
 from astropy.table import Table
 
 from photutils import extract_stars, EPSFStars, EPSFBuilder
-from thesis_lib.photometry import make_epsf_combine
+from .experimental import make_epsf_combine
 
 
 def reference_image(input_model, fitshape, oversampling):
