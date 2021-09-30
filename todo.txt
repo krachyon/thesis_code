@@ -1,3 +1,7 @@
 - Outlier rejection for photometry plots
 
+- Unhack flux guess
+
+- Try out fitter with constraints
+
 - The magnitude_to_flux conversion is all kinds of messed up for testdata generators
