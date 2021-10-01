@@ -5,8 +5,9 @@ import photutils
 from . import config
 from .astrometry_types import ImageStats,\
     INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, RESULT_TABLE_NAMES, GUESS_TABLE_NAMES, REFERENCE_NAMES, INPUT_TABLE_NAMES,\
-    StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable
-from . astrometry_functions import calc_image_stats, extract_epsf_stars, perturb_guess_table, match_finder_to_reference, calc_extra_result_columns
+    StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable, OUTLIER
+from . astrometry_functions import calc_image_stats, extract_epsf_stars, perturb_guess_table, \
+    match_finder_to_reference, calc_extra_result_columns, mark_outliers
 
 import numpy as np
 from typing import Optional, Union, TypeVar
@@ -53,7 +54,12 @@ class TableSet(metaclass=util.ClassRepr):
             value = ResultTable(value).validate()
         if set(REFERENCE_NAMES.values()).issubset(value.colnames):
             value = calc_extra_result_columns(value)
+            value = mark_outliers(value)
         self._result_table = value
+
+    @property
+    def valid_result_table(self):
+        return self._result_table[~self._result_table[OUTLIER]]
 
     @property
     def input_table(self):
