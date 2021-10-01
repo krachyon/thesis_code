@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.4
+#       jupytext_version: 1.13.0
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -34,7 +34,10 @@ from IPython.display import clear_output
 import thesis_lib.config as config
 from thesis_lib.util import save_plot, match_observation_to_source, make_gauss_kernel
 from thesis_lib.scopesim_helper import make_anisocado_model
-from thesis_lib.testdata_generators import model_add_grid, read_or_generate_image
+from thesis_lib.testdata_generators import read_or_generate_image
+from thesis_lib.testdata_recipes import model_add_grid
+import thesis_lib.astrometry_wrapper as astrometry_wrapper
+import thesis_lib.astrometry_plots as astrometry_plots
 import os
 
 ## use these for interactive, disable for export
@@ -63,68 +66,116 @@ if not os.path.exists(outdir):
 scopesim_helper.download()
 
 # %%
+anisocado_full = make_anisocado_model()
+anisocado_lp = make_anisocado_model(lowpass=5)
+
+# %%
+from anisocado import AnalyticalScaoPsf
+anisocado_img = AnalyticalScaoPsf(pixelSize=0.004/2, N=400*2, seed=0).shift_off_axis(0,0)
+
+
+# %%
+def image_moment(image, x_order, y_order):
+    y, x = np.indices(image.shape)
+    return np.sum(x**x_order * y**y_order * image)
+
+def centroid(image):
+    m00 = image_moment(image, 0, 0)
+    m10 = image_moment(image, 1, 0)
+    m01 = image_moment(image, 0, 1)
+    return m10/m00, m01/m00
+
+
+# %%
+even = AnalyticalScaoPsf(pixelSize=0.004, N=512, seed=0).shift_off_axis(0,0)
+odd = AnalyticalScaoPsf(pixelSize=0.004, N=511, seed=0).shift_off_axis(0,0)
+print(even.shape, odd.shape)
+print(centroid(even), centroid(odd))
+
+
+# %%
+figure()
+imshow(even)
+
+# %%
+from photutils import FittableImageModel
+
+# %%
+figure()
+imshow(anisocado_full.data-anisocado_img)
+
+# %%
+centroid(anisocado_full.data)
+
+# %%
+y,x=np.mgrid[-400:400:801j,-400:400:801j]
+print(centroid(anisocado_img))
+model = FittableImageModel(anisocado_img,oversampling=2,degree=3)
+print(centroid(model.data))
+print(centroid(model(x,y)))
+
+# %%
+figure()
+imshow(anisocado_img)
+axhline((anisocado_img.shape[1]-1)/2)
+axvline((anisocado_img.shape[0]-1)/2)
+
+figure()
+imshow(anisocado_full.data)
+axhline((anisocado_full.data.shape[1]-1)/2)
+axvline((anisocado_full.data.shape[0]-1)/2)
+
+# %%
+from astropy.modeling.functional_models import Gaussian2D
+y, x = np.indices(anisocado_img.shape)
+gauss_img = Gaussian2D(x_stddev=5, y_stddev=5)(x-x.mean(), y-y.mean())
+centroid(gauss_img)
+
+# %%
 lowpass_config = config.Config()
-lowpass_config.smoothing = 'quartic'
+lowpass_config.smoothing = make_gauss_kernel()
 lowpass_config.output_folder = 'output_files_lowpass'
 lowpass_config.use_catalogue_positions = True  # cheat with guesses
 lowpass_config.photometry_iterations = 1  # with known positions we know all stars on first iter
 lowpass_config.cutout_size = 20  # adapted by hand for PSF at hand
 lowpass_config.fitshape = 15
+lowpass_config.photometry_iterations=1
 lowpass_config.create_dirs()
 
 # %%
-image_name_lpc = 'gausscluster_N2000_mag22_lowpass_subpixel'
-image_recipe_lpc = thesis_lib.testdata_definitions.benchmark_images[image_name_lpc]
-image_lpc, input_table_lpc = testdata_generators.read_or_generate_image(image_recipe_lpc,
-                                                                        image_name_lpc,
-                                                                        lowpass_config.image_folder)
-
-photometry_result_lpc = photometry.run_photometry(
-    image_lpc, input_table_lpc, image_name_lpc, lowpass_config)
+session_conv = astrometry_wrapper.Session(lowpass_config, 'gausscluster_N2000_mag22_lowpass')
+session_conv.do_it_all()
 
 # %%
-image_name_lpsub = 'gausscluster_N2000_mag22_lowpass_subpixel'
-image_recipe_lpsub = thesis_lib.testdata_definitions.benchmark_images[image_name_lpsub]
-image_lpsub, input_table_lpsub = testdata_generators.read_or_generate_image(image_recipe_lpsub,
-                                                                        image_name_lpsub,
-                                                                        lowpass_config.image_folder)
-
-photometry_result_lpsub = photometry.run_photometry(
-    image_lpsub, input_table_lpsub, image_name_lpsub, lowpass_config)
-
+session_subp = astrometry_wrapper.Session(lowpass_config, 'gausscluster_N2000_mag22_lowpass_subpixel')
+session_subp.do_it_all()
 
 # %%
-def ref_phot_plot(photometry_result):
-    plt.figure()
-    plt.imshow(photometry_result.image, norm=LogNorm())
-    plt.plot(photometry_result.input_table['x'], photometry_result.input_table['y'], 'o', fillstyle='none', 
-             markeredgewidth=1, markeredgecolor='red', label=f'reference N={len(input_table)}')
-    plt.plot(photometry_result.result_table['x_fit'], photometry_result.result_table['y_fit'], '.', markersize=5,
-             markeredgecolor='orange', label=f'photometry N={len(result_table)}')
-    plt.legend()
-
+astrometry_plots.plot_image_with_source_and_measured(session_conv.image, session_conv.tables.input_table, session_conv.tables.result_table)
+pass
 
 # %%
-ref_phot_plot(photometry_result_lpc)
-
-# %%
-
-ref_phot_plot(photometry_result_lpsub)
+astrometry_plots.plot_image_with_source_and_measured(session_subp.image, session_subp.tables.input_table, session_subp.tables.result_table)
+pass
 
 # %%
 fig,axs = plt.subplots(1,2)
-axs[0].imshow(photometry_result_lpc.epsf.data)
-axs[1].imshow(photometry_result_lpsub.epsf.data)
+axs[0].imshow(session_conv.epsf.data, norm=LogNorm())
+axs[1].imshow(session_subp.epsf.data, norm=LogNorm())
 
 # %%
-tab_lpsub = match_observation_to_source(photometry_result_lpsub.input_table, photometry_result_lpsub.result_table)
-tab_lpc = match_observation_to_source(photometry_result_lpc.input_table, photometry_result_lpc.result_table)
+tab_conv = session_conv.tables.valid_result_table
+tab_subp = session_subp.tables.valid_result_table
+
+# %%
+np.mean(tab_subp['x_offset']), np.mean(tab_subp['y_offset'])
 
 # %%
 figure()
-plt.scatter(tab_lpsub['x_offset'], tab_lpsub['y_offset'], alpha=0.8, label='lp_sub')
-plt.scatter(tab_lpc['x_offset'], tab_lpc['y_offset'], alpha=0.8, label='lp_conv')
+plt.scatter(tab_subp['x_offset'], tab_subp['y_offset'], alpha=0.8, label='subp')
+plt.scatter(tab_conv['x_offset'], tab_conv['y_offset'], alpha=0.8, label='conv')
 plt.legend()
+np.std(tab_subp['x_offset']**2 +tab_subp['y_offset']**2), np.std(tab_conv['x_offset']**2 +tab_conv['y_offset']**2)
 
 # %%
 np.mean(tab_lpsub['offset']), np.mean(tab_lpc['offset']), np.std(tab_lpsub['offset']), np.std(tab_lpc['offset']), 
