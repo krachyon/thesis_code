@@ -166,9 +166,11 @@ def gaussian_cluster(N: int = 1000,
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
+    x_px = to_pixel_scale(x) + (0 if custom_subpixel_psf else 1)
+    y_px = to_pixel_scale(y) + (0 if custom_subpixel_psf else 1)
 
-    table = Table((cancel_psf_pixel_shift(to_pixel_scale(x)).ravel(),
-                   cancel_psf_pixel_shift(to_pixel_scale(y)).ravel(),
+    table = Table((x_px.ravel(),
+                   y_px.ravel(),
                    magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
@@ -185,17 +187,22 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
                                                     core_radius=0.3,  # parsec
                                                     seed=seed)
 
-    detector = setup_optical_train(psf_effect=make_psf(),custom_subpixel_psf=custom_subpixel_psf)
+    detector = setup_optical_train(psf_effect=make_psf(), custom_subpixel_psf=custom_subpixel_psf)
 
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
     source_table = source.fields[0]
-    xs = to_pixel_scale(source_table['x']).ravel()
-    ys = to_pixel_scale(source_table['y']).ravel()
+    xs = source_table['x'].ravel()
+    ys = source_table['y'].ravel()
     ms = source_table['weight']  # TODO these don't really correspond, do they?
     fluxes = magnitude_to_flux(ms)
-    return_table = Table((cancel_psf_pixel_shift(xs), cancel_psf_pixel_shift(ys), fluxes, ms), names=COLUMN_NAMES)
+    x_px = to_pixel_scale(xs) + (0 if custom_subpixel_psf else 1)
+    y_px = to_pixel_scale(ys) + (0 if custom_subpixel_psf else 1)
+
+    return_table = Table((x_px.ravel(),
+                   y_px.ravel(),
+                   fluxes, ms), names=COLUMN_NAMES)
 
     return observed_image, return_table
 
@@ -379,8 +386,11 @@ def scopesim_groups(N1d: int = 16,
     detector.observe(source, random_seed=seed, updatephotometry_iterations=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((cancel_psf_pixel_shift(to_pixel_scale(x)).ravel(),
-                   cancel_psf_pixel_shift(to_pixel_scale(y)).ravel(),
+    x_px = to_pixel_scale(x) + (0 if custom_subpixel_psf else 1)
+    y_px = to_pixel_scale(y) + (0 if custom_subpixel_psf else 1)
+
+    table = Table((x_px.ravel(),
+                   y_px.ravel(),
                    magnitude_to_flux(m), m), names=COLUMN_NAMES)
     return observed_image, table
 
