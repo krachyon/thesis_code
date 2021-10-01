@@ -1,6 +1,7 @@
 from .config import Config
 from .astrometry_types import ImageStats, INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, REFERENCE_NAMES, GUESS_TABLE_NAMES,\
-    X,Y,FLUX,MAGNITUDE,\
+    RESULT_TABLE_NAMES,\
+    X,Y,FLUX,MAGNITUDE, OFFSET, XOFFSET, YOFFSET, OUTLIER,\
     InputTable, ResultTable, GuessTable
 
 import numpy as np
@@ -63,12 +64,18 @@ def match_finder_to_reference(finder_table: Table, reference_table: Table):
         row[REFERENCE_NAMES[FLUX]] = reference_table[INPUT_TABLE_NAMES[FLUX]][index]
         row['reference_index'] = index
 
+    finder_table['reference_index'] = finder_table['reference_index'].astype(int)
     return finder_table
 
 
 # TODO may be a bit overkill but would be nice if the additional names had their own type
 def calc_extra_result_columns(result_table: ResultTable) -> ResultTable:
-    result_table['x_offset'] = result_table['x_fit'] - result_table['x_orig']
-    result_table['y_offset'] = result_table['y_fit'] - result_table['y_orig']
-    result_table['offset'] = np.sqrt(result_table['x_offset'] ** 2 + result_table['y_offset'] ** 2)
+    result_table[XOFFSET] = result_table[RESULT_TABLE_NAMES[X]] - result_table[REFERENCE_NAMES[X]]
+    result_table[YOFFSET] = result_table[RESULT_TABLE_NAMES[Y]] - result_table[REFERENCE_NAMES[Y]]
+    result_table[OFFSET] = np.sqrt(result_table[XOFFSET] ** 2 + result_table[YOFFSET] ** 2)
+    return result_table
+
+
+def mark_outliers(result_table: ResultTable) -> ResultTable:
+    result_table[OUTLIER] = result_table[OFFSET] >= 1
     return result_table

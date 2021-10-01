@@ -21,10 +21,19 @@ X = ColumnType('X')
 Y = ColumnType('Y')
 FLUX = ColumnType('FLUX')
 MAGNITUDE = ColumnType('MAGNITUDE')
+OFFSET = 'offset'
+XOFFSET = 'x_offset'
+YOFFSET = 'y_offset'
+OUTLIER = 'outlier'
+
 
 ConversionEntry = namedtuple('ConversionEntry', ['fromType', 'converter'])
 CONVERSION_MAP = {MAGNITUDE: [ConversionEntry(FLUX, flux_to_magnitude)],
-                  FLUX: [ConversionEntry(MAGNITUDE, magnitude_to_flux)]}
+                  FLUX: [ConversionEntry(MAGNITUDE, magnitude_to_flux)],
+                  X0: [ConversionEntry(X, lambda x: x)],
+                  Y0: [ConversionEntry(Y, lambda y: y)],
+                  FLUX0: [ConversionEntry(FLUX, lambda f: f)]}
+
 
 INPUT_TABLE_NAMES: dict[ColumnType, str] = {X: 'x', Y: 'y', MAGNITUDE: 'm', FLUX: 'f'}
 REFERENCE_NAMES: dict[ColumnType, str] = {X: 'x_orig', Y: 'y_orig', MAGNITUDE: 'm_orig', FLUX: 'flux_orig'}
@@ -32,7 +41,6 @@ STARFINDER_TABLE_NAMES: dict[ColumnType, str] = {X: 'xcentroid', Y: 'ycentroid',
 GUESS_TABLE_NAMES: dict[ColumnType, str] = {X: 'x_0', Y: 'y_0', FLUX: 'flux_0'}
 RESULT_TABLE_NAMES: dict[ColumnType, str] = {X:  'x_fit', Y: 'y_fit', FLUX: 'flux_fit',
                                              X0: 'x_0', Y0: 'y_0', FLUX0: 'flux_0'}
-
 
 
 def _find_converter(key, required_columns) -> Optional[ConversionEntry]:
