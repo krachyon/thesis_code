@@ -17,7 +17,7 @@ from photutils import FittableImageModel
 
 from .experimental.saturation_model import SaturationModel, read_scopesim_linearity
 from .scopesim_helper import to_pixel_scale, pixel_scale, setup_optical_train, make_anisocado_model, filter_name, \
-    pixel_to_mas, max_pixel_coord, make_psf, cancel_psf_pixel_shift
+    pixel_to_mas, max_pixel_coord, make_psf
 from .util import flux_to_magnitude, magnitude_to_flux
 from .astrometry_types import X, Y, FLUX, MAGNITUDE, INPUT_TABLE_NAMES
 from .config import Config

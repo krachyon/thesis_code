@@ -1,5 +1,5 @@
 # This is needed as the default method 'fork' sometimes borks the ipython kernel...
-import multiprocess
+# import multiprocess
 # try:
 #     multiprocess.set_start_method('forkserver')
 # except RuntimeError:
@@ -15,7 +15,6 @@ except ModuleNotFoundError:
 
 
 from . import astrometry_wrapper
-from . import astrometry_benchmark
 from . import astrometry_plots
 from . import util
 from . import testdata_generators

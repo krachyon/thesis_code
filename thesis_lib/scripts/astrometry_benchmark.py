@@ -89,12 +89,12 @@ def main():
                   for config in configs
                   for image_name in testdata_definitions.benchmark_images]
 
-    n_threads = 100
+    n_threads = None
     #from thesis_lib.util import DebugPool
     #with DebugPool() as pool:
     with mp.Pool(n_threads) as pool:
         run_sessions = pool.starmap(runner, parameters)
-    with open('../all_photometry_results.pickle', 'wb') as f:
+    with open('../../all_photometry_results.pickle', 'wb') as f:
         pickle.dump(run_sessions, f)
 
 

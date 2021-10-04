@@ -11,6 +11,8 @@ setup(
     description='Analysis scripts for master thesis',
     entry_points={
         'console_scripts':
-            ['astrometry_benchmark=thesis_lib.astrometry_benchmark:main']
+            ['astrometry_benchmark=thesis_lib.scripts.astrometry_benchmark:main',
+             'generate_all_test_images=thesis_lib.scripts.generate_testimages:main'
+             ]
     }
 )
