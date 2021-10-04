@@ -423,6 +423,18 @@ def center_of_image(img: np.ndarray) -> tuple[float, float]:
     return xcenter, ycenter
 
 
+def image_moment(image, x_order, y_order):
+    y, x = np.indices(image.shape)
+    return np.sum(x**x_order * y**y_order * image)
+
+
+def centroid(image):
+    m00 = image_moment(image, 0, 0)
+    m10 = image_moment(image, 1, 0)
+    m01 = image_moment(image, 0, 1)
+    return m10/m00, m01/m00
+
+
 def estimate_fwhm(psf: photutils.psf.EPSFModel) -> float:
     """
     Use a 2D symmetric gaussian fit to estimate the FWHM of an empirical psf

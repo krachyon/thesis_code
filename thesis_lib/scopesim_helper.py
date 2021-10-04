@@ -60,6 +60,7 @@ def cancel_psf_pixel_shift(input_coords):
     return input_coords+1
 
 
+# TODO take care of correcting centroid shift
 # noinspection PyPep8Naming
 def make_psf(psf_wavelength: float = 2.15,
              shift: Tuple[int] = (0, 14), N: int = 512,
@@ -96,6 +97,7 @@ def make_psf(psf_wavelength: float = 2.15,
     # convolve_mode=''
 
 
+# TODO take care of pixel shift, best by setting origin according to computed centroid
 class AnisocadoModel(FittableImageModel):
     def __repr__(self):
         return super().__repr__() + f' oversampling: {self.oversampling}'
