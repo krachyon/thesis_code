@@ -149,7 +149,6 @@ def gaussian_cluster(N: int = 1000,
     x, y, m = _gaussian_cluster_coords(N, seed, magnitude)
 
     Nprime = len(x)
-    filter_name = 'MICADO/filters/TC_filter_K-cont.dat'  # TODO: how to make system find this?
 
     # That's what scopesim seemed to use for all stars.
     spectral_types = ['A0V'] * Nprime
@@ -317,7 +316,6 @@ def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nd
     y = np.array([0.])
     m = np.array([16.])
 
-    filter_name = 'MICADO/filters/TC_filter_K-cont.dat'  # TODO: how to make system find this?
     spectral_types = ['A0V']
 
     source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
@@ -330,7 +328,9 @@ def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nd
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    return observed_image
+    table = Table((x, y, magnitude_to_flux(m), m), names=COLUMN_NAMES)
+
+    return observed_image, table
 
 
 def empty_image(seed: int = 1000) -> Tuple[np.ndarray, Table]:

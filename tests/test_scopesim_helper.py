@@ -5,28 +5,10 @@ from thesis_lib import scopesim_helper
 from thesis_lib.util import center_of_image, centroid
 from thesis_lib.testdata_helpers import lowpass
 
-@pytest.fixture(scope='session', params=[0, 5])
-def anisocado_model(request):
-    return scopesim_helper.make_anisocado_model(lowpass=request.param)
+from conftest import psf_effect_odd, psf_effect_even, anisocado_model
 
 
-@pytest.fixture(scope='session', params=(0, 5))
-def psf_effect_odd(request):
-    σ = request.param
-    if σ:
-        return scopesim_helper.make_psf(N=511, transform=lowpass(σ))
-    else:
-        return scopesim_helper.make_psf(N=511)
-
-@pytest.fixture(scope='session', params=(0, 5))
-def psf_effect_even(request):  # This may not make sense
-    σ = request.param
-    if σ:
-        return scopesim_helper.make_psf(N=512, transform=lowpass(σ))
-    else:
-        return scopesim_helper.make_psf(N=512)
-
-
+@pytest.mark.parametrize('anisocado_model', [0, 5], indirect=True)
 def test_anisocado_model_centered(anisocado_model):
 
     data = anisocado_model.render()

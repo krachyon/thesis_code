@@ -125,6 +125,11 @@ def make_anisocado_model(oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowp
     return AnisocadoModel(img, oversampling=oversampling, degree=degree, origin=origin)
 
 
+def make_gauss_model(σ):
+    data = Gaussian2D(x_stddev=σ, y_stddev=σ)(*np.mgrid[-100:100:400j, -100:100:400j])
+    return FittableImageModel(data, oversampling=2, degree=5)
+
+
 def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,
                         custom_subpixel_psf: Optional[Callable] = None) -> scopesim.OpticalTrain:
     """
