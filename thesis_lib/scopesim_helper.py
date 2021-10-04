@@ -7,12 +7,13 @@ import anisocado
 from anisocado import AnalyticalScaoPsf
 from photutils import FittableImageModel
 from astropy.modeling.functional_models import Gaussian2D
+from image_registration.fft_tools import upsample_image
 
 import numpy as np
 import scopesim
 
 from .config import Config
-from .util import work_in
+from .util import work_in, centroid, center_of_image
 import astropy.units as u
 
 # globals
@@ -55,11 +56,6 @@ def pixel_to_mas(px_coord):
     return mas.value
 
 
-def cancel_psf_pixel_shift(input_coords):
-    """The PSF effects of scopesim convolve the image and shift it which is a bug imho"""
-    return input_coords+1
-
-
 # TODO take care of correcting centroid shift
 # noinspection PyPep8Naming
 def make_psf(psf_wavelength: float = 2.15,
@@ -78,7 +74,14 @@ def make_psf(psf_wavelength: float = 2.15,
     image = hdus[2]
     image.data = np.squeeze(image.data)  # remove leading dimension, we're only looking at a single picture, not a stack
 
+    # re-sample to shift center
+    actual_center = np.array(centroid(image.data))
+    expected_center = np.array(center_of_image(image.data))
+    shift = expected_center - actual_center
+    resampled = upsample_image(image.data, xshift=shift[0], yshift=shift[1]).real
+    image.data = resampled
     image.data = transform(image.data)
+
 
     filename = tempfile.NamedTemporaryFile('w', suffix='.fits').name
     image.writeto(filename)
@@ -111,14 +114,15 @@ class AnisocadoModel(FittableImageModel):
         return ((self.y_0-200, self.y_0+200), (self.x_0-200, self.x_0+200))
 
 
-def make_anisocado_model(oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowpass = 0):
+def make_anisocado_model(oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowpass=0):
     img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=400*oversampling+1, seed=seed).shift_off_axis(*offaxis)
     if lowpass != 0:
         y, x = np.indices(img.shape)
         img = img * Gaussian2D(x_stddev=lowpass, y_stddev=lowpass)(x-x.mean(), y-y.mean())
         img /= np.sum(img)
 
-    return AnisocadoModel(img, oversampling=oversampling, degree=degree)
+    origin = centroid(img)
+    return AnisocadoModel(img, oversampling=oversampling, degree=degree, origin=origin)
 
 
 def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,

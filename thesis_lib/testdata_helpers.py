@@ -5,7 +5,7 @@ from astropy.convolution import Kernel2D
 from astropy.modeling.functional_models import Gaussian2D
 
 from .scopesim_helper import max_pixel_coord
-
+from .util import centered_grid
 
 def gauss2d(σ_x=1., σ_y=1., a=1.):
     @numba.njit(fastmath=True)
@@ -15,12 +15,11 @@ def gauss2d(σ_x=1., σ_y=1., a=1.):
     return inner
 
 
+# TODO this seems to break for std=0
 def lowpass(std=5):
     def transform(data):
-        y, x = data.shape
-        # psf array is offset by one, hence need the -1 after coordinates
-        return data * Gaussian2D(x_stddev=std, y_stddev=std)(*np.mgrid[-x / 2:x / 2:x * 1j, -y / 2:y / 2:y * 1j] - 1)
-
+        y, x = centered_grid(data.shape)
+        return data * Gaussian2D(x_stddev=std, y_stddev=std)(x, y)
     return transform
 
 
@@ -29,16 +28,6 @@ def expmag(N):
     mag_target = 21
     dist_shift = dist - np.median(dist) + mag_target
     return dist_shift
-
-
-def _centered_grid(size, border):
-    """todo"""
-    stop = (size - 1) / 2 - border
-    start = -stop + border
-    step = 1j * size
-
-    # y, x =
-    return np.mgrid[start:stop:step, start:stop:step]
 
 
 def make_anisocado_kernel(shift=(0, 14), wavelength=2.15, pixel_count=max_pixel_coord.value):
