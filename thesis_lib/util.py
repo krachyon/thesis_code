@@ -197,14 +197,6 @@ def center_cutout_shift_1(image: np.ndarray, cutout_size: Tuple[int, int]):
     return image[xstart:xend, ystart:yend]
 
 
-def linspace_grid(start: float, stop: float, num: int):
-    """
-    Construct a 2D meshgrid analog to np.mgrid, but use linspace syntax instead of indexing
-    """
-    # complex step: use number of steps instead
-    return np.mgrid[start:stop:1j*num, start:stop:1j*num]
-
-
 def estimate_photometric_precision_peak_only(image: np.ndarray, sources: Table, fwhm: float, effective_gain: float = 1):
     """
     Estimate the possible position precision for stars in an image based on the SNR and the PSF FWHM.
@@ -408,6 +400,12 @@ def save_plot(outdir, name, dpi=250):
         pickle.dump(plt.gcf(), f)
 
 
+@np.vectorize
+def center_of_index(length: int) -> float:
+    """given an array with extent length, what index hits the center of the array?"""
+    return (length-1)/2
+
+
 def center_of_image(img: np.ndarray) -> tuple[float, float]:
     """in pixel coordinates, pixel center convention
 
@@ -418,9 +416,27 @@ def center_of_image(img: np.ndarray) -> tuple[float, float]:
     plot(x.flatten(),y.flatten(),'ro')
     """
     assert len(img.shape) == 2
-    ycenter, xcenter = (np.array(img.shape)-1)/2
+    ycenter, xcenter = center_of_index(img.shape)
 
     return xcenter, ycenter
+
+
+def centered_grid_quadratic(size: int) -> np.ndarray:
+    """Create indices for a 2D-image of given size centered on zero
+    """
+    stop = center_of_index(size)
+    start = -stop
+    step = 1j * size
+
+    # y, x =
+    return np.mgrid[start:stop:step, start:stop:step]
+
+
+def centered_grid(shape: tuple[int, int]) -> np.ndarray:
+    ystop, xstop = center_of_index(shape)
+    ystart, xstart = -ystop, -xstop
+
+    return np.mgrid[ystart:ystop:1j*shape[0], xstart:xstop:1j*shape[1]]
 
 
 def image_moment(image, x_order, y_order):

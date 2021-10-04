@@ -601,3 +601,10 @@ def main():
         pickle.dump(results, f)
     plt.close('all')
     pass
+
+def linspace_grid(start: float, stop: float, num: int):
+    """
+    Construct a 2D meshgrid analog to np.mgrid, but use linspace syntax instead of indexing
+    """
+    # complex step: use number of steps instead
+    return np.mgrid[start:stop:1j*num, start:stop:1j*num]
