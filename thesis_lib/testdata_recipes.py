@@ -308,12 +308,9 @@ def model_add_grid(model: FittableImageModel,
 
 
 def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
-    """
-    TODO This should return a table as well...
-    """
 
-    x = np.array([0.])
-    y = np.array([0.])
+    x = np.array([0])
+    y = np.array([0])
     m = np.array([16.])
 
     spectral_types = ['A0V']

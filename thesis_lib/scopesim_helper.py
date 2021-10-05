@@ -80,11 +80,10 @@ def make_psf(psf_wavelength: float = 2.15,
     # re-sample to shift center
     actual_center = np.array(centroid(image.data))
     expected_center = np.array(center_of_image(image.data))
-    shift = expected_center - actual_center
-    resampled = upsample_image(image.data, xshift=shift[0], yshift=shift[1]).real
+    xshift, yshift = expected_center - actual_center
+    resampled = upsample_image(image.data, xshift=xshift, yshift=yshift).real
     image.data = resampled
     image.data = transform(image.data)
-
 
     filename = tempfile.NamedTemporaryFile('w', suffix='.fits').name
     image.writeto(filename)
@@ -103,7 +102,6 @@ def make_psf(psf_wavelength: float = 2.15,
     # convolve_mode=''
 
 
-# TODO take care of pixel shift, best by setting origin according to computed centroid
 class AnisocadoModel(FittableImageModel):
     def __repr__(self):
         return super().__repr__() + f' oversampling: {self.oversampling}'
