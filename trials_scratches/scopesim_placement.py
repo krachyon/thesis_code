@@ -3,65 +3,118 @@ from scopesim_templates.basic.stars import stars
 import matplotlib.pyplot as plt
 import numpy as np
 import astropy.units as u
-from thesis_lib.scopesim_helper import make_anisocado_model
-
-micado = scopesim.OpticalTrain('MICADO')
-micado['armazones_atmo_dispersion'].include = False
-micado['micado_adc_3D_shift'].include = False
-micado['relay_psf'].include = False
-micado['micado_ncpas_psf'].include = False
-#micado['scope_vibration'].include = False
-micado.cmds["!SIM.sub_pixel.flag"] = "psf_eval"
-micado.cmds["!SIM.sub_pixel.psf"] = make_anisocado_model()
-
-filter_name = 'MICADO/filters/TC_filter_K-cont.dat'
-spectral_types = ['A0V']
-
-pixel_scale = 0.004 * u.arcsec/u.pixel
-
-n_pixel = 1024 * u.pixel
-max_coord = n_pixel - 1*u.pixel #  size 1024 to max index 1023
+from thesis_lib.scopesim_helper import make_anisocado_model, make_psf
+from thesis_lib.config import Config
+from thesis_lib.util import work_in
 
 
-# YAY, these functions seem to work now
-def to_as(px_coord):
-    if not isinstance(px_coord, u.Quantity):
-        px_coord *= u.pixel
+def micado_base():
+    micado = scopesim.OpticalTrain('MICADO')
+    micado['armazones_atmo_dispersion'].include = False
+    micado['micado_adc_3D_shift'].include = False
+    # micado['scope_vibration'].include = False
+    return micado
 
-    # shift bounds (0,1023) to (-511.5,511.5), shift pixel center convention
-    coord_shifted = px_coord - max_coord/2 + 0.5*u.pixel
-    return coord_shifted * pixel_scale
+with work_in(Config.instance().scopesim_working_dir):
+    micado_nopsf = micado_base()
+    micado_nopsf['relay_psf'].include = False
+    micado_nopsf['micado_ncpas_psf'].include = False
+    micado_nopsf.cmds["!SIM.sub_pixel.flag"] = True
+
+    micado_default = micado_base()
+    micado_default.cmds["!SIM.sub_pixel.flag"] = True
+
+    micado_convpsf = micado_base()
+    element_idx = [element.meta['name'] for element in micado_convpsf.optics_manager.optical_elements].index('default_ro')
+    psf_effect = make_psf()
+    micado_convpsf.optics_manager.add_effect(psf_effect, ext=element_idx)
+    micado_convpsf['relay_psf'].include = False
+    micado_convpsf['micado_ncpas_psf'].include = False
+    micado_convpsf.cmds["!SIM.sub_pixel.flag"] = True
+
+    micado_subpixel = micado_base()
+    micado_subpixel.cmds["!SIM.sub_pixel.flag"] = "psf_eval"
+    micado_subpixel.cmds["!SIM.sub_pixel.psf"] = make_anisocado_model()
+    micado_subpixel['relay_psf'].include = False
+    micado_subpixel['micado_ncpas_psf'].include = False
+
+    filter_name = 'MICADO/filters/TC_filter_K-cont.dat'
+    spectral_types = ['A0V']
+
+    pixel_scale = 0.004 * u.arcsec/u.pixel
+
+    n_pixel = 1024 * u.pixel
+    max_coord = n_pixel - 1*u.pixel #  size 1024 to max index 1023
 
 
-def to_pixel(as_coord):
-    if not isinstance(as_coord, u.Quantity):
-        as_coord *= u.arcsec
+    def to_as_expected(px_coord):
+        if not isinstance(px_coord, u.Quantity):
+            px_coord *= u.pixel
 
-    shifted_pixel_coord = as_coord / pixel_scale
-    return shifted_pixel_coord + max_coord/2 - 0.5*u.pixel
+        # shift bounds (0,1023) to (-511.5,511.5)
+        coord_shifted = px_coord - max_coord/2
+        return coord_shifted * pixel_scale
+
+    def to_as(px_coord):
+        if not isinstance(px_coord, u.Quantity):
+            px_coord *= u.pixel
+
+        # shift bounds (0,1023) to (-511.5,511.5), shift pixel center convention
+        coord_shifted = px_coord - max_coord/2 + 0.5*u.pixel
+        return coord_shifted * pixel_scale
 
 
-# define points
-x_pixel = np.array([511.5, 5, 5,      1023-5, 1023-5, 511.5, 0, 1023]) * u.pixel
-y_pixel = np.array([511.5, 5, 1023-5, 5,      1023-5, 1.   , 0, 1023]) * u.pixel
+    def to_pixel_expected(as_coord):
+        if not isinstance(as_coord, u.Quantity):
+            as_coord *= u.arcsec
 
-#x_pixel = np.array([511, 513.5]) * u.pixel
-#y_pixel = np.array([511, 513.5]) * u.pixel
+        shifted_pixel_coord = as_coord / pixel_scale
+        return shifted_pixel_coord + max_coord/2
 
-x_as = to_as(x_pixel)
-y_as = to_as(y_pixel)
+    def to_pixel(as_coord):
+        if not isinstance(as_coord, u.Quantity):
+            as_coord *= u.arcsec
 
-source = stars(filter_name=filter_name,
-               amplitudes=[20]*len(x_as),
-               spec_types=spectral_types*len(x_as),
-               x=x_as,
-               y=y_as)
+        shifted_pixel_coord = as_coord / pixel_scale
+        return shifted_pixel_coord + max_coord/2 - 0.5*u.pixel
 
-micado.observe(source, random_seed=1, update=True)
-observed_image = micado.readout()[0][1].data
+    # define points
+    x_pixel = np.array([511.5, 10, 10,      1023-10, 1023-10, 511.5, 0, 1023]) * u.pixel
+    y_pixel = np.array([511.5, 10, 1023-10, 10,      1023-10, 1.   , 0, 1023]) * u.pixel
+
+    #x_pixel = np.array([511, 513.5]) * u.pixel
+    #y_pixel = np.array([511, 513.5]) * u.pixel
+
+    x_as = to_as(x_pixel)
+    y_as = to_as(y_pixel)
+    x_as_expected = to_as_expected(x_pixel)
+    y_as_expected = to_as_expected(y_pixel)
+
+    print(f'x in pixel: {x_pixel}\n'
+          f'x in as   : {x_as}\n'
+          f'x in as ex: {x_as_expected}\n')
+    print(f'y in pixel: {y_pixel}\n'
+          f'y in as   : {y_as}\n'
+          f'y in as ex: {y_as_expected}\n')
+
+    assert np.all(np.isclose(to_pixel(x_as), x_pixel))
+    assert np.all(np.isclose(to_pixel(y_as), y_pixel))
+
+
+    source = stars(filter_name=filter_name,
+                   amplitudes=[20]*len(x_as),
+                   spec_types=spectral_types*len(x_as),
+                   x=x_as,
+                   y=y_as)
+
+    for det, name in zip([micado_convpsf, micado_default, micado_subpixel, micado_nopsf], ['conv', 'default', 'model', 'nopsf']):
+        det.observe(source, random_seed=1, update=True)
+        observed_image = det.readout()[0][1].data
+        plt.figure()
+        plt.title(name)
+        plt.imshow(observed_image)
+        plt.plot(x_pixel, y_pixel, 'r.', markersize=5)
 
 #observed_image[::2,::2] += observed_image.max()/10
 #plt.scatter(*np.indices(observed_image.shape), s=1, c='blue', alpha=0.5)
-plt.imshow(observed_image)
-plt.plot(x_pixel, y_pixel, 'r.', markersize=5)
 plt.show()
