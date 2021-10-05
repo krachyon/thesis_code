@@ -28,7 +28,16 @@ def single_star(request):
     return img, table
 
 
+def make_delta_model():
+    from photutils import FittableImageModel
+    data = np.zeros((400,400))
+    xcenter, ycenter = center_of_image(data)
+    data[int(ycenter),int(xcenter)] = 1
+    return FittableImageModel(data, oversampling=2, degree=5)
+
+
 @pytest.mark.parametrize('single_star', [None,
+                                         make_delta_model(),
                                          make_anisocado_model(),
                                          make_anisocado_model(lowpass=5),
                                          make_gauss_model(5)], indirect=True)

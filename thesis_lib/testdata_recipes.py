@@ -328,7 +328,9 @@ def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nd
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
 
-    table = Table((x, y, magnitude_to_flux(m), m), names=COLUMN_NAMES)
+    x_pix = to_pixel_scale(x)
+    y_pix = to_pixel_scale(y)
+    table = Table((x_pix, y_pix, magnitude_to_flux(m), m), names=COLUMN_NAMES)
 
     return observed_image, table
 
