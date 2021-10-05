@@ -416,9 +416,8 @@ def center_of_image(img: np.ndarray) -> tuple[float, float]:
     plot(x.flatten(),y.flatten(),'ro')
     """
     assert len(img.shape) == 2
-    ycenter, xcenter = center_of_index(img.shape)
-
-    return xcenter, ycenter
+    # xcenter, ycenter
+    return tuple(center_of_index(img.shape)[::-1])
 
 
 def centered_grid_quadratic(size: int) -> np.ndarray:
@@ -448,6 +447,7 @@ def centroid(image):
     m00 = image_moment(image, 0, 0)
     m10 = image_moment(image, 1, 0)
     m01 = image_moment(image, 0, 1)
+    # xcentroid, ycentroid
     return m10/m00, m01/m00
 
 

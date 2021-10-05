@@ -31,7 +31,7 @@ def single_star(request):
 def make_delta_model():
     from photutils import FittableImageModel
     data = np.zeros((400,400))
-    xcenter, ycenter = center_of_image(data)
+    ycenter, xcenter = center_of_image(data)
     data[int(ycenter),int(xcenter)] = 1
     return FittableImageModel(data, oversampling=2, degree=5)
 

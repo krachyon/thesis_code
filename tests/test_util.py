@@ -62,11 +62,21 @@ def test_centered_grid():
     assert np.mean(y) == 0
 
 
-def test_centroid():
+def test_centroid_sym():
     y, x = centered_grid_quadratic(51)
-    img = Gaussian2D()(x,y)
+    img = Gaussian2D()(x, y)
     assert np.all(np.isclose(centroid(img), center_of_image(img)))
 
     y, x = centered_grid((51, 71))
     img = Gaussian2D()(x, y)
     assert np.all(np.isclose(centroid(img), center_of_image(img)))
+
+
+@pytest.mark.parametrize('xy', [(23, 28), (-10.3, 8.7), (-11, -7.2), (8.45, -5.98), (-30, -34), (-30, 34)])
+def test_centroid_asym(xy):
+    y_grid, x_grid = centered_grid_quadratic(101)
+    xy = np.array(xy)
+    xy_expected = xy + center_of_image(x_grid)
+
+    img = Gaussian2D(x_mean=xy[0], y_mean=xy[1])(x_grid, y_grid)
+    assert np.all(np.isclose(centroid(img), xy_expected))
