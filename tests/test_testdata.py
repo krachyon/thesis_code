@@ -30,7 +30,7 @@ def single_star(request):
 
 def make_delta_model():
     from photutils import FittableImageModel
-    data = np.zeros((400,400))
+    data = np.zeros((401,401))
     ycenter, xcenter = center_of_image(data)
     data[int(ycenter),int(xcenter)] = 1
     return FittableImageModel(data, oversampling=2, degree=5)
@@ -40,17 +40,17 @@ def make_delta_model():
                                          make_delta_model(),
                                          make_anisocado_model(),
                                          make_anisocado_model(lowpass=5),
-                                         make_gauss_model(5)], indirect=True)
+                                         make_gauss_model(0.5)], indirect=True)
 def test_single_star_image(single_star):
     from photutils.centroids import centroid_quadratic
     img, table = single_star
 
     xcenter, ycenter = center_of_image(img)
-    xcentroid, ycentroid = centroid_quadratic(img, fit_boxsize=31)
+    xcentroid, ycentroid = centroid_quadratic(img, fit_boxsize=5)
     xref, yref = table[INPUT_TABLE_NAMES[X]][0], table[INPUT_TABLE_NAMES[Y]][0]
 
-    assert np.abs(xref-xcentroid) < 0.01
-    assert np.abs(yref-ycentroid) < 0.01
+    assert np.abs(xref-xcentroid) < 0.005
+    assert np.abs(yref-ycentroid) < 0.005
     # currently stars are not placed dead center due to 0.5 pixel offset from scopesim
     #assert np.abs(xcenter-xref) < 0.01
     #assert np.abs(ycenter-yref) < 0.01

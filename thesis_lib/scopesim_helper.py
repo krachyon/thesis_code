@@ -6,6 +6,7 @@ from typing import Callable, Tuple, Optional
 import anisocado
 from anisocado import AnalyticalScaoPsf
 from photutils import FittableImageModel
+from photutils.centroids import centroid_quadratic
 from astropy.modeling.functional_models import Gaussian2D
 from image_registration.fft_tools import upsample_image
 
@@ -13,7 +14,7 @@ import numpy as np
 import scopesim
 
 from .config import Config
-from .util import work_in, centroid, center_of_image
+from .util import work_in, center_of_image
 import astropy.units as u
 
 # globals
@@ -78,7 +79,7 @@ def make_psf(psf_wavelength: float = 2.15,
     image.data = np.squeeze(image.data)  # remove leading dimension, we're only looking at a single picture, not a stack
 
     # re-sample to shift center
-    actual_center = np.array(centroid(image.data))
+    actual_center = np.array(centroid_quadratic(image.data, fit_boxsize=5))
     expected_center = np.array(center_of_image(image.data))
     xshift, yshift = expected_center - actual_center
     resampled = upsample_image(image.data, xshift=xshift, yshift=yshift).real
@@ -119,15 +120,19 @@ def make_anisocado_model(oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowp
     img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=400*oversampling+1, seed=seed).shift_off_axis(*offaxis)
     if lowpass != 0:
         y, x = np.indices(img.shape)
-        img = img * Gaussian2D(x_stddev=lowpass, y_stddev=lowpass)(x-x.mean(), y-y.mean())
+        # find center of PSF image
+        x_mean, y_mean = centroid_quadratic(img, fit_boxsize=5)
+        img = img * Gaussian2D(x_mean=x_mean, y_mean=y_mean, x_stddev=lowpass, y_stddev=lowpass)(x, y)
         img /= np.sum(img)
 
-    origin = centroid(img)
+
+    origin = centroid_quadratic(img, fit_boxsize=5)
     return AnisocadoModel(img, oversampling=oversampling, degree=degree, origin=origin)
 
 
 def make_gauss_model(σ):
-    data = Gaussian2D(x_stddev=σ, y_stddev=σ)(*np.mgrid[-100:100:400j, -100:100:400j])
+    # TODO something about the sigma is sketchy here...
+    data = Gaussian2D(x_stddev=σ*2, y_stddev=σ*2)(*np.mgrid[-100:100:401j, -100:100:401j])
     return FittableImageModel(data, oversampling=2, degree=5)
 
 
