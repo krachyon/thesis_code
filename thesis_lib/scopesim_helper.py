@@ -38,6 +38,8 @@ def to_pixel_scale(as_coord):
         as_coord *= u.arcsec
 
     shifted_pixel_coord = as_coord / pixel_scale
+    # FIXME the -0.5 pixel are a fudge factor for scopesim. IMHO center of image should be at 0,0 as
+    #  but it's offset by 0.5 pixel...
     pixel = shifted_pixel_coord + max_pixel_coord / 2 - 0.5 * u.pixel
     return pixel.value
 
@@ -51,15 +53,16 @@ def pixel_to_mas(px_coord):
         px_coord *= u.pixel
 
     # shift bounds (0,1023) to (-511.5,511.5)
+    # FIXME the -0.5 pixel are a fudge factor for scopesim. IMHO center of image should be at 0,0 as
+    #  but it's offset by 0.5 pixel...
     coord_shifted = px_coord - max_pixel_coord / 2 + 0.5 * u.pixel
     mas = coord_shifted * pixel_scale
     return mas.value
 
 
-# TODO take care of correcting centroid shift
 # noinspection PyPep8Naming
 def make_psf(psf_wavelength: float = 2.15,
-             shift: Tuple[int] = (0, 14), N: int = 512,
+             shift: Tuple[int] = (0, 14), N: int = 511,
              transform: Callable[[np.ndarray], np.ndarray] = lambda x: x) -> scopesim.effects.Effect:
     """
     create a psf effect for scopesim to be as close as possible to how an anisocado PSF is used in simcado
