@@ -174,12 +174,12 @@ def make_all_plots(astrometry_session: astrometry_wrapper.Session, save_files: b
 
     source_measured = plot_image_with_source_and_measured(astrometry_session.image,
                                                           tables.input_table,
-                                                          tables.result_table)
-    xy_dev = plot_xy_deviation(tables.result_table)
+                                                          tables.valid_result_table)
+    xy_dev = plot_xy_deviation(tables.valid_result_table)
 
-    dev_v_mag = plot_deviation_vs_magnitude(tables.result_table)
+    dev_v_mag = plot_deviation_vs_magnitude(tables.valid_result_table)
 
-    deviation_histograms = plot_deviation_histograms(tables.result_table)
+    deviation_histograms = plot_deviation_histograms(tables.valid_result_table)
     epsf = plot_epsf(astrometry_session.epsf)
     epsf_stars = plot_epsfstars(astrometry_session.epsfstars)
 

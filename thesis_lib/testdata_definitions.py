@@ -47,11 +47,11 @@ benchmark_images = {
     'scopesim_grid_16_perturb2_mag18_24_lowpass':
         lambda: scopesim_grid(N1d=16, perturbation=2.,
                               magnitude=lambda N: np.random.uniform(18, 24, N), psf_transform=lowpass()),
-    'scopesim_grid_16_perturb2_lowpass_mag18_24_subpixel':
+    'scopesim_grid_16_perturb2_mag18_24_subpixel':
         lambda: scopesim_grid(N1d=16, perturbation=2.,
                               magnitude=lambda N: np.random.uniform(18, 24, N),
                               custom_subpixel_psf=make_anisocado_model()),
-    'scopesim_grid_16_perturb2_lowpass_mag18_24_subpixel_lowpass':
+    'scopesim_grid_16_perturb2_mag18_24_subpixel_lowpass':
         lambda: scopesim_grid(N1d=16, perturbation=2.,
                               magnitude=lambda N: np.random.uniform(18, 24, N),
                               custom_subpixel_psf=make_anisocado_model(lowpass=5)),

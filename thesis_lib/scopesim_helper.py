@@ -116,15 +116,15 @@ class AnisocadoModel(FittableImageModel):
         return ((self.y_0-200, self.y_0+200), (self.x_0-200, self.x_0+200))
 
 
-def make_anisocado_model(oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowpass=0):
+def make_anisocado_model(*, oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowpass=0):
     img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=400*oversampling+1, seed=seed).shift_off_axis(*offaxis)
     if lowpass != 0:
         y, x = np.indices(img.shape)
         # find center of PSF image
         x_mean, y_mean = centroid_quadratic(img, fit_boxsize=5)
-        img = img * Gaussian2D(x_mean=x_mean, y_mean=y_mean, x_stddev=lowpass, y_stddev=lowpass)(x, y)
+        img = img * Gaussian2D(x_mean=x_mean, y_mean=y_mean,
+                               x_stddev=lowpass*oversampling, y_stddev=lowpass*oversampling)(x, y)
         img /= np.sum(img)
-
 
     origin = centroid_quadratic(img, fit_boxsize=5)
     return AnisocadoModel(img, oversampling=oversampling, degree=degree, origin=origin)

@@ -25,6 +25,7 @@ def extract_epsf_stars(image: np.ndarray, image_stats: ImageStats, stars_tbl: In
     image_no_background = image - image_stats.median
 
     stars_tbl_filtered = stars_tbl[stars_tbl[INPUT_TABLE_NAMES[FLUX]] < config.detector_saturation]
+    stars_tbl_filtered.sort(INPUT_TABLE_NAMES[FLUX], reverse=True)
     stars = extract_stars(NDData(image_no_background), stars_tbl_filtered, size=config.cutout_size)
     if len(stars) == 0:
         warnings.warn('No stars extracted')
