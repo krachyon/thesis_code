@@ -31,6 +31,8 @@
 # #%matplotlib inline
 import matplotlib.pyplot as plt
 import numpy as np
+
+import thesis_lib.astrometry_wrapper
 import thesis_lib.testdata_definitions
 from thesis_lib import *
 import thesis_lib
@@ -291,7 +293,7 @@ def recipe_template(seed):
     return inner
 
 
-sessions_multi = astrometry_benchmark.photometry_multi(recipe_template, 'mag18-24_grid', n_images=12, config=no_overlap_config, threads=None)
+sessions_multi = thesis_lib.astrometry_wrapper.photometry_multi(recipe_template, 'mag18-24_grid', n_images=12, config=no_overlap_config, threads=None)
 result_table_multi = astropy.table.vstack([session.tables.result_table for session in sessions_multi])
 clear_output()
 

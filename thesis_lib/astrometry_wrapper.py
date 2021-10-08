@@ -1,8 +1,10 @@
 from __future__ import annotations  # makes the "-> __class__" annotation work...
 
+import multiprocess as mp
+
 import photutils
 
-from . import config
+from . import config, util
 from .astrometry_types import ImageStats,\
     INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, RESULT_TABLE_NAMES, GUESS_TABLE_NAMES, REFERENCE_NAMES, INPUT_TABLE_NAMES,\
     StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable, OUTLIER
@@ -10,7 +12,7 @@ from . astrometry_functions import calc_image_stats, extract_epsf_stars, perturb
     match_finder_to_reference, calc_extra_result_columns, mark_outliers
 
 import numpy as np
-from typing import Optional, Union, TypeVar
+from typing import Optional, Union, TypeVar, Callable, Tuple
 import warnings
 
 from astropy.table import Table
@@ -18,6 +20,7 @@ from astropy.table import Table
 from photutils import DAOStarFinder, DAOGroup, EPSFBuilder, IterativelySubtractedPSFPhotometry, MMMBackground
 from astropy.modeling.fitting import LevMarLSQFitter
 
+from .config import Config
 from .testdata_generators import read_or_generate_image
 from . import util
 
@@ -228,4 +231,30 @@ class Session:
         return self
 
 
+def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
+                     image_name_template: str,
+                     n_images: int,
+                     config=Config.instance(),
+                     threads: Union[int, None, bool]=None) -> list[Session]:
+    """
+    """
 
+    def inner(i):
+        image_recipe = image_recipe_template(i)
+        image_name = image_name_template+f'_{i}'
+        image, input_table = read_or_generate_image(image_name, config, image_recipe)
+        session = Session(config, image, input_table)
+        session.do_it_all()
+
+        # TODO maybe do this as part of the calc_additional function
+        session.tables.result_table['σ_pos_estimated'] = \
+            util.estimate_photometric_precision_full(image, input_table, session.fwhm)
+        return session
+
+    if threads is False:
+        sessions = list(map(inner, range(n_images)))
+    else:
+        with mp.Pool(threads) as pool:
+            sessions = pool.map(inner, range(n_images))
+
+    return sessions

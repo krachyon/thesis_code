@@ -1,55 +1,15 @@
-import os
 import pickle
-from typing import Union, Callable, Tuple, Optional
 
 import matplotlib.pyplot as plt
 import multiprocess as mp  # not multiprocessing, this can pickle lambdas
-from multiprocess.pool import Pool as Pool_t
-import numpy as np
-from astropy.table import Table
-import astropy.table
 
-
-import thesis_lib.testdata_definitions
-from thesis_lib import testdata_generators
-from thesis_lib import util
 from thesis_lib.config import Config
 
 from thesis_lib.scopesim_helper import download
-from thesis_lib.testdata_generators import read_or_generate_image, read_or_generate_helper
 from thesis_lib import testdata_definitions
 from thesis_lib.astrometry_wrapper import Session
 from thesis_lib.astrometry_plots import make_all_plots
-from thesis_lib.util import make_gauss_kernel, green, blue, yellow
-
-
-def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
-                     image_name_template: str,
-                     n_images: int,
-                     config=Config.instance(),
-                     threads: Union[int, None, bool]=None) -> list[Session]:
-    """
-    """
-
-    def inner(i):
-        image_recipe = image_recipe_template(i)
-        image_name = image_name_template+f'_{i}'
-        image, input_table = read_or_generate_image(image_name, config, image_recipe)
-        session = Session(config, image, input_table)
-        session.do_it_all()
-
-        # TODO maybe do this as part of the calc_additional function
-        session.tables.result_table['σ_pos_estimated'] = \
-            util.estimate_photometric_precision_full(image, input_table, session.fwhm)
-        return session
-
-    if threads is False:
-        sessions = list(map(inner, range(n_images)))
-    else:
-        with mp.Pool(threads) as pool:
-            sessions = pool.map(inner, range(n_images))
-
-    return sessions
+from thesis_lib.util import make_gauss_kernel, blue, yellow
 
 
 def runner(config, image_name) -> Session:
@@ -73,10 +33,11 @@ def main():
     normal_config.output_folder = 'output_files/normal'
 
     gauss_config = config.copy()
+    gauss_config.detector_saturation = 150000
     gauss_config.smoothing = make_gauss_kernel(0.5)
     gauss_config.output_folder = 'output_files/gauss'
 
-    known_position_config = config.copy()
+    known_position_config = gauss_config.copy()
     known_position_config.use_catalogue_positions = True
     known_position_config.output_folder = 'output_files/known_position'
 

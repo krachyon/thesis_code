@@ -20,6 +20,7 @@
 # %pylab
 # use this to export to pdf instead
 # #%matplotlib inline
+import thesis_lib.astrometry_wrapper
 import thesis_lib.testdata_definitions
 from thesis_lib import *
 import thesis_lib
@@ -202,8 +203,8 @@ def recipe_template(seed):
         return gaussian_cluster_modeladd(N=1000, seed=seed, magnitude=lambda N: np.random.normal(21, 2, N))
     return inner
 
-result_table_multi = astrometry_benchmark.photometry_multi(recipe_template, 'gausscluster_modeladd',
-                                                           n_images=12, config=multi_config, threads=None)
+result_table_multi = thesis_lib.astrometry_wrapper.photometry_multi(recipe_template, 'gausscluster_modeladd',
+                                                                    n_images=12, config=multi_config, threads=None)
 clear_output()
 
 # %%
