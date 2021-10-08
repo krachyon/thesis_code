@@ -20,25 +20,17 @@
 # %pylab
 # use this to export to pdf instead
 # #%matplotlib inline
-import thesis_lib.astrometry_wrapper
-import thesis_lib.testdata_definitions
 from thesis_lib import *
 import thesis_lib
-from pprint import pprint
 from matplotlib.colors import LogNorm
-import multiprocess as mp
-import astropy.units as u
-from astropy.stats import sigma_clipped_stats
-from photutils.psf import EPSFModel
-from copy import copy
 from IPython.display import clear_output
 import thesis_lib.config as config
 from thesis_lib.util import save_plot, match_observation_to_source, make_gauss_kernel
 from thesis_lib.scopesim_helper import make_anisocado_model
-from thesis_lib.testdata_generators import read_or_generate_image
-from thesis_lib.testdata_recipes import model_add_grid
-import thesis_lib.astrometry_wrapper as astrometry_wrapper
-import thesis_lib.astrometry_plots as astrometry_plots
+from thesis_lib.testdata.generators import read_or_generate_image
+from thesis_lib.testdata.recipes import model_add_grid
+import thesis_lib.astrometry.wrapper as astrometry_wrapper
+import thesis_lib.astrometry.plots as astrometry_plots
 import os
 
 ## use these for interactive, disable for export
@@ -196,14 +188,14 @@ def recipe_template(seed):
         # These imports are necessary to be able to execute in a forkserver context;
         # it does not copy the full memory space, so
         # we'd have to rely on the target to know the imports
-        from thesis_lib.testdata_generators import gaussian_cluster_modeladd
+        from thesis_lib.testdata.generators import gaussian_cluster_modeladd
         from thesis_lib.scopesim_helper import make_anisocado_model
         import numpy as np
         psf_model=make_anisocado_model()
         return gaussian_cluster_modeladd(N=1000, seed=seed, magnitude=lambda N: np.random.normal(21, 2, N))
     return inner
 
-result_table_multi = thesis_lib.astrometry_wrapper.photometry_multi(recipe_template, 'gausscluster_modeladd',
+result_table_multi = thesis_lib.astrometry.wrapper.photometry_multi(recipe_template, 'gausscluster_modeladd',
                                                                     n_images=12, config=multi_config, threads=None)
 clear_output()
 

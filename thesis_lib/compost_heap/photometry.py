@@ -1,13 +1,12 @@
-from typing import Tuple, Union, Optional
 from collections import namedtuple
-import numpy as np
+from typing import Tuple, Union, Optional
 
 import astropy
+import numpy as np
 from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.nddata import NDData
 from astropy.stats import sigma_clipped_stats, gaussian_sigma_to_fwhm
 from astropy.table import Table
-from image_registration.fft_tools import upsample_image
 
 import photutils
 from photutils import EPSFBuilder
@@ -16,7 +15,6 @@ from photutils.detection import IRAFStarFinder, DAOStarFinder
 from photutils.psf import BasicPSFPhotometry, extract_stars, DAOGroup, IntegratedGaussianPRF, \
     IterativelySubtractedPSFPhotometry
 from photutils.psf import EPSFModel
-
 from .config import Config
 from .util import flux_to_magnitude, estimate_fwhm
 

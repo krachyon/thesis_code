@@ -1,18 +1,18 @@
-from .config import Config
-from .astrometry_types import ImageStats, INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, REFERENCE_NAMES, GUESS_TABLE_NAMES,\
-    RESULT_TABLE_NAMES,\
-    X,Y,FLUX,MAGNITUDE, OFFSET, XOFFSET, YOFFSET, OUTLIER,\
-    InputTable, ResultTable, GuessTable
-
-import numpy as np
 import warnings
-from scipy.spatial import cKDTree
 from typing import Optional
 
-from astropy.stats import sigma_clipped_stats
-from photutils import extract_stars, EPSFStars
+import numpy as np
 from astropy.nddata import NDData
+from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
+from scipy.spatial import cKDTree
+
+from photutils import extract_stars, EPSFStars
+from thesis_lib.config import Config
+from .types import ImageStats, INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, REFERENCE_NAMES, GUESS_TABLE_NAMES, \
+    RESULT_TABLE_NAMES, \
+    X, Y, FLUX, MAGNITUDE, OFFSET, XOFFSET, YOFFSET, OUTLIER, \
+    InputTable, ResultTable, GuessTable
 
 
 def calc_image_stats(img: np.ndarray, config: Config) -> ImageStats:

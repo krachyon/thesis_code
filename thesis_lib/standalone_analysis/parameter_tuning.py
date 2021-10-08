@@ -1,30 +1,25 @@
+import time
+from collections import namedtuple
+from typing import Callable, Any
+
 import matplotlib.figure
+import matplotlib.pyplot as plt
 import multiprocess as mp
 import numpy as np
-import dill
-import time
-import matplotlib.pyplot as plt
 import skopt
-from skopt.space import Real, Integer, Categorical, Dimension
-from typing import Callable, Any
-from collections import namedtuple
-from scipy.spatial import cKDTree
-from numpy.lib.recfunctions import structured_to_unstructured
-from typing import Optional, List
-
-
-from photutils.detection import DAOStarFinder
-from photutils import DAOGroup
-
 from astropy.stats import sigma_clipped_stats
-
-from .config import Config
-from . import testdata_generators
-from . import util
-from .photometry import run_photometry, get_finder
-
-from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm
+from numpy.lib.recfunctions import structured_to_unstructured
+from scipy.interpolate import griddata
+from scipy.spatial import cKDTree
+from skopt.space import Real, Integer, Categorical
+
+from photutils import DAOGroup
+from photutils.detection import DAOStarFinder
+from thesis_lib import util
+from thesis_lib.config import Config
+from thesis_lib.testdata import generators
+from .photometry import run_photometry, get_finder
 
 
 def plot_shape(result: skopt.utils.OptimizeResult, dimensions=None) -> matplotlib.figure.Figure:
@@ -179,7 +174,7 @@ def run_optimizer(optimizer: skopt.Optimizer, objective: Callable[[Any], float],
 
 def make_starfinder_objective(image_recipe: Callable, image_name: str) -> Callable:
 
-    image, input_table = testdata_generators.read_or_generate_image(image_recipe, image_name)
+    image, input_table = generators.read_or_generate_image(image_recipe, image_name)
     mean, median, std = sigma_clipped_stats(image)
 
     xym_pixel = np.array((input_table['x'], input_table['y'])).T
@@ -238,7 +233,7 @@ def make_epsf_objective(config: Config, image_recipe: Callable, image_name: str)
         config.epsfbuilder_iters = iters
         config.separation_factor = separation
 
-        image, input_table = testdata_generators.read_or_generate_image(image_recipe, image_name, config.image_folder)
+        image, input_table = generators.read_or_generate_image(image_recipe, image_name, config.image_folder)
         try:
             find_result = get_finder(image, config)(image)
             find_result.rename_columns(['xcentroid', 'ycentroid'], ['x_0', 'y_0'])

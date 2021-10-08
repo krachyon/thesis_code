@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
-from astropy.convolution import Gaussian2DKernel, convolve_fft
-from photutils.psf import EPSFModel, prepare_psf_model
+from astropy.convolution import Gaussian2DKernel
 import numpy as np
-from astropy.table import Table
 from astropy.modeling.models import Gaussian2D
 from photutils.psf import *
 from astropy.nddata import NDData
@@ -10,7 +8,7 @@ from astropy.nddata import NDData
 cutout_size = 30
 
 σ = 8
-from thesis_lib.testdata_generators import read_or_generate_image, convolved_grid
+from thesis_lib.testdata.generators import read_or_generate_image, convolved_grid
 
 img, input_table = read_or_generate_image(
         lambda: convolved_grid(8, perturbation=8, kernel=Gaussian2DKernel(x_stddev=σ, x_size=201, y_size=201)),

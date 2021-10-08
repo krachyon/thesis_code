@@ -1,9 +1,8 @@
 from multiprocess import Pool
-from itertools import zip_longest
 
-from thesis_lib.testdata_definitions import predefined_images
-from thesis_lib.testdata_generators import read_or_generate_image
 from thesis_lib.config import Config
+from thesis_lib.testdata.definitions import predefined_images
+from thesis_lib.testdata.generators import read_or_generate_image
 
 
 def main():

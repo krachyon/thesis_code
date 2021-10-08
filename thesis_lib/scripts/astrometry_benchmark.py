@@ -3,12 +3,11 @@ import pickle
 import matplotlib.pyplot as plt
 import multiprocess as mp  # not multiprocessing, this can pickle lambdas
 
+from thesis_lib.astrometry.plots import make_all_plots
+from thesis_lib.astrometry.wrapper import Session
 from thesis_lib.config import Config
-
 from thesis_lib.scopesim_helper import download
-from thesis_lib import testdata_definitions
-from thesis_lib.astrometry_wrapper import Session
-from thesis_lib.astrometry_plots import make_all_plots
+from thesis_lib.testdata import definitions
 from thesis_lib.util import make_gauss_kernel, blue, yellow
 
 
@@ -48,7 +47,7 @@ def main():
 
     parameters = [(config, image_name)
                   for config in configs
-                  for image_name in testdata_definitions.benchmark_images]
+                  for image_name in definitions.benchmark_images]
 
     n_threads = None
     #from thesis_lib.util import DebugPool

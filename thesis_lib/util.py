@@ -1,25 +1,24 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import contextlib
+import os
 import pathlib
+import pickle
+import re
+from dataclasses import dataclass
+from typing import Any
+from typing import Tuple, Union
+
+import astropy.io.fits
+import matplotlib.pyplot as plt
+import numpy as np
+from astropy.stats import sigma_clipped_stats
+from astropy.table import Table
+from scipy.interpolate import RectBivariateSpline
+from scipy.optimize import curve_fit
+from termcolor import colored
 
 import photutils
-from scipy.optimize import curve_fit
-from typing import Tuple, Union
-from astropy.table import Table
-from astropy.stats import sigma_clipped_stats
-from photutils.utils.errors import calc_total_error
-from scipy.interpolate import RectBivariateSpline
 from photutils import CircularAperture
-from typing import List, Any
-from dataclasses import dataclass
-from termcolor import colored
-import re
-import astropy.io.fits
-import pickle
-import os
-import contextlib
-
-
+from photutils.utils.errors import calc_total_error
 
 
 class ClassRepr(type):

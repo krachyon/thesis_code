@@ -1,8 +1,6 @@
 import os
-import warnings
 
-from thesis_lib.astrometry_plots import make_all_plots
-from conftest import session_grid
+from thesis_lib.astrometry.plots import make_all_plots
 from thesis_lib.util import work_in
 from tempfile import TemporaryDirectory
 import matplotlib.pyplot as plt

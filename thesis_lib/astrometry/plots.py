@@ -1,19 +1,18 @@
+import os.path as p
 import pickle
 import warnings
-from typing import Optional
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import photutils
 from astropy.table import Table
 from matplotlib.colors import LogNorm
-import os.path as p
 
-from .util import flux_to_magnitude, concat_star_images
-from . import astrometry_wrapper
-from .astrometry_types import REFERENCE_NAMES, RESULT_TABLE_NAMES, INPUT_TABLE_NAMES,\
-    X, Y, MAGNITUDE, FLUX,\
+import photutils
+from thesis_lib.util import flux_to_magnitude, concat_star_images
+from . import wrapper
+from .types import RESULT_TABLE_NAMES, INPUT_TABLE_NAMES, \
+    X, Y, FLUX, \
     ResultTable
 
 
@@ -167,7 +166,7 @@ def plot_epsfstars(epsfstars: photutils.EPSFStars) -> matplotlib.pyplot.figure:
     return fig
 
 
-def make_all_plots(astrometry_session: astrometry_wrapper.Session, save_files: bool = False) -> None:
+def make_all_plots(astrometry_session: wrapper.Session, save_files: bool = False) -> None:
     """"""
 
     tables = astrometry_session.tables

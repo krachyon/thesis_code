@@ -1,14 +1,13 @@
 from photutils.psf import EPSFModel
 from astropy.nddata import NDData
-from photutils import extract_stars
+from photutils import extract_stars, EPSFBuilder
 import numpy as np
 from astropy.modeling import fitting
-from matplotlib.colors import LogNorm
 
-from thesis_lib.testdata_generators import read_or_generate_image, convolved_grid, Gaussian2DKernel, gauss2d, model_add_grid
-from thesis_lib.testdata_definitions import kernel_size, benchmark_images
-from thesis_lib.photometry import make_epsf_fit, make_epsf_combine
-from thesis_lib.sampling_precision import get_cutout_slices
+from thesis_lib.testdata.recipes import convolved_grid, Gaussian2DKernel, model_add_grid
+from thesis_lib.testdata.helpers import gauss2d
+from thesis_lib.standalone_analysis.sampling_precision import get_cutout_slices
+
 
 from astropy.modeling.models import Gaussian2D
 import matplotlib.pyplot as plt
@@ -68,8 +67,9 @@ if __name__ == "__main__":
     stars_conv = extract_stars(NDData(img_conv), input_table_mod, size=(cutout_size, cutout_size))
 
     epsf_analytic = Gaussian2D()
-    epsf_fit_mod = make_epsf_fit(stars_mod, iters=8, oversampling=2, smoothing_kernel='quadratic')
-    epsf_fit_conv = make_epsf_fit(stars_mod, iters=8, oversampling=2, smoothing_kernel='quadratic')
+
+    epsf_fit_mod = EPSFBuilder(maxiters=8, oversampling=2, smoothing_kernel='quadratic').build_epsf(stars_mod)
+    epsf_fit_conv = EPSFBuilder(maxiters=8, oversampling=2, smoothing_kernel='quadratic').build_epsf(stars_conv)
 
 
     detections = np.array((input_table_mod['x'], input_table_mod['y'])).T

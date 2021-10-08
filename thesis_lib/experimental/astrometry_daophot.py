@@ -1,15 +1,15 @@
-from astwro.pydaophot import Daophot, Allstar
-from astwro.starlist import StarList, fileformats
-import astwro.starlist as starlist
-from collections import namedtuple
-from astropy.io import fits
-import astropy.table
-import astropy.io
-import numpy as np
 import os
+from collections import namedtuple
 from typing import Optional
 
-from .. import testdata_generators
+import astropy.io
+import astropy.table
+import numpy as np
+from astropy.io import fits
+from astwro.pydaophot import Daophot, Allstar
+from astwro.starlist import StarList, fileformats
+
+from ..testdata import generators
 from ..util import magnitude_to_flux
 
 DaophotPhotometryResult = namedtuple('DaophotPhotometryResult',
@@ -101,6 +101,6 @@ def run_daophot_photometry(image: np.ndarray,
 
 
 if __name__ == '__main__':
-    img, table = testdata_generators.read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_lowpass')
+    img, table = generators.read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_lowpass')
 
     res = run_daophot_photometry(img, table)

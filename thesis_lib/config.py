@@ -1,12 +1,12 @@
 # Global values and names
-import dataclasses
-from typing import Optional, Union, Tuple
-import numpy as np
-import os
-import appdirs
 import copy
+import dataclasses
+import os
+from typing import Optional, Union, Tuple
 
+import appdirs
 import matplotlib.pyplot as plt
+import numpy as np
 
 from photutils.psf import EPSFModel
 from .util import ClassRepr

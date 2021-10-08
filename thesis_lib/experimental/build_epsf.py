@@ -1,6 +1,7 @@
-import photutils
 import numpy as np
 from image_registration.fft_tools import upsample_image
+
+import photutils
 from ..config import Config
 
 

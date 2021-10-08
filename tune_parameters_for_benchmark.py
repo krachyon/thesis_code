@@ -1,10 +1,9 @@
-from thesis_lib.parameter_tuning import *
-from thesis_lib.testdata_definitions import benchmark_images
+from thesis_lib.standalone_analysis.parameter_tuning import *
+from thesis_lib.testdata.definitions import benchmark_images
 
 import skopt
 from skopt.space import Real, Categorical, Integer
 import dill
-import multiprocess as mp
 import os
 import sys
 

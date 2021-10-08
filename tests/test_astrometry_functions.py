@@ -1,13 +1,11 @@
 import pytest
 import numpy as np
 
-from thesis_lib.astrometry_functions import match_finder_to_reference, calc_extra_result_columns
-from thesis_lib.astrometry_types import InputTable, INPUT_TABLE_NAMES,\
+from thesis_lib.astrometry.functions import match_finder_to_reference, calc_extra_result_columns
+from thesis_lib.astrometry.types import InputTable, INPUT_TABLE_NAMES,\
 StarfinderTable, STARFINDER_TABLE_NAMES,\
 ReferenceTable, REFERENCE_NAMES,\
-ResultTable, RESULT_TABLE_NAMES,\
-GuessTable, GUESS_TABLE_NAMES, \
-    X, Y, FLUX, MAGNITUDE
+ResultTable, X, Y, FLUX, MAGNITUDE
 
 
 def make_catalogue_table(data):

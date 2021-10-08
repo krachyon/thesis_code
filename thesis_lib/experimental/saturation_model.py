@@ -1,6 +1,6 @@
-from astropy.modeling import FittableModel, Fittable2DModel, Model
-from scipy.interpolate import interp1d
 import pandas as pd
+from astropy.modeling import Model
+from scipy.interpolate import interp1d
 
 
 def read_scopesim_linearity(fname):

@@ -1,8 +1,5 @@
-import numpy as np
-
-from thesis_lib.sampling_precision import *
+from thesis_lib.standalone_analysis.sampling_precision import *
 from matplotlib.colors import LogNorm
-from scipy.signal import fftconvolve
 
 from itertools import tee
 from copy import copy
@@ -147,7 +144,7 @@ def doit(input_model: Fittable2DModel,
     #plotfig.colorbar(sc, ax=plotax)
 
 #model = make_anisocado_model(2)
-from astropy.modeling.functional_models import Gaussian2D, AiryDisk2D
+from astropy.modeling.functional_models import AiryDisk2D
 #model = Gaussian2D()
 model = AiryDisk2D(radius=3)
 

@@ -1,7 +1,7 @@
-import thesis_lib.testdata_definitions
+import thesis_lib.testdata.definitions
 from thesis_lib import *
 from photutils import DAOStarFinder, extract_stars, EPSFBuilder
-from photutils.psf.culler import ChiSquareCuller, CorrelationCuller
+from photutils.psf.culler import CorrelationCuller
 from astropy.stats import sigma_clipped_stats
 from astropy.nddata import NDData
 import matplotlib.pyplot as plt
@@ -21,9 +21,9 @@ scopesim_helper.download()
 
 #name = 'scopesim_grid_16_perturb2_mag18_24'
 name = 'gausscluster_N2000_mag22'
-recipe = thesis_lib.testdata_definitions.benchmark_images[name]
+recipe = thesis_lib.testdata.definitions.benchmark_images[name]
 
-img, input_table = testdata_generators.read_or_generate_image(recipe, name)
+img, input_table = generators.read_or_generate_image(recipe, name)
 
 saturation_model = SaturationModel(read_scopesim_linearity('MICADO/FPA_linearity.dat'))
 img = saturation_model.inverse_eval(img)

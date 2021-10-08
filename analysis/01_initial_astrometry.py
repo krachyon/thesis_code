@@ -23,6 +23,10 @@
 # pip install -r requirements.txt
 # ```
 
+import os
+from copy import copy
+
+import astropy.table
 # %% hide_input=false
 # use this for interactive plots
 # %matplotlib notebook
@@ -31,25 +35,15 @@
 # #%matplotlib inline
 import matplotlib.pyplot as plt
 import numpy as np
-
-import thesis_lib.astrometry_wrapper
-import thesis_lib.testdata_definitions
-from thesis_lib import *
-import thesis_lib
-from thesis_lib.astrometry_wrapper import Session
-from thesis_lib.astrometry_types import INPUT_TABLE_NAMES, GUESS_TABLE_NAMES, RESULT_TABLE_NAMES, X,Y, FLUX, MAGNITUDE
-from pprint import pprint
-from matplotlib.colors import LogNorm
-import multiprocess as mp
-import astropy.units as u
-from astropy.stats import sigma_clipped_stats
-from photutils.psf import EPSFModel
-from copy import copy
 from IPython.display import clear_output
+from matplotlib.colors import LogNorm
+
+import thesis_lib
+from thesis_lib import *
+from thesis_lib.astrometry import plots
+from thesis_lib.astrometry.types import INPUT_TABLE_NAMES, RESULT_TABLE_NAMES, X, Y, MAGNITUDE
+from thesis_lib.astrometry.wrapper import Session
 from thesis_lib.util import save_plot
-from thesis_lib.scopesim_helper import make_anisocado_model
-import os
-import astropy.table
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
@@ -106,7 +100,7 @@ clear_output()
 # the cluster template generates a lot of very faint sources, only show the ones that could reasonably be detected. 
 #
 filtered_input_table = scc_session.tables.input_table[scc_session.tables.input_table[INPUT_TABLE_NAMES[MAGNITUDE]] > 1e-12]
-fig = astrometry_plots.plot_image_with_source_and_measured(
+fig = plots.plot_image_with_source_and_measured(
         scc_session.image,
         filtered_input_table,
         scc_session.tables.result_table)
@@ -145,8 +139,6 @@ save_plot(outdir, 'photutils_grid')
 # # EPSF derivation
 
 # %%
-import photutils
-from photutils.detection import DAOStarFinder
 
 gauss_config = config.Config()
 gauss_config.smoothing = util.make_gauss_kernel()
@@ -203,7 +195,7 @@ save_plot(outdir, 'epsf_flygrid_b')
 
 # %%
 psf_effect_orig   = scopesim_helper.make_psf()
-psf_effect_filter = scopesim_helper.make_psf(transform=testdata_helpers.lowpass())
+psf_effect_filter = scopesim_helper.make_psf(transform=testdata.helpers.lowpass())
 ε = 1e-10 #prevent zeros in log
 fig_a = plt.figure()
 plt.imshow(psf_effect_orig.data+ε, norm=LogNorm())
@@ -264,12 +256,12 @@ plt.ylim((995.3013431030644, 644.769053872921))
 save_plot(outdir, 'lowpass_astrometry')
 
 # %%
-fig = astrometry_plots.plot_xy_deviation(session_lpc.tables.result_table)
+fig = plots.plot_xy_deviation(session_lpc.tables.result_table)
 
 save_plot(outdir,'lowpass_astrometry_xy')
 
 # %%
-fig = astrometry_plots.plot_deviation_vs_magnitude(session_lpc.tables.result_table)
+fig = plots.plot_deviation_vs_magnitude(session_lpc.tables.result_table)
 plt.xlim(-16,-12)
 save_plot(outdir, 'lowpass_astrometry_magvdev')
 
@@ -286,25 +278,25 @@ def recipe_template(seed):
     def inner():
         # These imports are necessary to be able to execute in a forkserver context; it does not copy the full memory space, so
         # we'd have to rely on the target to know the imports
-        from thesis_lib.testdata_recipes import scopesim_grid
-        from thesis_lib.testdata_helpers import lowpass
+        from thesis_lib.testdata.recipes import scopesim_grid
+        from thesis_lib.testdata.helpers import lowpass
         import numpy as np
         return scopesim_grid(seed=seed, N1d=25, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: np.random.uniform(18, 24, N))
     return inner
 
 
-sessions_multi = thesis_lib.astrometry_wrapper.photometry_multi(recipe_template, 'mag18-24_grid', n_images=12, config=no_overlap_config, threads=None)
+sessions_multi = thesis_lib.astrometry.wrapper.photometry_multi(recipe_template, 'mag18-24_grid', n_images=12, config=no_overlap_config, threads=None)
 result_table_multi = astropy.table.vstack([session.tables.result_table for session in sessions_multi])
 clear_output()
 
 # %%
-fig = astrometry_plots.plot_xy_deviation(result_table_multi)
+fig = plots.plot_xy_deviation(result_table_multi)
 save_plot(outdir, 'multi_astrometry_xy')
 
 # %%
 result_table_multi_recenter = result_table_multi.copy()
 result_table_multi_recenter['offset']-= np.mean(result_table_multi_recenter['offset'])
-fig = astrometry_plots.plot_deviation_vs_magnitude(result_table_multi_recenter)
+fig = plots.plot_deviation_vs_magnitude(result_table_multi_recenter)
 plt.ylim(-0.07,0.07)
 plt.title(plt.gca().get_title()+' (subtracted systematic error)')
 save_plot(outdir, 'multi_astrometry_mag')

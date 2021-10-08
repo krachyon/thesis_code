@@ -1,5 +1,5 @@
-from thesis_lib.astrometry_types import StarfinderTable, InputTable, TypeCheckedTable,\
-    STARFINDER_TABLE_NAMES, INPUT_TABLE_NAMES
+from thesis_lib.astrometry.types import StarfinderTable, InputTable, TypeCheckedTable,\
+    STARFINDER_TABLE_NAMES
 from astropy.table import Table
 import numpy as np
 

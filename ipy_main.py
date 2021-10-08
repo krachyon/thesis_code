@@ -1,11 +1,10 @@
 # noinspection PyPackageRequirements
 from pylab import *
 
-from thesis_lib.scripts.astrometry_benchmark import *
 from thesis_lib.photometry import *
 from photutils.detection import IRAFStarFinder, DAOStarFinder
-from thesis_lib.astrometry_plots import *
-from thesis_lib.testdata_generators import *
+from thesis_lib.astrometry.plots import *
+from thesis_lib.testdata.generators import *
 from thesis_lib.util import *
 from thesis_lib.util import estimate_fwhm, concat_star_images
 

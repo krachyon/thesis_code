@@ -18,18 +18,16 @@
     # Airy2D radius 8: Break in deviation at 0.5 phases
 
 import numbers
-import os
 from itertools import product, count
-from typing import Union, Optional
+from typing import Union
 
 import matplotlib.pyplot as plt
-import multiprocess as mp
 import numpy as np
 import pandas as pd
 from anisocado import AnalyticalScaoPsf
 from astropy.modeling import Fittable2DModel
 from astropy.modeling import fitting
-from astropy.modeling.functional_models import Gaussian2D, AiryDisk2D, Const2D
+from astropy.modeling.functional_models import Const2D
 from matplotlib.cm import get_cmap, ScalarMappable
 from matplotlib.colors import Normalize
 

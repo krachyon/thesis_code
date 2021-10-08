@@ -1,12 +1,7 @@
 import pytest
 import numpy as np
-import itertools
-from thesis_lib import scopesim_helper
 from thesis_lib.util import center_of_image
-from thesis_lib.testdata_helpers import lowpass
 from photutils.centroids import centroid_quadratic
-
-from conftest import psf_effect_odd, psf_effect_even, anisocado_model
 
 
 @pytest.mark.parametrize('anisocado_model', [0, 5], indirect=True)

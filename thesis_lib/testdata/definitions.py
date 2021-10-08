@@ -1,10 +1,10 @@
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, AiryDisk2DKernel
 
-from thesis_lib.scopesim_helper import make_anisocado_model
-from thesis_lib.testdata_helpers import lowpass, make_anisocado_kernel
-from thesis_lib.testdata_recipes import gaussian_cluster, scopesim_cluster, convolved_grid, scopesim_grid, empty_image, \
+from .helpers import lowpass, make_anisocado_kernel
+from .recipes import gaussian_cluster, scopesim_cluster, convolved_grid, scopesim_grid, empty_image, \
     single_star_image
+from ..scopesim_helper import make_anisocado_model
 
 kernel_size = 201  # should be enough for getting reasonable results
 misc_images = {

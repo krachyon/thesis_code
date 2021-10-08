@@ -4,18 +4,22 @@
 # %pylab
 import matplotlib.pyplot as plt
 import numpy as np
+
 from itertools import chain
-from thesis_lib.testdata_recipes import model_add_grid, convolved_grid
-from astropy.convolution.kernels import AiryDisk2DKernel
-from matplotlib.ticker import MaxNLocator
-from matplotlib.colors import LogNorm
 import os
-from scipy.signal import fftconvolve
-from thesis_lib.util import save_plot, estimate_fwhm
-from thesis_lib.sampling_precision import *
-from tqdm.auto import tqdm
-from scipy.stats import zscore
+import multiprocess as mp
+
 import astropy.units as u
+from astropy.convolution.kernels import AiryDisk2DKernel
+from matplotlib.colors import LogNorm
+from matplotlib.ticker import MaxNLocator
+from scipy.signal import fftconvolve
+from scipy.stats import zscore
+from tqdm.auto import tqdm
+
+from thesis_lib.standalone_analysis.sampling_precision import *
+from thesis_lib.testdata.recipes import convolved_grid
+from thesis_lib.util import save_plot, estimate_fwhm
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
@@ -472,7 +476,7 @@ save_plot(outdir, 'crowding_img')
 #
 
 # %%
-from thesis_lib.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
+from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
     fillqueue, anderson_gauss_ramp, plot_lambda_vs_precission_relative, fit_dictarg
 
 # %%

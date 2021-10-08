@@ -1,10 +1,9 @@
-from thesis_lib.sampling_precision import gen_image
 import numpy as np
 from astropy.nddata import NDData
 from astropy.table import Table
 
 from photutils import extract_stars, EPSFStars, EPSFBuilder
-from .experimental import make_epsf_combine
+from ..standalone_analysis.sampling_precision import gen_image
 
 
 def reference_image(input_model, fitshape, oversampling):
@@ -48,7 +47,7 @@ def epsf_from_model(input_model,
 
 if __name__ == '__main__':
 
-    from astropy.modeling.functional_models import AiryDisk2D, Gaussian2D
+    from astropy.modeling.functional_models import AiryDisk2D
     import matplotlib.pyplot as plt
 
     model = AiryDisk2D(radius=3)

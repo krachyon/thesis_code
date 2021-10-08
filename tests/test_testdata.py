@@ -1,15 +1,14 @@
 import pytest
 import numpy as np
 
-from thesis_lib.testdata_helpers import lowpass
+from thesis_lib.testdata.helpers import lowpass
 from thesis_lib.util import centroid, center_of_image
-from thesis_lib.testdata_recipes import single_star_image
+from thesis_lib.testdata.recipes import single_star_image
 
 from thesis_lib.util import work_in
 from thesis_lib.config import Config
-from thesis_lib.astrometry_types import INPUT_TABLE_NAMES, X, Y
+from thesis_lib.astrometry.types import INPUT_TABLE_NAMES, X, Y
 from thesis_lib.scopesim_helper import make_anisocado_model, make_gauss_model
-from conftest import anisocado_model
 
 
 @pytest.mark.parametrize('xsize', [51, 50, 101])

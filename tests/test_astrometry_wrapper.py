@@ -1,8 +1,7 @@
 import numpy as np
-import pytest
 
-from thesis_lib.testdata_generators import read_or_generate_image
-from thesis_lib.astrometry_types import GUESS_TABLE_NAMES, RESULT_TABLE_NAMES, X, Y
+from thesis_lib.testdata.generators import read_or_generate_image
+from thesis_lib.astrometry.types import GUESS_TABLE_NAMES, RESULT_TABLE_NAMES, X, Y
 
 def test_oneline(session_single):
     session_single.do_it_all()

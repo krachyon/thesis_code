@@ -7,9 +7,9 @@ import numpy as np
 from astropy.io.fits import PrimaryHDU
 from astropy.table import Table
 
-from .config import Config
-from .testdata_definitions import predefined_images
-from .util import getdata_safer, work_in
+from .definitions import predefined_images
+from ..config import Config
+from ..util import getdata_safer, work_in
 
 # make sure concurrent calls with the same filename don't tread on each other's toes.
 # only generate/write file once

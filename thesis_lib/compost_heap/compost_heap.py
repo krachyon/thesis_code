@@ -1,11 +1,10 @@
 """ Stuff that was in other files before and is not used right now"""
 
 
-from scipy.spatial import cKDTree
-from astropy.table import Table, Row
-import numpy as np
 from typing import List
-import pyckles
+
+from astropy.table import Table, Row
+from scipy.spatial import cKDTree
 
 
 def cut_close_stars(peak_table: Table, cutoff_dist: float) -> Table:
@@ -28,18 +27,15 @@ def get_spectral_types() -> List[Row]:
 import copy
 import multiprocessing
 import os
-import tempfile
 from typing import List, Tuple, Callable
 
-import anisocado
 import astropy.table
 import matplotlib.pyplot as plt
 import numpy as np
 import pyckles
 import scopesim
-import scopesim_templates
 from astropy.io.fits import PrimaryHDU
-from astropy.table import Table, Row
+from astropy.table import Table
 from matplotlib.colors import LogNorm
 
 # TODO CHANGEME
@@ -336,9 +332,6 @@ if __name__ == '__main__':
         plt.close('all')
         plot_deviation(photometry_table, match_observations_nearest)
         plot_deviation(photometry_table, match_observations_clustering)
-
-import scopesim_templates
-import scopesim
 
 from astropy.io.fits import PrimaryHDU
 from config import Config

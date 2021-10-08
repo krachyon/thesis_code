@@ -1,17 +1,14 @@
-from astropy.modeling import fitting
-from astropy.modeling.functional_models import Gaussian1D, Lorentz1D, Trapezoid1D
-
-import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
+import numpy as np
+from astropy.modeling import fitting
+from astropy.modeling.functional_models import Gaussian1D, Trapezoid1D
 
 fitter = fitting.LevMarLSQFitter()
 import pandas as pd
 import multiprocess as mp
 from itertools import chain, product, count
 from tqdm.auto import tqdm
-import os
-from matplotlib.colors import LogNorm, CenteredNorm, Normalize
+from matplotlib.colors import Normalize
 
 xs = np.linspace(-10, 10, 300)
 

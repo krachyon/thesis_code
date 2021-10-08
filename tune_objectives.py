@@ -1,30 +1,16 @@
-import matplotlib.figure
 import multiprocess as mp
-import numpy as np
-import dill
-import time
 import matplotlib.pyplot as plt
 import skopt
-from skopt.space import Real, Integer, Categorical, Dimension
-from typing import Callable, Any
-from collections import namedtuple
-from scipy.spatial import cKDTree
-from numpy.lib.recfunctions import structured_to_unstructured
-from typing import Optional, List
+from skopt.space import Real
 
-import thesis_lib.testdata_definitions
+import thesis_lib.testdata.definitions
 from photutils.detection import DAOStarFinder
 
 from astropy.stats import sigma_clipped_stats
 
-from thesis_lib.config import Config
-from thesis_lib import testdata_generators
-from thesis_lib import util
-from thesis_lib.photometry import run_photometry
-from thesis_lib.parameter_tuning import run_optimizer
+from thesis_lib.testdata import generators
+from thesis_lib.standalone_analysis.parameter_tuning import run_optimizer
 
-from thesis_lib.astrometry_plots import plot_xy_deviation
-from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm
 
 
@@ -70,13 +56,13 @@ from matplotlib.colors import LogNorm
 #         return np.sqrt(np.sum(np.array(offsets)**2))
 #
 #     return starfinder_objective
-from thesis_lib.parameter_tuning import make_starfinder_objective
+from thesis_lib.standalone_analysis.parameter_tuning import make_starfinder_objective
 
 if __name__ == '__main__':
     name = 'gausscluster_N2000_mag22'
-    recipe = thesis_lib.testdata_definitions.benchmark_images[name]
+    recipe = thesis_lib.testdata.definitions.benchmark_images[name]
 
-    img, input_table = testdata_generators.read_or_generate_image(recipe, name)
+    img, input_table = generators.read_or_generate_image(recipe, name)
 
     starfinder_obj = make_starfinder_objective(recipe, name)
     starfinder_dims = [

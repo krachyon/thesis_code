@@ -3,24 +3,23 @@
 # TODO maybe enforce with astropy.units
 # TODO calculate flux as well
 
+import os
 from typing import Tuple, Optional, Callable, Union
 
 import numpy as np
-from astropy.modeling.functional_models import Gaussian2D
-from tqdm import tqdm
-import os
-
 import scopesim_templates
 from astropy.convolution import Gaussian2DKernel, Kernel2D, convolve_fft
+from astropy.modeling.functional_models import Gaussian2D
 from astropy.table import Table
-from photutils import FittableImageModel
+from tqdm import tqdm
 
-from .experimental.saturation_model import SaturationModel, read_scopesim_linearity
-from .scopesim_helper import to_pixel_scale, pixel_scale, setup_optical_train, make_anisocado_model, filter_name, \
+from photutils import FittableImageModel
+from ..astrometry.types import X, Y, FLUX, MAGNITUDE, INPUT_TABLE_NAMES
+from ..config import Config
+from ..experimental.saturation_model import SaturationModel, read_scopesim_linearity
+from ..scopesim_helper import to_pixel_scale, pixel_scale, setup_optical_train, make_anisocado_model, filter_name, \
     pixel_to_mas, max_pixel_coord, make_psf
-from .util import flux_to_magnitude, magnitude_to_flux
-from .astrometry_types import X, Y, FLUX, MAGNITUDE, INPUT_TABLE_NAMES
-from .config import Config
+from ..util import flux_to_magnitude, magnitude_to_flux
 
 COLUMN_NAMES = (INPUT_TABLE_NAMES[X],
                 INPUT_TABLE_NAMES[Y],

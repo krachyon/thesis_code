@@ -4,8 +4,9 @@ import numpy as np
 from astropy.convolution import Kernel2D
 from astropy.modeling.functional_models import Gaussian2D
 
-from .scopesim_helper import max_pixel_coord
-from .util import centered_grid
+from thesis_lib.scopesim_helper import max_pixel_coord
+from thesis_lib.util import centered_grid
+
 
 def gauss2d(σ_x=1., σ_y=1., a=1.):
     @numba.njit(fastmath=True)

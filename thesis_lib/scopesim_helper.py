@@ -4,18 +4,17 @@ import tempfile
 from typing import Callable, Tuple, Optional
 
 import anisocado
+import astropy.units as u
+import numpy as np
 from anisocado import AnalyticalScaoPsf
-from photutils import FittableImageModel
-from photutils.centroids import centroid_quadratic
 from astropy.modeling.functional_models import Gaussian2D
 from image_registration.fft_tools import upsample_image
 
-import numpy as np
 import scopesim
-
+from photutils import FittableImageModel
+from photutils.centroids import centroid_quadratic
 from .config import Config
 from .util import work_in, center_of_image
-import astropy.units as u
 
 # globals
 # TODO get these from scopesim?

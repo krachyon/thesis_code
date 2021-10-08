@@ -1,14 +1,12 @@
-import matplotlib.pyplot as plt
-
-import thesis_lib.testdata_definitions
-from thesis_lib import testdata_generators
+import thesis_lib.testdata.definitions
+from thesis_lib.testdata import generators
 from thesis_lib.photometry import run_photometry
 from thesis_lib.config import Config
 from thesis_lib import util
-from thesis_lib.astrometry_plots import *
+from thesis_lib.astrometry.plots import *
 
 image_name = 'gausscluster_N2000_mag22_lowpass'
-image_recipe = thesis_lib.testdata_definitions.benchmark_images[image_name]
+image_recipe = thesis_lib.testdata.definitions.benchmark_images[image_name]
 
 
 def view_objective(cutout_size: int, fitshape_half: int, sigma: float, iters:int):
@@ -22,7 +20,7 @@ def view_objective(cutout_size: int, fitshape_half: int, sigma: float, iters:int
     config.cutout_size = cutout_size
     config.epsfbuilder_iters=iters
 
-    image, input_table = testdata_generators.read_or_generate_image(image_recipe, image_name, config.image_folder)
+    image, input_table = generators.read_or_generate_image(image_recipe, image_name, config.image_folder)
     result = run_photometry(image, input_table, image_name, config)
     result_table = util.match_observation_to_source(input_table, result.result_table)
 

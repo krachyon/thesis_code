@@ -1,28 +1,22 @@
 from __future__ import annotations  # makes the "-> __class__" annotation work...
 
-import multiprocess as mp
-
-import photutils
-
-from . import config, util
-from .astrometry_types import ImageStats,\
-    INPUT_TABLE_NAMES, STARFINDER_TABLE_NAMES, RESULT_TABLE_NAMES, GUESS_TABLE_NAMES, REFERENCE_NAMES, INPUT_TABLE_NAMES,\
-    StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable, OUTLIER
-from . astrometry_functions import calc_image_stats, extract_epsf_stars, perturb_guess_table, \
-    match_finder_to_reference, calc_extra_result_columns, mark_outliers
-
-import numpy as np
-from typing import Optional, Union, TypeVar, Callable, Tuple
 import warnings
+from typing import Optional, Union, Callable, Tuple
 
+import multiprocess as mp
+import numpy as np
+from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.table import Table
 
+import photutils
 from photutils import DAOStarFinder, DAOGroup, EPSFBuilder, IterativelySubtractedPSFPhotometry, MMMBackground
-from astropy.modeling.fitting import LevMarLSQFitter
-
-from .config import Config
-from .testdata_generators import read_or_generate_image
-from . import util
+from thesis_lib import config
+from .functions import calc_image_stats, extract_epsf_stars, perturb_guess_table, \
+    match_finder_to_reference, calc_extra_result_columns, mark_outliers
+from .types import REFERENCE_NAMES, StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable, OUTLIER
+from .. import util
+from ..config import Config
+from ..testdata.generators import read_or_generate_image
 
 
 class TableSet(metaclass=util.ClassRepr):

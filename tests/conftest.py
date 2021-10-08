@@ -1,17 +1,14 @@
 import pytest
 
 from thesis_lib.config import Config
-import thesis_lib.astrometry_wrapper as astrometry_wrapper
+import thesis_lib.astrometry.wrapper as astrometry_wrapper
 from thesis_lib.scopesim_helper import download
-from thesis_lib.testdata_recipes import convolved_grid, one_source_testimage, multi_source_testimage
-from thesis_lib.testdata_generators import read_or_generate_image
+from thesis_lib.testdata.recipes import convolved_grid, one_source_testimage, multi_source_testimage
+from thesis_lib.testdata.generators import read_or_generate_image
 
 from thesis_lib import scopesim_helper
-from thesis_lib.testdata_helpers import lowpass
+from thesis_lib.testdata.helpers import lowpass
 
-import numpy as np
-from astropy.modeling.functional_models import Gaussian2D
-from photutils import FittableImageModel
 
 @pytest.fixture
 def config_for_tests() -> Config:

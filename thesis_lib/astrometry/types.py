@@ -1,12 +1,12 @@
 from __future__ import annotations  # makes the "-> __class__" annotation work...
 
 import typing
-from typing import Tuple, Optional, Union, Callable
-from collections import namedtuple, OrderedDict
+from collections import namedtuple
+from typing import Optional
 
 from astropy.table import Table
 
-from .util import flux_to_magnitude, magnitude_to_flux
+from thesis_lib.util import flux_to_magnitude, magnitude_to_flux
 
 ImageStats = namedtuple('ImageStats', ['mean', 'median', 'std', 'threshold'])
 

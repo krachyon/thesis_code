@@ -3,21 +3,18 @@ import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured
 import matplotlib.pyplot as plt
 import dill
-import os
 from collections import namedtuple
 import time
 from astropy.stats import sigma_clipped_stats
 
 from skopt import Optimizer
-from skopt.space import Real, Integer, Categorical
-from skopt.plots import plot_objective, plot_convergence, plot_evaluations
+from skopt.plots import plot_convergence, plot_evaluations
 from scipy.spatial import cKDTree
 
-from photutils.detection import IRAFStarFinder, DAOStarFinder
+from photutils.detection import DAOStarFinder
 
-from thesis_lib.testdata_generators import read_or_generate_image
-from thesis_lib.testdata_definitions import benchmark_images
-from thesis_lib.util import DebugPool
+from thesis_lib.testdata.generators import read_or_generate_image
+from thesis_lib.testdata.definitions import benchmark_images
 
 from scipy.interpolate import griddata
 from matplotlib.colors import LogNorm

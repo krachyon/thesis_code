@@ -14,15 +14,11 @@ except ModuleNotFoundError:
     pass
 
 
-from . import astrometry_wrapper
-from . import astrometry_plots
-from . import util
-from . import testdata_generators
-from . import scopesim_helper
+from . import astrometry
 from . import config
-from . import sampling_precision
-from . import fitting_weights1D
-# currently broken
-# from . import parameter_tuning
-from . import sampling_precision
-from . import experimental
+#from . import experimental
+from . import scopesim_helper
+from . import standalone_analysis
+from . import testdata
+from . import util
+
