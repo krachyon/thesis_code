@@ -8,18 +8,23 @@ import numpy as np
 from itertools import chain
 import os
 import multiprocess as mp
+from tqdm.auto import tqdm
 
-import astropy.units as u
-from astropy.convolution.kernels import AiryDisk2DKernel
 from matplotlib.colors import LogNorm
 from matplotlib.ticker import MaxNLocator
 from scipy.signal import fftconvolve
 from scipy.stats import zscore
-from tqdm.auto import tqdm
+
+import astropy.units as u
+from astropy.convolution.kernels import AiryDisk2DKernel
+from astropy.modeling.functional_models import AiryDisk2D
+from astropy.convolution import AiryDisk2DKernel, convolve
 
 from thesis_lib.standalone_analysis.sampling_precision import *
 from thesis_lib.testdata.recipes import convolved_grid
 from thesis_lib.util import save_plot, estimate_fwhm
+from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
+    fillqueue, anderson_gauss_ramp, plot_lambda_vs_precission_relative, fit_dictarg
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
@@ -81,9 +86,6 @@ save_plot(outdir, 'odd_even_difference')
 plt.colorbar()
 
 # %%
-from astropy.modeling.functional_models import AiryDisk2D
-from astropy.convolution import AiryDisk2DKernel, convolve
-
 N = 10  # number of sources
 r = 4  # width of airy
 
@@ -476,10 +478,6 @@ save_plot(outdir, 'crowding_img')
 #
 
 # %%
-from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
-    fillqueue, anderson_gauss_ramp, plot_lambda_vs_precission_relative, fit_dictarg
-
-# %%
 model = Gaussian1D()
 
 
@@ -532,9 +530,9 @@ model = Gaussian1D()
 params = {
     'λ': [λ for λ in np.linspace(100, 50_000, 150)],
     'σ': [σ for σ in np.linspace(0, 50, 80)],
-    'weight_calc': [ones, anderson, anderson_gauss, anderson_gauss_ramp],
+    'weight_calc': [ones, anderson, anderson_gauss],
     'model': [model],
-    'iters': [300],
+    'iters': [100],
     'seed_queue': [q],
     'return_arrays': [False],
 }
@@ -543,7 +541,7 @@ if os.path.exists(resname):
     results_pic = pd.read_pickle(resname)
 else:
     with mp.Pool() as p:
-        records_pic = chain(*p.map(fit_dictarg, tqdm(dictoflists_to_listofdicts(params)), 10))
+            records_pic = chain(*p.map(fit_dictarg, tqdm(dictoflists_to_listofdicts(params)), 10))
         results_pic = pd.DataFrame.from_records(records_pic)
         small_results = results_pic[results_pic.columns.difference(['fitted'])]
         small_results.to_pickle(resname)
@@ -552,13 +550,14 @@ else:
 results_pic = results_pic.replace('anderson_gauss', 'inverse variance')
 
 # %%
-figs = plot_lambda_vs_precission_relative(
-    results_pic[(results_pic.σ < 20) & (results_pic.weight_calc != 'anderson_gauss_ramp')])
+figs = plot_lambda_vs_precission_relative(results_pic[results_pic.σ < 20])
 plt.title('Poisson + Gaussian noise $0<σ<20$')
 plt.text(10000, 1.05, 'weighted worse')
 plt.text(10000, 0.95, 'weighted better')
 save_plot(outdir, 'weights_methods1d')
 
 # %%
-print('script succesfull')
+print('script successful')
 plt.close('all')
+
+# %%
