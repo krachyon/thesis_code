@@ -1,6 +1,7 @@
 import os.path as p
 import pickle
 import warnings
+import zstandard
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -19,7 +20,7 @@ from .types import RESULT_TABLE_NAMES, INPUT_TABLE_NAMES, \
 def save(filename_base: str, figure: matplotlib.pyplot.figure):
     """Save a matplotlib figure as png and a pickle it to a mplf file"""
     figure.savefig(filename_base + '.png')
-    with open(filename_base + '.mplf', 'wb') as outfile:
+    with zstandard.open(filename_base + '.mplf', 'wb') as outfile:
         pickle.dump(figure, outfile)
 
 
