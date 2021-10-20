@@ -1,5 +1,5 @@
 import pytest
-from thesis_lib.util import estimate_fwhm, center_of_index, center_of_image, centered_grid, centered_grid_quadratic, centroid
+from thesis_lib.util import estimate_fwhm, center_of_index, center_of_image, centered_grid, centered_grid_quadratic, centroid, copying_lru_cache
 
 from astropy.modeling.functional_models import Gaussian2D
 import numpy as np
@@ -80,3 +80,46 @@ def test_centroid_asym(xy):
 
     img = Gaussian2D(x_mean=xy[0], y_mean=xy[1])(x_grid, y_grid)
     assert np.all(np.isclose(centroid(img), xy_expected))
+
+
+def test_copying_lru():
+    calls = []
+
+    @copying_lru_cache()
+    def get_list(i):
+        calls.append(0)
+        return list(range(i))
+
+    get_list(5)
+    result_list=get_list(5)
+
+    assert len(calls) == 1
+    result_list[0]=[100]
+
+    result_list = get_list(5)
+    assert result_list[0] != 100
+
+    calls = []
+    @copying_lru_cache(maxsize=2, typed=False)
+    def get_square(foo):
+        calls.append(0)
+        return foo**2
+
+    get_square(2)
+    get_square(3)
+    get_square(4)
+    get_square(2)
+    assert len(calls) == 4
+
+    calls = []
+    @copying_lru_cache(maxsize=2, typed=True)
+    def get_square(foo):
+        calls.append(0)
+        return foo**2
+
+    get_square(2)
+    get_square(3)
+    get_square(2.1)
+    get_square(2)
+    assert len(calls) == 4
+

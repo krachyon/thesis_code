@@ -4,8 +4,9 @@ import pathlib
 import pickle
 import re
 from dataclasses import dataclass
-from typing import Any
-from typing import Tuple, Union
+from typing import Any, Tuple, Union
+from functools import lru_cache
+from copy import copy
 
 import astropy.io.fits
 import matplotlib.pyplot as plt
@@ -19,6 +20,17 @@ from termcolor import colored
 import photutils
 from photutils import CircularAperture
 from photutils.utils.errors import calc_total_error
+
+
+def copying_lru_cache(*decorator_args, **decorator_kwargs):
+    def created_decorator(func):
+        cached_func = lru_cache(*decorator_args, **decorator_kwargs)(func)
+
+        def inner(*args, **kwargs):
+            return copy(cached_func(*args, **kwargs))
+
+        return inner
+    return created_decorator
 
 
 class ClassRepr(type):

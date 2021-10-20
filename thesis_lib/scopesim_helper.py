@@ -2,6 +2,7 @@ import multiprocessing
 import os
 import tempfile
 from typing import Callable, Tuple, Optional
+from .util import copying_lru_cache
 
 import anisocado
 import astropy.units as u
@@ -61,6 +62,7 @@ def pixel_to_mas(px_coord):
 
 
 # noinspection PyPep8Naming
+@copying_lru_cache(maxsize=10, typed=True)
 def make_psf(psf_wavelength: float = 2.15,
              shift: Tuple[int] = (0, 14), N: int = 511,
              transform: Callable[[np.ndarray], np.ndarray] = lambda x: x) -> scopesim.effects.Effect:
@@ -115,6 +117,7 @@ class AnisocadoModel(FittableImageModel):
         return ((self.y_0-200, self.y_0+200), (self.x_0-200, self.x_0+200))
 
 
+@copying_lru_cache(maxsize=10)
 def make_anisocado_model(*, oversampling=2, degree=5, seed=0, offaxis=(0, 14), lowpass=0):
     img = AnalyticalScaoPsf(pixelSize=0.004/oversampling, N=400*oversampling+1, seed=seed).shift_off_axis(*offaxis)
     if lowpass != 0:
@@ -129,6 +132,7 @@ def make_anisocado_model(*, oversampling=2, degree=5, seed=0, offaxis=(0, 14), l
     return AnisocadoModel(img, oversampling=oversampling, degree=degree, origin=origin)
 
 
+@copying_lru_cache(maxsize=10)
 def make_gauss_model(σ):
     # TODO something about the sigma is sketchy here...
     data = Gaussian2D(x_stddev=σ*2, y_stddev=σ*2)(*np.mgrid[-100:100:401j, -100:100:401j])
