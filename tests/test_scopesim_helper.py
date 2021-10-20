@@ -11,8 +11,8 @@ def test_anisocado_model_centered(anisocado_model):
     actual = centroid_quadratic(data)
     expected = center_of_image(data)
 
-    # TODO ideally this should be tighter
-    assert np.all(np.abs(np.array(actual) - np.array(expected)) < 0.0001)
+
+    assert np.all(np.abs(np.array(actual) - np.array(expected)) < 1e-8)
 
 
 # Lowpass seems to fail. Investigate
@@ -21,8 +21,7 @@ def test_anisocado_psf_odd(psf_effect_odd):
     actual = centroid_quadratic(data)
     expected = center_of_image(data)
 
-    # TODO ideally this should be a lot tighter
-    assert np.all(np.abs(np.array(actual) - np.array(expected)) < 0.001)
+    assert np.all(np.abs(np.array(actual) - np.array(expected)) < 1e-8)
 
 
 def test_anisocado_psf_even(psf_effect_even):
