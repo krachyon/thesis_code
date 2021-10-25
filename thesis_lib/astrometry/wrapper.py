@@ -228,8 +228,8 @@ class Session:
 def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
                      image_name_template: str,
                      n_images: int,
-                     config=Config.instance(),
-                     threads: Union[int, None, bool]=None) -> list[Session]:
+                     config = Config.instance(),
+                     threads: Union[int, None, bool] = None) -> list[Session]:
     """
     """
 

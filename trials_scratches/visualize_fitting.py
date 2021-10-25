@@ -4,6 +4,7 @@ from matplotlib.colors import LogNorm
 from itertools import tee
 from copy import copy
 
+
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
     a, b = tee(iterable)
@@ -144,9 +145,9 @@ def doit(input_model: Fittable2DModel,
     #plotfig.colorbar(sc, ax=plotax)
 
 #model = make_anisocado_model(2)
-from astropy.modeling.functional_models import AiryDisk2D
-#model = Gaussian2D()
-model = AiryDisk2D(radius=3)
+from astropy.modeling.functional_models import AiryDisk2D, Gaussian2D
+model = Gaussian2D()
+#model = AiryDisk2D(radius=3)
 
 doit(model,
      pixelphase=0.,

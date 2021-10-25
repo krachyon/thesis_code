@@ -23,8 +23,9 @@
 # make it work in linked script
 import matplotlib.pyplot as plt
 
-from thesis_lib import *
+
 import thesis_lib
+import thesis_lib.astrometry.plots as plots
 from thesis_lib.astrometry.wrapper import Session
 from matplotlib.colors import LogNorm
 from copy import copy
@@ -52,10 +53,10 @@ HTML('''
 
 # %%
 # if something goes wrong here, check the stdout of the jupyter notebook server for hints
-lowpass_config = config.Config()
-lowpass_config.smoothing = util.make_gauss_kernel()  # avoid EPSF artifacts
+lowpass_config = thesis_lib.config.Config()
+lowpass_config.smoothing = thesis_lib.util.make_gauss_kernel()  # avoid EPSF artifacts
 lowpass_config.output_folder = 'output_files_lowpass'
-lowpass_config.image_folder = '/data/beegfs/astro-storage/groups/matisse/messlinger/testfiles'
+#lowpass_config.image_folder = '/data/beegfs/astro-storage/groups/matisse/messlinger/testfiles'
 lowpass_config.use_catalogue_positions = True  # cheat with guesses
 lowpass_config.photometry_iterations = 1  # with known positions we know all stars on first iter
 lowpass_config.cutout_size = 20  # adapted by hand for PSF at hand
@@ -78,7 +79,7 @@ def recipe_template_conv(seed):
         from thesis_lib.testdata.recipes import scopesim_grid
         from thesis_lib.testdata.helpers import lowpass
         import numpy as np
-        return scopesim_grid(seed=seed, N1d=9, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: np.random.uniform(18, 24, N))
+        return scopesim_grid(seed=seed, N1d=25, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: np.random.uniform(18, 24, N))
     return inner
 
 psf = make_anisocado_model(lowpass=5)
@@ -88,17 +89,19 @@ def recipe_template_subpixel(seed):
         # we'd have to rely on the target to know the imports
         from thesis_lib.testdata.recipes import scopesim_grid
         import numpy as np
-        return scopesim_grid(seed=seed, N1d=9, perturbation=2., custom_subpixel_psf=psf, magnitude=lambda N: np.random.uniform(18, 24, N))
+        return scopesim_grid(seed=seed, N1d=25, perturbation=2., custom_subpixel_psf=psf, magnitude=lambda N: np.random.uniform(18, 24, N))
     return inner
 
 
-sessions_multi_conv = thesis_lib.astrometry.wrapper.photometry_multi(recipe_template_conv, 'mag18-24_grid_conv', n_images=50, config=no_overlap_config, threads=None)
+sessions_multi_conv = thesis_lib.astrometry.wrapper.photometry_multi(recipe_template_conv, 'mag18-24_grid_conv', n_images=12, config=no_overlap_config, threads=None)
 result_table_multi_conv = astropy.table.vstack([session.tables.valid_result_table for session in sessions_multi_conv])
 
-sessions_multi_subpixel = thesis_lib.astrometry.wrapper.photometry_multi(recipe_template_subpixel, 'mag18-24_grid_subpixel', n_images=50, config=no_overlap_config, threads=None)
+sessions_multi_subpixel = thesis_lib.astrometry.wrapper.photometry_multi(recipe_template_subpixel, 'mag18-24_grid_subpixel', n_images=12, config=no_overlap_config, threads=None)
 result_table_multi_subpixel = astropy.table.vstack([session.tables.valid_result_table for session in sessions_multi_subpixel])
 
 # %%
+print(result_table_multi_conv['x_offset'].mean(),result_table_multi_conv['y_offset'].mean())
+print(result_table_multi_subpixel['x_offset'].mean(),result_table_multi_subpixel['y_offset'].mean())
 figa = plots.plot_xy_deviation(result_table_multi_conv)
 figb = plots.plot_xy_deviation(result_table_multi_subpixel)
 
