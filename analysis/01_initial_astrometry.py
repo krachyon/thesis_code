@@ -22,17 +22,18 @@
 # pip install -e .
 # pip install -r requirements.txt
 # ```
-
-import os
-from copy import copy
-
-import astropy.table
 # %% hide_input=false
 # use this for interactive plots
 # %matplotlib notebook
 # %pylab
 # use this to export to pdf instead
 # #%matplotlib inline
+
+import os
+from copy import copy
+
+import astropy.table
+
 import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import clear_output
@@ -244,8 +245,8 @@ def ref_phot_plot():
     plt.legend()
 
 ref_phot_plot()
-plt.xlim((333.0414029362044, 371.33596286811064))
-plt.ylim((280.9350859599385, 244.97388631062154))
+plt.xlim((778.8170946421627, 823.9573452589827))
+plt.ylim((508.11191403130636, 468.09311665069544))
 
 save_plot(outdir, 'lowpass_astrometry_groupissue')
 
@@ -256,7 +257,7 @@ plt.ylim((995.3013431030644, 644.769053872921))
 save_plot(outdir, 'lowpass_astrometry')
 
 # %%
-fig = plots.plot_xy_deviation(session_lpc.tables.result_table)
+fig = plots.plot_xy_deviation(session_lpc.tables.valid_result_table)
 
 save_plot(outdir,'lowpass_astrometry_xy')
 
@@ -272,6 +273,7 @@ save_plot(outdir, 'lowpass_astrometry_magvdev')
 # if something goes wrong here, check the stdout of the jupyter notebook server for hints
 no_overlap_config = copy(lowpass_config)
 no_overlap_config.separation_factor = 0.1  # No groups in this case
+#no_overlap_config.detector_saturation=15000
 
 
 def recipe_template(seed):
@@ -302,44 +304,42 @@ plt.title(plt.gca().get_title()+' (subtracted systematic error)')
 save_plot(outdir, 'multi_astrometry_mag')
 
 # %%
+result_table_multi
+
+# %%
 plt.figure()
+result_table_multi.sort('m')
 
-magnitudes = result_table_multi['m']
 window_size = 101
-x_offset = int(window_size/2)
-order = np.argsort(magnitudes)
 
-dists = result_table_multi['offset'][order]
-dists_x = result_table_multi['x_orig'][order] - result_table_multi['x_fit'][order]
-dists_y = result_table_multi['y_orig'][order] - result_table_multi['y_fit'][order]
+dists = result_table_multi['offset']
+dists_x = np.abs(result_table_multi['x_offset'])
+dists_y = np.abs(result_table_multi['y_offset'])
+magnitudes = result_table_multi['m']
 
-# subtract out systematics
-dists -= np.mean(dists)
-dists_x -= np.mean(dists_x)
-dists_y -= np.mean(dists_y)
 
-magnitudes = magnitudes[order]
+magnitudes_mean= np.mean(np.lib.stride_tricks.sliding_window_view(magnitudes, window_size), axis=1)
 
 dists_slide = np.lib.stride_tricks.sliding_window_view(dists, window_size)
-dists_std = np.std(dists_slide, axis=1)
+dists_mean = np.mean(dists_slide, axis=1)
 
 dists_slide_x = np.lib.stride_tricks.sliding_window_view(dists_x, window_size)
-dists_std_x = np.std(dists_slide_x, axis=1)
+dists_mean_x = np.mean(dists_slide_x, axis=1)
 
 dists_slide_y = np.lib.stride_tricks.sliding_window_view(dists_y, window_size)
-dists_std_y = np.std(dists_slide_y, axis=1)
+dists_mean_y = np.mean(dists_slide_y, axis=1)
 
 plt.title(f'smoothed with window size {window_size}')
-plt.plot(magnitudes[x_offset:-x_offset], dists_std, linewidth=1, color='green',
+plt.plot(magnitudes_mean, dists_mean, linewidth=1, color='green',
              label=r'measured euclidean deviation')
-plt.plot(magnitudes[x_offset:-x_offset], dists_std_x, linewidth=1, color='red',
+plt.plot(magnitudes_mean, dists_mean_x, linewidth=1, color='red',
              label=f'measured x-deviation')
-plt.plot(magnitudes[x_offset:-x_offset], dists_std_y, linewidth=1, color='orange',
+plt.plot(magnitudes_mean, dists_mean_y, linewidth=1, color='orange',
              label=f'measured y-deviation')
-plt.plot(result_table_multi['m'], result_table_multi['σ_pos_estimated'], 'bo',markersize=0.5, label='FWHM/SNR')
+plt.plot(magnitudes, result_table_multi['σ_pos_estimated'], 'bo',markersize=0.5, label='FWHM/SNR')
 
 plt.xlabel('magnitude')
-plt.ylabel('deviation [pixel]')
+plt.ylabel('absolute centroid deviation [pixel]')
 #plt.ylim(0,dists_std.max()*5)
 plt.legend()
 save_plot(outdir, 'multi_astrometry_noisefloor')
