@@ -26,7 +26,7 @@ from thesis_lib.testdata.recipes import convolved_grid
 from thesis_lib.util import save_plot, estimate_fwhm
 from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
     fillqueue, anderson_gauss_ramp, plot_lambda_vs_precission_relative, fit_dictarg
-from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce
+from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce, cumulative_flux
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
@@ -564,7 +564,7 @@ save_plot(outdir, 'weights_methods1d')
 # %%
 psf = AnalyticalScaoPsf(pixelSize=0.004*0.5, N=1025)
 on_axis = psf.psf_on_axis
-off_axis = psf.shift_off_axis(15, 15)
+off_axis = psf.shift_off_axis(10, 10)
 
 xs, on_axis_min = psf_radial_reduce(on_axis, np.min)
 on_axis_mean = psf_radial_reduce(on_axis, np.mean)[1]
@@ -577,20 +577,27 @@ off_axis_max = psf_radial_reduce(off_axis, np.max)[1]
 # %%
 plt.figure()
 
-plt.semilogy(xs, on_axis_min, label='min')
-plt.semilogy(xs, on_axis_mean, label='mean')
-plt.semilogy(xs, on_axis_max, label='max')
+plt.semilogy(xs, on_axis_mean, label='on-axis mean')
+plt.fill_between(xs, on_axis_max, on_axis_min, alpha=0.65, label='on-axis min, max')
 
-plt.semilogy(xs, off_axis_min, label='oa min')
-plt.semilogy(xs, off_axis_mean, label='oa mean')
-plt.semilogy(xs, off_axis_max, label='oa max')
+plt.semilogy(xs, off_axis_mean, label='off-axis mean')
+plt.fill_between(xs, off_axis_min, off_axis_max, alpha=0.65, label='off-axis min, max')
 
-plt.xlim(-5,250)
+plt.xlim(-5,150)
 
 plt.xlabel('radius from PSF center [px]')
 plt.ylabel('fractional PSF value')
 plt.legend()
 save_plot(outdir, 'radial_reduce')
+
+# %%
+# Todo missing a factor of area here?
+#  Test the reduce function with a gauss
+plt.figure()
+xs, flux = cumulative_flux(on_axis)
+plt.semilogy(xs[1:], np.diff(flux/np.max(on_axis)))
+plt.semilogy(xs[1:], on_axis_mean)
+plt.semilogy(xs[1:], np.diff(flux)/on_axis_mean)
 
 # %%
 print('script successful')
