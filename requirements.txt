@@ -27,3 +27,4 @@ numba
 pyFFTW
 termcolor
 zstandard
+lockfile

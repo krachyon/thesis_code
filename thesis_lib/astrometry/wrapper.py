@@ -225,10 +225,12 @@ class Session:
         return self
 
 
+# Todo having the pool initialized here breaks in jupyter, no matter what startup method you use.
+# have it passed in as argument...
 def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[np.ndarray, Table]]],
                      image_name_template: str,
                      n_images: int,
-                     config = Config.instance(),
+                     config=Config.instance(),
                      threads: Union[int, None, bool] = None) -> list[Session]:
     """
     """

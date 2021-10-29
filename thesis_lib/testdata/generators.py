@@ -1,8 +1,12 @@
 from os import mkdir
-from os.path import exists, join
+from os.path import exists, join, abspath
 from typing import Callable, Tuple, Optional
-
 import multiprocess
+import filelock
+import hashlib
+import tempfile
+from pathlib import Path
+
 import numpy as np
 from astropy.io.fits import PrimaryHDU
 from astropy.table import Table
@@ -14,12 +18,14 @@ from ..util import getdata_safer, work_in
 # make sure concurrent calls with the same filename don't tread on each other's toes.
 # only generate/write file once
 
-manager = multiprocess.Manager()
-file_locks = manager.dict()
 
-
-def get_lock(filename_base):
-    lock: multiprocess.Lock = file_locks.setdefault(filename_base, manager.Lock())
+def get_lock(file_path: str) -> filelock.FileLock:
+    tmp = Path(tempfile.gettempdir())/'thesis_lib_locks'
+    tmp.mkdir(exist_ok=True)
+    file_name = Path(file_path).name
+    file_base = str(Path(file_path).parent)
+    lockname = hashlib.md5(file_base.encode()).hexdigest() + file_name
+    lock = filelock.FileLock(tmp/lockname)
     return lock
 
 
@@ -38,7 +44,7 @@ def read_or_generate_image(filename_base: str,
         mkdir(config.image_folder)
     image_name = join(config.image_folder, filename_base + '.fits')
     table_name = join(config.image_folder, filename_base + '.dat')
-    lock = get_lock(filename_base)
+    lock = get_lock(abspath(image_name))
     with lock:
         if exists(image_name) and exists(table_name):
             img = getdata_safer(image_name)
@@ -68,7 +74,7 @@ def read_or_generate_helper(filename_base: str,
     if not exists(config.image_folder):
         mkdir(config.image_folder)
     image_name = join(config.image_folder, filename_base + '.fits')
-    lock = get_lock(filename_base)
+    lock = get_lock(abspath(image_name))
     with lock:
         if exists(image_name):
             img = getdata_safer(image_name)
