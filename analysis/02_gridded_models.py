@@ -15,6 +15,7 @@ from matplotlib.ticker import MaxNLocator
 from scipy.signal import fftconvolve
 from scipy.stats import zscore
 
+from anisocado import AnalyticalScaoPsf
 import astropy.units as u
 from astropy.convolution.kernels import AiryDisk2DKernel
 from astropy.modeling.functional_models import AiryDisk2D
@@ -25,6 +26,7 @@ from thesis_lib.testdata.recipes import convolved_grid
 from thesis_lib.util import save_plot, estimate_fwhm
 from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
     fillqueue, anderson_gauss_ramp, plot_lambda_vs_precission_relative, fit_dictarg
+from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
@@ -555,6 +557,40 @@ plt.title('Poisson + Gaussian noise $0<σ<20$')
 plt.text(10000, 1.05, 'weighted worse')
 plt.text(10000, 0.95, 'weighted better')
 save_plot(outdir, 'weights_methods1d')
+
+# %% [markdown]
+# # Radial averages of PSF
+
+# %%
+psf = AnalyticalScaoPsf(pixelSize=0.004*0.5, N=1025)
+on_axis = psf.psf_on_axis
+off_axis = psf.shift_off_axis(15, 15)
+
+xs, on_axis_min = psf_radial_reduce(on_axis, np.min)
+on_axis_mean = psf_radial_reduce(on_axis, np.mean)[1]
+on_axis_max = psf_radial_reduce(on_axis, np.max)[1]
+
+xs, off_axis_min = psf_radial_reduce(off_axis, np.min)
+off_axis_mean = psf_radial_reduce(off_axis, np.mean)[1]
+off_axis_max = psf_radial_reduce(off_axis, np.max)[1]
+
+# %%
+plt.figure()
+
+plt.semilogy(xs, on_axis_min, label='min')
+plt.semilogy(xs, on_axis_mean, label='mean')
+plt.semilogy(xs, on_axis_max, label='max')
+
+plt.semilogy(xs, off_axis_min, label='oa min')
+plt.semilogy(xs, off_axis_mean, label='oa mean')
+plt.semilogy(xs, off_axis_max, label='oa max')
+
+plt.xlim(-5,250)
+
+plt.xlabel('radius from PSF center [px]')
+plt.ylabel('fractional PSF value')
+plt.legend()
+save_plot(outdir, 'radial_reduce')
 
 # %%
 print('script successful')
