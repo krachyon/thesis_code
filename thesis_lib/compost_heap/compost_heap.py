@@ -601,3 +601,22 @@ def linspace_grid(start: float, stop: float, num: int):
     """
     # complex step: use number of steps instead
     return np.mgrid[start:stop:1j*num, start:stop:1j*num]
+
+def psf_to_sigma(psf_img, N, σ, axis, oversampling=1):
+    """Formula from
+    Lindegren, Lennart. “High-Accuracy Positioning: Astrometry.” ISSI Scientific Reports Series 9 (January 1, 2010): 279–91.
+
+    to estimate variance of position estimate
+    """
+    normalized_psf = psf_img / np.trapz(np.trapz(psf_img, dx=1/oversampling),dx=1/oversampling)
+
+    prefactor = N / (normalized_psf + σ**2/N)
+    grad = np.gradient(normalized_psf, 1/oversampling, axis=axis) ** 2
+
+    res = 1 / np.sqrt(np.trapz(np.trapz(prefactor * grad, dx=1/oversampling), dx=1/oversampling))
+    return res
+
+def psf_to_sigma_euc(psf_img, N, σ, oversampling=1):
+    return np.sqrt(
+        psf_to_sigma(psf_img, N, σ, axis=0, oversampling=oversampling)**2 +
+        psf_to_sigma(psf_img, N, σ, axis=1, oversampling=oversampling)**2)

@@ -525,3 +525,40 @@ def yellow(text: str) -> str:
 
 def blue(text: str) -> str:
     return colored(text, 'blue')
+
+
+def double_trapz(arr: np.array, dx=1) -> float:
+    """2D numerical integral over array"""
+    assert len(arr.shape) == 2
+    return np.trapz(np.trapz(arr, dx=dx), dx=dx)
+
+
+def psf_to_fisher(psf_img: np.ndarray, constant_noise_variance: float = 0, n_photons: int = 1, oversampling=1) -> np.ndarray:
+    """
+    calculate Fisher information matrix for a given psf grid. Multiply with N to get information for N counts
+    """
+    if not len(psf_img.shape) == 2:
+        raise ValueError('only 2D arrays are supported')
+
+    dx = 1 / oversampling
+    normalized_psf = psf_img / double_trapz(psf_img, dx=dx)
+
+    prefactor = n_photons / (normalized_psf + constant_noise_variance/n_photons)
+    grad = np.gradient(normalized_psf, dx)
+
+    res = np.empty((2, 2))
+    res[0, 0] = double_trapz(prefactor * grad[0] ** 2, dx=dx)
+    res[0, 1] = res[1, 0] = double_trapz(prefactor * grad[0] * grad[1], dx=dx)
+    res[1, 1] = double_trapz(prefactor * grad[1] ** 2, dx=dx)
+    return res
+
+
+def psf_cramer_rao_bound(psf_img: np.ndarray, constant_noise_variance: float = 0, n_photons: int = 1, oversampling=1) -> float:
+    """
+    """
+    fisher_matrix = psf_to_fisher(psf_img, constant_noise_variance, n_photons, oversampling)
+
+    # variance = 1/|I^-1|; just add contributions of x, y
+    sigma = np.sqrt(np.sum(np.linalg.inv(fisher_matrix)))
+
+    return sigma
