@@ -3,6 +3,7 @@ import numpy as np
 from thesis_lib.util import center_of_image
 from photutils.centroids import centroid_quadratic
 
+from thesis_lib.scopesim_helper import make_anisocado_model
 
 @pytest.mark.parametrize('anisocado_model', [0, 5], indirect=True)
 def test_anisocado_model_centered(anisocado_model):
@@ -13,6 +14,15 @@ def test_anisocado_model_centered(anisocado_model):
 
 
     assert np.all(np.abs(np.array(actual) - np.array(expected)) < 1e-8)
+
+
+@pytest.mark.parametrize('oversampling', [1, 2])
+@pytest.mark.parametrize('degree', [2, 3, 5])
+@pytest.mark.parametrize('lowpass', [0, 5])
+def test_anisocado_model_normalized(oversampling, degree, lowpass):
+    mod = make_anisocado_model(oversampling=oversampling, degree=degree, lowpass=lowpass)
+    assert np.abs(np.sum(mod.render()) - 1) < 1e4
+
 
 
 # Lowpass seems to fail. Investigate

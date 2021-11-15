@@ -36,6 +36,7 @@ def make_delta_model():
     data[int(ycenter),int(xcenter)] = 1
     return FittableImageModel(data, oversampling=2, degree=5)
 
+
 # The following tests take quite long to run and tolerances are pretty low.
 # Not sure if debugging this will leads somewhere
 
@@ -59,8 +60,9 @@ def test_single_star_image(single_star):
 
 
 @pytest.mark.xfail
-@pytest.mark.parametrize('single_star', [make_anisocado_model(lowpass=5)])
+@pytest.mark.parametrize('single_star', [make_anisocado_model(lowpass=5)], indirect=True)
 def test_single_star_image_scopesim_shift(single_star):
+    """This test should not fail after scopesim fixes the coordinate transformation"""
     img, table = single_star
 
     xcenter, ycenter = center_of_image(img)
