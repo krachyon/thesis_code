@@ -9,6 +9,9 @@ from itertools import chain
 import os
 import multiprocess as mp
 from tqdm.auto import tqdm
+from pathlib import Path
+import pickle
+import zstandard
 
 from matplotlib.colors import LogNorm
 from matplotlib.ticker import MaxNLocator
@@ -23,7 +26,7 @@ from astropy.convolution import AiryDisk2DKernel, convolve
 
 from thesis_lib.standalone_analysis.sampling_precision import *
 from thesis_lib.testdata.recipes import convolved_grid
-from thesis_lib.util import save_plot, estimate_fwhm
+from thesis_lib.util import save_plot, estimate_fwhm, psf_cramer_rao_bound, psf_to_fisher
 from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
     fillqueue, anderson_gauss_ramp, plot_lambda_vs_precission_relative, fit_dictarg
 from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce, cumulative_flux
@@ -367,7 +370,7 @@ save_plot(outdir, 'anisocado_fail')
 # # Noise
 
 # %%
-size_1D = 10j
+size_1D = 15j
 xy_pairs = np.mgrid[0:0.5:size_1D, 0:0.5:size_1D].transpose((1, 2, 0)).reshape(-1, 2)
 dl = {'input_model': [anisocado],
       'n_sources': [1],
@@ -375,28 +378,103 @@ dl = {'input_model': [anisocado],
       'img_size': [64],
       'pixelphase': xy_pairs,
       'fitshape': [(21, 21)],
-      'σ': [0, 25, 50],
-      'λ': np.logspace(2, 5.5, 100),
+      'σ': [0, 25],
+      'λ': np.logspace(2, 6.5, 100),
       'model_oversampling': [2],
       'model_degree': [5],
-      'model_mode': ['grid'],
+      'model_mode': ['same'],
       'fit_accuracy': [1.49012e-08],
       'use_weights': [True]
       }
 
-with mp.Pool() as p:
-    results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
-results = transform_dataframe(results)
-results = results[results.dev < 1]
+# TODO zstandard here
+savefile = Path('noisevdev.pkl.zstd')
+if not savefile.exists():
+    with mp.Pool() as p:
+        results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
+    results = transform_dataframe(results)
+    results = results[results.dev < 1]
+    with zstandard.open(savefile, 'wb') as f:
+        pickle.dump(results, f)
+else:
+    with zstandard.open(savefile, 'rb') as f:
+        results = pickle.load(f)
+# %%
+# calculate k*FWHM of anisocado PSF
+k_times_fwhm = np.sqrt(np.sum(np.linalg.inv(psf_to_fisher(anisocado.data, oversampling=anisocado.oversampling[0]))))
+k_times_fwhm
 
 # %%
+mod = make_anisocado_model(oversampling=1)
+def plot_deviation_vs_noise(results: pd.DataFrame):
+
+    # issue: pickling destroys type identity, so we need to convert to strings
+    # select all distinct models and distinct noise /types/
+    grouped = results.groupby([results.input_model.astype(str), results.σ], as_index=False)
+
+    plt.figure()
+    for i, ((model_str, σ), group) in enumerate(grouped):
+        # for each noisetype, plot magnitude vs deviation
+        noisegroup = group.groupby('λ')
+        plt.errorbar(noisegroup.first().index, noisegroup.mean().dev, noisegroup.std().dev,
+                     errorevery=(i, len(grouped)),
+                     fmt='o', label=f'{repr(group.input_model.iloc[0])} σ={σ}', alpha=0.8)
+
+    plt.legend(fontsize='small')
+    plt.xscale('log')
+    plt.yscale('log')
+
+    plt.xlabel('Total Flux')
+
+    plt.ylabel('Mean Deviation in measured Position')
+    
 plot_deviation_vs_noise(results)
 
 grpd = results.groupby(['λ'], as_index=False).mean()
-plt.plot(grpd.λ, estimate_fwhm(anisocado) / grpd.snr, ':', label='FWHM/SNR')
+
+deviation0 = np.array([psf_cramer_rao_bound(
+        mod.data, n_photons=λ, constant_noise_variance=0, oversampling=mod.oversampling[0])
+    for λ in grpd.λ])
+deviation25 = np.array([psf_cramer_rao_bound(
+        mod.data, n_photons=λ, constant_noise_variance=25**2, oversampling=mod.oversampling[0])
+    for λ in grpd.λ])
+
+
+plt.plot(grpd.λ, k_times_fwhm / grpd.snr, ':', label=f'k*FWHM/SNR = {k_times_fwhm:.3f}/SNR')
+plt.plot(grpd.λ, deviation0,'--', label='Cramér-Rao bound σ=0', color='C0')
+plt.plot(grpd.λ, deviation25,'--', label='Cramér-Rao bound σ=25', color='C1')
+
+m = (grpd.peak_flux.iloc[-1]-grpd.peak_flux.iloc[1])/(grpd.λ.iloc[-1]-grpd.λ.iloc[1])
+t = grpd.peak_flux.iloc[-1]-m*grpd.λ.iloc[-1]
+def flux_to_peak(flux):
+    return m*flux+t
+def peak_to_flux(peak):
+    return peak/m - t/m
+
+secax = plt.gca().secondary_xaxis(-0.13, functions=(flux_to_peak, peak_to_flux))
+secax.set_xlabel('Peak Flux')
 plt.legend()
 
 save_plot(outdir, 'deviation_vs_noise_anisocado')
+
+# %%
+grpd = results[results.σ == 0].groupby(['λ'], as_index=False)
+fig, axs = plt.subplots(2, 1)
+axs[0].semilogy(grpd.std().λ, grpd.std().x_dev, label='xdev')
+axs[0].semilogy(grpd.std().λ, grpd.std().y_dev, label='ydev')
+axs[0].semilogy(grpd.std().λ, grpd.std().dev, label='dev')
+axs[0].semilogy(grpd.std().λ, deviation0, label='CRLB')
+axs[0].legend()
+axs[0].set_title('std')
+
+magg = grpd.agg(lambda group: np.mean(np.abs(group)))
+axs[1].semilogy(magg.λ, magg.x_dev, label='xdev')
+axs[1].semilogy(magg.λ, magg.y_dev, label='ydev')
+axs[1].semilogy(magg.λ, magg.dev, label='dev')
+axs[1].semilogy(magg.λ, deviation0, label='CRLB')
+axs[1].legend()
+axs[1].set_title('mean')
+pass
 
 
 # %% [markdown]
@@ -543,7 +621,7 @@ if os.path.exists(resname):
     results_pic = pd.read_pickle(resname)
 else:
     with mp.Pool() as p:
-            records_pic = chain(*p.map(fit_dictarg, tqdm(dictoflists_to_listofdicts(params)), 10))
+        records_pic = chain(*p.map(fit_dictarg, tqdm(dictoflists_to_listofdicts(params)), 10))
         results_pic = pd.DataFrame.from_records(records_pic)
         small_results = results_pic[results_pic.columns.difference(['fitted'])]
         small_results.to_pickle(resname)
@@ -591,16 +669,5 @@ plt.legend()
 save_plot(outdir, 'radial_reduce')
 
 # %%
-# Todo missing a factor of area here?
-#  Test the reduce function with a gauss
-plt.figure()
-xs, flux = cumulative_flux(on_axis)
-plt.semilogy(xs[1:], np.diff(flux/np.max(on_axis)))
-plt.semilogy(xs[1:], on_axis_mean)
-plt.semilogy(xs[1:], np.diff(flux)/on_axis_mean)
-
-# %%
 print('script successful')
 plt.close('all')
-
-# %%

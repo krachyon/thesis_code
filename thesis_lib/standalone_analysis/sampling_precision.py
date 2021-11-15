@@ -58,9 +58,8 @@ def gen_image(model, N, size, border, pixelphase, σ=0, λ=100_000, rng=np.rando
     for xshift, yshift in xy_sources:
         data += model(x-xshift, y-yshift)
 
-    # normalization: Each model should contribute flux=1 (maybe bad?)
-    # data /= np.sum(data)*(N1d**2)
-    data /= np.max(data)
+    # normalization: Each model evaluation should contribute flux=1
+    data /= np.sum(data)*N
 
     # apply noise
     if λ:
@@ -162,7 +161,7 @@ def fit_single_image(fit_model: Fittable2DModel,
     fit_model.flux.value = flux + rng.uniform(-np.sqrt(flux), +np.sqrt(flux))
 
     fitted = fitter(fit_model, x_grid[cutout_slices], y_grid[cutout_slices], img[cutout_slices],
-                    acc=fit_accuracy, maxiter=1000, weights=weights[cutout_slices])
+                    acc=fit_accuracy, maxiter=200, weights=weights[cutout_slices])
     fitted.snr = np.sum(img[cutout_slices])/np.sqrt(np.sum(img_variance[cutout_slices]))
 
     return fitted
@@ -235,7 +234,7 @@ def fit_models(input_model: Fittable2DModel,
     ret = {'x':    res[:, 0], 'y': res[:, 1],
            'dev':  dev, 'x_dev': x_dev, 'y_dev': y_dev,
            'flux': res[:, 4], 'snr': res[:, 5],
-           'fititers': res[:, 6]}
+           'fititers': res[:, 6], 'peak_flux': np.max(img)}
     if return_imgs:
         ret |= {'img': img, 'residual': residual}
 
@@ -375,7 +374,7 @@ def plot_deviation_vs_noise(results: pd.DataFrame):
     plt.xscale('log')
     plt.yscale('log')
 
-    plt.xlabel('Peak pixel count')
+    plt.xlabel('Total Flux')
 
     plt.ylabel('Mean Deviation in measured Position')
     #plt.title("everything's a line on a loglog-plot lol")
