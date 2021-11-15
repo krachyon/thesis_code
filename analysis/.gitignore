@@ -9,4 +9,6 @@ test_images/
 *.gz
 *.mplf
 *.dat
+*.npy
+*.zstd
 
