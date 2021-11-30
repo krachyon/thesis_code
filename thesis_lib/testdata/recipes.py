@@ -55,7 +55,7 @@ def scopesim_grid(N1d: int = 16,
 
     m = np.array(magnitude(N))
 
-    source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
+    source = scopesim_templates.stars(filter_name=filter_name,
                                                   amplitudes=m,
                                                   spec_types=spectral_types,
                                                   x=x.ravel(), y=y.ravel())
@@ -152,7 +152,7 @@ def gaussian_cluster(N: int = 1000,
     # That's what scopesim seemed to use for all stars.
     spectral_types = ['A0V'] * Nprime
 
-    source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
+    source = scopesim_templates.stars(filter_name=filter_name,
                                                   amplitudes=m,
                                                   spec_types=spectral_types,
                                                   x=x, y=y)
@@ -180,7 +180,7 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
     :param seed: RNG initializer
     :return: image and input catalogue
     """
-    source = scopesim_templates.basic.stars.cluster(mass=1000,  # Msun
+    source = scopesim_templates.cluster(mass=1000,  # Msun
                                                     distance=50000,  # parsec
                                                     core_radius=0.3,  # parsec
                                                     seed=seed)
@@ -314,7 +314,7 @@ def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nd
 
     spectral_types = ['A0V']
 
-    source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
+    source = scopesim_templates.stars(filter_name=filter_name,
                                                   amplitudes=m,
                                                   spec_types=spectral_types,
                                                   x=x, y=y)
@@ -332,7 +332,7 @@ def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nd
 
 
 def empty_image(seed: int = 1000) -> Tuple[np.ndarray, Table]:
-    source = scopesim_templates.basic.misc.empty_sky()
+    source = scopesim_templates.empty_sky()
     detector = setup_optical_train()
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -372,7 +372,7 @@ def scopesim_groups(N1d: int = 16,
 
     m = np.array(magnitude(N * group_size))
 
-    source = scopesim_templates.basic.stars.stars(filter_name=filter_name,
+    source = scopesim_templates.stars(filter_name=filter_name,
                                                   amplitudes=m,
                                                   spec_types=spectral_types,
                                                   x=x, y=y)
