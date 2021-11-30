@@ -18,7 +18,7 @@
     # Airy2D radius 8: Break in deviation at 0.5 phases
 
 import numbers
-from itertools import product, count
+from itertools import count
 from typing import Union
 
 import matplotlib.pyplot as plt
@@ -245,10 +245,6 @@ def fit_models_dictarg(kwargs_dict):
     return kwargs_dict | fit_models(**kwargs_dict)
 
 
-def dictoflists_to_listofdicts(dict_of_list):
-    return [dict(zip(dict_of_list.keys(), vals)) for vals in product(*dict_of_list.values())]
-
-
 def create_arg_list(dict_of_lists):
     dict_of_lists = dict_of_lists.copy()
     seed_start = dict_of_lists.pop('seed_start', 0)
@@ -444,7 +440,8 @@ if __name__ == '__main__':
           'return_imgs': [True]
           }
 
-    from thesis_lib.util import DebugPool
+    from thesis_lib.util import DebugPool, dictoflists_to_listofdicts
+
     with DebugPool() as p:
     #with mp.Pool() as p:
         results = pd.DataFrame.from_records(

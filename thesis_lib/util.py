@@ -4,6 +4,7 @@ import pathlib
 import pickle
 import re
 from dataclasses import dataclass
+from itertools import product
 from typing import Any, Tuple, Union
 from functools import lru_cache
 from copy import copy
@@ -562,3 +563,12 @@ def psf_cramer_rao_bound(psf_img: np.ndarray, constant_noise_variance: float = 0
     sigma = np.sqrt(np.sum(np.linalg.inv(fisher_matrix)))
 
     return sigma
+
+
+
+def dictoflists_to_listofdicts(dict_of_list):
+    return [dict(zip(dict_of_list.keys(), vals)) for vals in product(*dict_of_list.values())]
+
+# TODO rename me
+def dict_to_kwargs(function, kwargs_dict):
+    return kwargs_dict | function(**kwargs_dict)
