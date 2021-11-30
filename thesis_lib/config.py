@@ -60,6 +60,8 @@ class Config(metaclass=ClassRepr):
     use_catalogue_positions: bool = False
     perturb_catalogue_guess: Optional[float] = 0.1  # by how many pixels to randomize when using initial guess
     photometry_iterations: int = 3
+    bounds: dict[str, Tuple[Optional[float], Optional[float]]] = \
+        dataclasses.field(default_factory=lambda: {'x_0': (None, None), 'y_0': (None, None), 'flux_0': (None, None)})
 
     scopesim_working_dir: str = appdirs.user_cache_dir('scopesim_workspace')
 

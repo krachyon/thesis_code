@@ -134,6 +134,7 @@ class Session:
         self.epsfstars: Optional[photutils.EPSFStars] = None
         self.epsf: Optional[photutils.EPSFModel] = None
         self.fwhm: Optional[float] = None
+        self.residual = None
 
     # ## Properties ## #
     @property
@@ -204,13 +205,16 @@ class Session:
             psf_model=self.epsf,
             fitter=self.fitter,
             niters=self.config.photometry_iterations,
-            fitshape=self.config.fitshape
+            fitshape=self.config.fitshape,
+            bounds=self.config.bounds
         )
         if initial_guess:
             guess_table = initial_guess
         else:
             guess_table = self.tables.select_table_for_photometry(self.config)
         self.tables.result_table = self.photometry.do_photometry(self.image, init_guesses=guess_table)
+        self.residual = self.photometry.get_residual_image()
+
         return self
 
     def do_it_all(self) -> __class__:
