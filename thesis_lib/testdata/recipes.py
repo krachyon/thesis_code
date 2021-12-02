@@ -7,10 +7,11 @@ import os
 from typing import Tuple, Optional, Callable, Union
 
 import numpy as np
-import scopesim_templates
 from astropy.convolution import Gaussian2DKernel, Kernel2D, convolve_fft
 from astropy.modeling.functional_models import Gaussian2D
 from astropy.table import Table
+from scopesim_templates.calibration import empty_sky
+from scopesim_templates.stellar import stars, cluster
 from tqdm import tqdm
 
 from photutils import FittableImageModel
@@ -55,10 +56,10 @@ def scopesim_grid(N1d: int = 16,
 
     m = np.array(magnitude(N))
 
-    source = scopesim_templates.stars(filter_name=filter_name,
-                                                  amplitudes=m,
-                                                  spec_types=spectral_types,
-                                                  x=x.ravel(), y=y.ravel())
+    source = stars(filter_name=filter_name,
+                   amplitudes=m,
+                   spec_types=spectral_types,
+                   x=x.ravel(), y=y.ravel())
     if custom_subpixel_psf:
         detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
     else:
@@ -126,7 +127,8 @@ def gaussian_cluster_modeladd(N: int = 1000,
     img = np.random.poisson(img) + np.random.normal(3164.272322010335, 58, img.shape)
     if saturation:
         scopesim_wdir = Config.instance().scopesim_working_dir
-        img = SaturationModel(read_scopesim_linearity(os.path.join(scopesim_wdir, 'MICADO/FPA_linearity.dat'))).evaluate(img)
+        img = SaturationModel(
+            read_scopesim_linearity(os.path.join(scopesim_wdir, 'MICADO/FPA_linearity.dat'))).evaluate(img)
 
     table = Table((xs.ravel(), ys.ravel(), fluxes, ms), names=COLUMN_NAMES)
     return img, table
@@ -152,10 +154,10 @@ def gaussian_cluster(N: int = 1000,
     # That's what scopesim seemed to use for all stars.
     spectral_types = ['A0V'] * Nprime
 
-    source = scopesim_templates.stars(filter_name=filter_name,
-                                                  amplitudes=m,
-                                                  spec_types=spectral_types,
-                                                  x=x, y=y)
+    source = stars(filter_name=filter_name,
+                   amplitudes=m,
+                   spec_types=spectral_types,
+                   x=x, y=y)
 
     if custom_subpixel_psf:
         detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
@@ -180,10 +182,10 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
     :param seed: RNG initializer
     :return: image and input catalogue
     """
-    source = scopesim_templates.cluster(mass=1000,  # Msun
-                                                    distance=50000,  # parsec
-                                                    core_radius=0.3,  # parsec
-                                                    seed=seed)
+    source = cluster(mass=1000,  # Msun
+                     distance=50000,  # parsec
+                     core_radius=0.3,  # parsec
+                     seed=seed)
 
     detector = setup_optical_train(psf_effect=make_psf(), custom_subpixel_psf=custom_subpixel_psf)
 
@@ -199,8 +201,8 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
     y_px = to_pixel_scale(ys)
 
     return_table = Table((x_px.ravel(),
-                   y_px.ravel(),
-                   fluxes, ms), names=COLUMN_NAMES)
+                          y_px.ravel(),
+                          fluxes, ms), names=COLUMN_NAMES)
 
     return observed_image, return_table
 
@@ -277,7 +279,7 @@ def model_add_grid(model: FittableImageModel,
 
     # list of sources to generate, shape: [[y0,y1...], [x0,x1...]]
     yx_sources = np.mgrid[0 + border:size - border:N1d * 1j, 0 + border:size - border:N1d * 1j].transpose(
-        (1, 2, 0)).reshape(-1, 2)
+            (1, 2, 0)).reshape(-1, 2)
     yx_sources += np.random.uniform(0, perturbation, (N1d ** 2, 2))
 
     fluxes = flux_func(N1d ** 2)
@@ -307,17 +309,16 @@ def model_add_grid(model: FittableImageModel,
 
 
 def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
-
     x = np.array([0])
     y = np.array([0])
     m = np.array([16.])
 
     spectral_types = ['A0V']
 
-    source = scopesim_templates.stars(filter_name=filter_name,
-                                                  amplitudes=m,
-                                                  spec_types=spectral_types,
-                                                  x=x, y=y)
+    source = stars(filter_name=filter_name,
+                   amplitudes=m,
+                   spec_types=spectral_types,
+                   x=x, y=y)
 
     detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
 
@@ -332,7 +333,7 @@ def single_star_image(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nd
 
 
 def empty_image(seed: int = 1000) -> Tuple[np.ndarray, Table]:
-    source = scopesim_templates.empty_sky()
+    source = empty_sky()
     detector = setup_optical_train()
     detector.observe(source, random_seed=seed, update=True)
     observed_image = detector.readout()[0][1].data
@@ -372,10 +373,10 @@ def scopesim_groups(N1d: int = 16,
 
     m = np.array(magnitude(N * group_size))
 
-    source = scopesim_templates.stars(filter_name=filter_name,
-                                                  amplitudes=m,
-                                                  spec_types=spectral_types,
-                                                  x=x, y=y)
+    source = stars(filter_name=filter_name,
+                   amplitudes=m,
+                   spec_types=spectral_types,
+                   x=x, y=y)
     if custom_subpixel_psf:
         detector = setup_optical_train(custom_subpixel_psf=custom_subpixel_psf)
     else:
@@ -402,8 +403,8 @@ def one_source_testimage():
 def multi_source_testimage():
     img = np.zeros((301, 301))
     xs = [50, 50, 120.1, 100, 20]
-    ys = [50,57,130,20.3,100.8]
-    fluxes = [10,20,20,10,30]
+    ys = [50, 57, 130, 20.3, 100.8]
+    fluxes = [10, 20, 20, 10, 30]
     model = Gaussian2D(x_mean=0, y_mean=0, x_stddev=1.5, y_stddev=1.5)
 
     for x, y, f in zip(xs, ys, fluxes):

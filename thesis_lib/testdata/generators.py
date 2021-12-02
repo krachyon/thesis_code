@@ -56,7 +56,7 @@ def read_or_generate_image(filename_base: str,
                 img, table = recipe()
             img = img.astype(np.float64, order='C', copy=False)
             PrimaryHDU(img).writeto(image_name, overwrite=True)
-            table.write(table_name, format='ascii.ecsv')
+            table.write(table_name, format='ascii.ecsv', overwrite=True)
 
     return img, table
 
