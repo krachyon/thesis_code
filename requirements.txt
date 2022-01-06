@@ -10,6 +10,7 @@ scopesim_templates
 image_registration
 
 pytest
+pytest-print
 pyckles
 astwro
 multiprocess
@@ -23,7 +24,7 @@ ipython
 ipywidgets
 appdirs
 dill
-numba
+#numba
 pyFFTW
 termcolor
 zstandard

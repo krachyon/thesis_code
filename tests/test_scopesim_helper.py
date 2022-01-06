@@ -12,7 +12,6 @@ def test_anisocado_model_centered(anisocado_model):
     actual = centroid_quadratic(data)
     expected = center_of_image(data)
 
-
     assert np.all(np.abs(np.array(actual) - np.array(expected)) < 1e-8)
 
 
@@ -23,6 +22,14 @@ def test_anisocado_model_normalized(oversampling, degree, lowpass):
     mod = make_anisocado_model(oversampling=oversampling, degree=degree, lowpass=lowpass)
     assert np.abs(np.sum(mod.render()) - 1) < 1e4
 
+
+def disabled_test_weird_os4():
+    mod = make_anisocado_model(oversampling=4, degree=5)
+    mod = make_anisocado_model(oversampling=4, degree=5)
+
+    mod.render()
+    y,x = np.mgrid[-200:200:401j, -200:200:401j]
+    mod(x,y)
 
 
 # Lowpass seems to fail. Investigate
