@@ -16,3 +16,5 @@ src/
 **/test_images*/
 **/output_files*/
 
+trials_scratches/fast_splines.py
+trials_scratches/.ipynb_checkpoints/
