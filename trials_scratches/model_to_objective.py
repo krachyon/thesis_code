@@ -67,6 +67,7 @@ def make_objective_function(model: FittableImageModel,
     def objective(values):
         # assert len(values) = 3 * len(to_optimize)
         eval_img = np.zeros_like(img_to_fit)
+        # TODO maybe re-gridding this instead of transposing
         for x, y, flux in np.split(values, len(values)/3):
             eval_img += flux * norm * interpolator(oversampling[0]*(xs-x),
                                                    oversampling[1]*(ys-y)).T
@@ -141,8 +142,8 @@ if __name__ == '__main__':
         update_guess(guess_table, x_found['x'], to_optimize)
 
 
-    plt.imshow(img)
-    plt.plot(table['x'], table['y'], 'gx')
-    plt.plot(guess_table[xname], guess_table[yname], 'ro')
-    plt.show()
+    #plt.imshow(img)
+    #plt.plot(table['x'], table['y'], 'gx')
+    #plt.plot(guess_table[xname], guess_table[yname], 'ro')
+    #plt.show()
 
