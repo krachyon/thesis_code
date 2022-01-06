@@ -31,7 +31,8 @@ def get_lock(file_path: str) -> filelock.FileLock:
 
 def read_or_generate_image(filename_base: str,
                            config: Config = Config.instance(),
-                           recipe: Optional[Callable[[], Tuple[np.ndarray, Table]]] = None):
+                           recipe: Optional[Callable[[], Tuple[np.ndarray, Table]]] = None,
+                           force_generate = False):
     """
     For the 'recipe' either generate and write the image+catalogue or read existing output from disk
     :param directory: where to put/read data
@@ -46,7 +47,7 @@ def read_or_generate_image(filename_base: str,
     table_name = join(config.image_folder, filename_base + '.dat')
     lock = get_lock(abspath(image_name))
     with lock:
-        if exists(image_name) and exists(table_name):
+        if (exists(image_name) and exists(table_name)) and not force_generate:
             img = getdata_safer(image_name)
             table = Table.read(table_name, format='ascii.ecsv')
         else:

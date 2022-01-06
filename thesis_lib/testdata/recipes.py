@@ -80,11 +80,12 @@ noise = 57
 
 def _gaussian_cluster_coords(N: int = 1000,
                              seed: int = 9999,
-                             magnitude=lambda N: np.random.normal(21, 2, N)
+                             magnitude=lambda N: np.random.normal(21, 2, N),
+                             tightness=1
                              ):
     np.random.seed(seed)
-    x = np.random.normal(0, 1, N)
-    y = np.random.normal(0, 1, N)
+    x = np.random.normal(0, tightness, N)
+    y = np.random.normal(0, tightness, N)
     m = magnitude(N)
     x_in_px = to_pixel_scale(x)
     y_in_px = to_pixel_scale(y)
@@ -103,8 +104,9 @@ def gaussian_cluster_modeladd(N: int = 1000,
                               seed: int = 9999,
                               magnitude=lambda N: np.random.normal(21, 2, N),
                               psf_model: Optional[Callable] = None,
-                              saturation: bool = True):
-    xs, ys, ms = _gaussian_cluster_coords(N, seed, magnitude)
+                              saturation: bool = True,
+                              tightness=1):
+    xs, ys, ms = _gaussian_cluster_coords(N, seed, magnitude, tightness)
 
     img = np.zeros((1024, 1024))
     if not psf_model:
@@ -138,7 +140,8 @@ def gaussian_cluster(N: int = 1000,
                      seed: int = 9999,
                      magnitude=lambda N: np.random.normal(21, 2, N),
                      psf_transform=lambda x: x,
-                     custom_subpixel_psf=None) -> Tuple[np.ndarray, Table]:
+                     custom_subpixel_psf=None,
+                     tightness=1) -> Tuple[np.ndarray, Table]:
     """
     Emulates custom cluster creation from initial simcado script.
     Stars with gaussian position and magnitude distribution
@@ -147,7 +150,7 @@ def gaussian_cluster(N: int = 1000,
     :param psf_transform: function modifying the psf array
     :return: image and input catalogue
     """
-    x, y, m = _gaussian_cluster_coords(N, seed, magnitude)
+    x, y, m = _gaussian_cluster_coords(N, seed, magnitude, tightness)
 
     Nprime = len(x)
 
