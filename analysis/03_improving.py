@@ -55,6 +55,7 @@ cfg.use_catalogue_positions = True
 cfg.separation_factor = 20
 cfg.photometry_iterations = 1
 cfg.perturb_catalogue_guess = 0.01
+cfg.fitshape=51
 
 epsf = make_anisocado_model()
 
@@ -94,60 +95,93 @@ else:
     with mp.Pool() as p:
         recs = p.map(lambda arg: dict_to_kwargs(benchmark_parameter_constraints, arg), tqdm(args), 1)
     performance_data = pd.DataFrame.from_records(recs)
+    performance_data.to_pickle(result_name)
 
-
-# %%
-performance_data
-
-# %%
-grpd.groups
 
 # %%
 fig=plt.figure()
 fake_handles = []
 labels = []
 
-large_bound = performance_data[np.isnan(performance_data.fluxbound) & (performance_data.posbound==1)]
-small_bound = performance_data[~np.isnan(performance_data.fluxbound) & (performance_data.posbound==0.1)]
-
+large_bound = performance_data[np.isnan(performance_data.fluxbound) & (performance_data.posbound>=0.5)]
+small_bound = performance_data[~np.isnan(performance_data.fluxbound) & (performance_data.posbound<=0.1)]
 
 grpd=large_bound.groupby('groupsize', as_index=False)
 vp = plt.violinplot([group.runtime for _, group in grpd], [pos for pos, _ in grpd],
-               showmedians=True, showextrema=False)
+               showmedians=True, showextrema=False, widths=1.5)
 fake_handles.append(vp['cmedians'])
 labels.append('large bounds')
 
 grpd=small_bound.groupby('groupsize', as_index=False)
 vp = plt.violinplot([group.runtime for _, group in grpd], [pos for pos, _ in grpd],
-               showmedians=True, showextrema=False)
+               showmedians=True, showextrema=False, widths=1.5)
 
 fake_handles.append(vp['cmedians'])
 labels.append('small bounds')
 
-p=plt.plot(grpd.mean().groupsize, 0.3*grpd.mean().groupsize**2)
+xs = np.linspace(3,30,1000)
+p=plt.plot(xs, 0.5*xs**2)
 fake_handles.append(p[0])
-labels.append(r'$0.3$ groupSize $^2$')
+labels.append(r'$0.5$ groupSize $^2$')
 
 plt.legend(fake_handles, labels, loc='upper left')
 plt.xlabel('size of fitted star-group')
 plt.ylabel('runtime in seconds')
 plt.yscale('log')
 
+
 # %% [markdown]
 # \todo{grouper finds connected components, not just all stars around target within radius}
 #
-# Considering the science case of astrometry in crowded fields a it is not at all unexpected to find a group of more than 30 stars that form a connected component within 2 FWHMs of the PSF. With photutils, this whole connected component is fit simultaneously. 
+# Considering the science case of astrometry in crowded fields a it is not at all unexpected to find a group of more than 30 stars that form a connected component within 2 FWHMs of the PSF. With the currently available Grouping and Fitting routines in photutils, this whole connected component is fit simultaneously. 
 #
-# It is obvious that scaling the simultaneous fit to groups beyond 30 stars is prohibitively expensive. The mean run-time increases with $\mathcal O(N^2)$ with large outliers towards much longer run-times. It is suspected that these outliers are pathological cases in which the fit is stuck in a low-gradient local environment.
+# To evaluate if a tight restriction on the fit-parameter can make this process viable \todo{we wanted this because diverging fits}, images containing isolated groups of sources are fit with a modified version of `BasicPSFPhotometry`. With the modifications in \todo{link branch for parameter_restriction} and using a TRF-Fitter one can specify constraints on the parameters.
+#
+# While initial experiments looked promising wrt. the quality of the results (i.e. no wandering sources) the run-time of the fits was concerning.
+#
+#
+# It is obvious that scaling the simultaneous fit to groups beyond 30 stars is prohibitively expensive. The mean run-time increases with $\mathcal O(N^2)$ with a significant amount of outliers towards much longer run-times. It is suspected that these outliers are pathological cases in which the fit is stuck in a low-gradient local environment.
 #
 # One could set an aggressive limit on the fit iterations or introduce a timeout on a per-group basis. This would require manual intervention and tuning on a per-image basis and would make an automatic analysis of a single frame infeasible
 #
-# A strict restriction on the star positions and fluxes within the group can improve performance by a factor of about $5$ in the best cases, but given the quadratic run-time scaling this will not save the method
+# A strict restriction on the star positions and fluxes within the group can improve performance by a factor of about $5$ in the best cases, but given the quadratic run-time scaling, even a drastic constant improvement factor will not make the simultaneous fit feasible for crowded fields
 #
-# \
 # \todo{image for connected component}
 
 # %% [markdown]
 # # Qualitative analysis of restriction effect
 
 # %%
+def recipe():
+    return scopesim_groups(N1d=8, border=50, group_size=1, group_radius=1, jitter=2,
+                           magnitude=lambda N: np.random.normal(21, 2, N),
+                           custom_subpixel_psf=epsf, seed=10)
+
+def recipe():
+    return scopesim_groups(N1d=13, border=70, group_size=1, group_radius=1, jitter=15,
+                           magnitude=lambda N: [20.5]*N,
+                           custom_subpixel_psf=epsf, seed=10)
+
+cfg.fithshape=199
+cfg.bounds = {'x_0': (0.3, 0.3), 'y_0': (0.3, 0.3), 'flux_0': (10000, 10000)}
+cfg.niters = 1
+
+img, tab = read_or_generate_image(f'169x1_group', cfg, recipe)
+trialsession = Session(cfg, image=img, input_table=tab)
+trialsession.fitter = TRFLSQFitter()
+trialsession.epsf = epsf
+trialsession.determine_psf_parameters()
+trialsession.do_astrometry()
+
+# %%
+plot_image_with_source_and_measured(img, tab, trialsession.tables.result_table)
+pass
+
+# %%
+plot_xy_deviation(trialsession.tables.result_table)
+pass
+
+# %% [markdown]
+# ## Reinventing the wheel
+#
+# Severe performance bug when using RectBivariateSpline
