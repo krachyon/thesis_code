@@ -7,11 +7,12 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any, Tuple, Union
 from functools import lru_cache
-from copy import copy
+from copy import deepcopy
 
 import astropy.io.fits
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.modeling.functional_models import Gaussian2D
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 from scipy.interpolate import RectBivariateSpline
@@ -28,7 +29,7 @@ def copying_lru_cache(*decorator_args, **decorator_kwargs):
         cached_func = lru_cache(*decorator_args, **decorator_kwargs)(func)
 
         def inner(*args, **kwargs):
-            return copy(cached_func(*args, **kwargs))
+            return deepcopy(cached_func(*args, **kwargs))
 
         return inner
     return created_decorator
@@ -72,14 +73,14 @@ def gauss(x, a, x0, σ):
     return a * np.exp(-(x - x0) ** 2 / (2 * σ ** 2))
 
 
-def make_gauss_kernel(σ=1.0):
-    """create a 5x5 gaussian convolution kernel"""
-    x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
-    d = np.sqrt(x * x + y * y)
+def make_gauss_kernel(σ=1.0, N=5):
+    """create a gaussian convolution kernel for the EPSF smoothing step"""
+    mod = Gaussian2D(x_stddev=σ, y_stddev=σ)
 
-    gauss_kernel = gauss(d, 1., 0.0, σ)
-    return gauss_kernel/np.sum(gauss_kernel)
+    y, x = np.mgrid[-N / 2:N / 2:N * 1j, -N / 2:N / 2:N * 1j]
+    ev = mod(y, x)
 
+    return ev / np.sum(ev)
 
 def airy_fwhm(r):
     """FWHM= 1.028λ/d ; θ~=r=1.22 λ/d"""
