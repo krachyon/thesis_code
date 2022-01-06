@@ -2,13 +2,10 @@
 # %%
 # %matplotlib notebook
 # %pylab
-import matplotlib.pyplot as plt
-import numpy as np
 
 from itertools import chain
 import os
 import multiprocess as mp
-from tqdm.auto import tqdm
 from pathlib import Path
 import pickle
 import zstandard
@@ -18,18 +15,16 @@ from matplotlib.ticker import MaxNLocator
 from scipy.signal import fftconvolve
 from scipy.stats import zscore
 
-from anisocado import AnalyticalScaoPsf
 import astropy.units as u
-from astropy.convolution.kernels import AiryDisk2DKernel
 from astropy.modeling.functional_models import AiryDisk2D
 from astropy.convolution import AiryDisk2DKernel, convolve
 
 from thesis_lib.standalone_analysis.sampling_precision import *
 from thesis_lib.testdata.recipes import convolved_grid
-from thesis_lib.util import save_plot, estimate_fwhm, psf_cramer_rao_bound, psf_to_fisher
+from thesis_lib.util import save_plot, estimate_fwhm, psf_cramer_rao_bound, psf_to_fisher, dictoflists_to_listofdicts
 from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
-    fillqueue, anderson_gauss_ramp, plot_lambda_vs_precission_relative, fit_dictarg
-from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce, cumulative_flux
+    fillqueue, plot_lambda_vs_precission_relative, fit_dictarg
+from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)

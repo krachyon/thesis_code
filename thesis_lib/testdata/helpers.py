@@ -1,5 +1,5 @@
 import anisocado
-import numba
+#import numba
 import numpy as np
 from astropy.convolution import Kernel2D
 from astropy.modeling.functional_models import Gaussian2D
@@ -9,7 +9,7 @@ from thesis_lib.util import centered_grid
 
 
 def gauss2d(σ_x=1., σ_y=1., a=1.):
-    @numba.njit(fastmath=True)
+    #@numba.njit(fastmath=True)
     def inner(x: np.ndarray, y: np.ndarray):
         return a * np.exp(-x ** 2 / (2 * σ_x ** 2) + -y ** 2 / (2 * σ_y ** 2))
 

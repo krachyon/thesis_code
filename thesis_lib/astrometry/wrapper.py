@@ -9,7 +9,7 @@ from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.table import Table
 
 import photutils
-from photutils import DAOStarFinder, DAOGroup, EPSFBuilder, IterativelySubtractedPSFPhotometry, MMMBackground
+from photutils import DAOStarFinder, DAOGroup, EPSFBuilder, IterativelySubtractedPSFPhotometry, MMMBackground, BasicPSFPhotometry
 from thesis_lib import config
 from .functions import calc_image_stats, extract_epsf_stars, perturb_guess_table, \
     match_finder_to_reference, calc_extra_result_columns, mark_outliers
@@ -89,7 +89,7 @@ class TableSet(metaclass=util.ClassRepr):
             #  the model towards zero instead of increasing flux and adapting positions
             # TODO imho this is a sign that the objective function is bad. It should penalize
             #  a non-existent model if there's flux in the pixels
-            ret.remove_column('flux_0')
+            # ret.remove_column('flux_0')
             return perturb_guess_table(ret, config.perturb_catalogue_guess, config.seed)
         elif self._result_table:
             return self._result_table.convert(GuessTable)
@@ -216,6 +216,9 @@ class Session:
         self.residual = self.photometry.get_residual_image()
 
         return self
+
+    def do_astrometry_mine(self, initial_guess: Optional[GuessTable] = None) -> __class__:
+        raise NotImplementedError
 
     def do_it_all(self) -> __class__:
         """Fire and forget mode"""
