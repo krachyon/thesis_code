@@ -144,9 +144,6 @@ axs[1].legend()
 save_plot(outdir, 'epsf_quality')
 
 # %%
-clf()
-
-# %%
 # residual between real PSF and EPSF
 y, x = np.mgrid[-50:50:101j,-50:50:101j]
 def comparison_plot(empiric, title):

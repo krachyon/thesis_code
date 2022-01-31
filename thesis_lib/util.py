@@ -5,9 +5,10 @@ import pickle
 import re
 from dataclasses import dataclass
 from itertools import product
-from typing import Any, Tuple, Union
+from typing import Any, Tuple, Union, Optional, Callable
 from functools import lru_cache
 from copy import deepcopy
+import zstandard
 
 import astropy.io.fits
 import matplotlib.pyplot as plt
@@ -535,6 +536,8 @@ def double_trapz(arr: np.array, dx=1) -> float:
     return np.trapz(np.trapz(arr, dx=dx), dx=dx)
 
 
+# Todo the next two should be somewhere else
+
 def psf_to_fisher(psf_img: np.ndarray, constant_noise_variance: float = 0, n_photons: int = 1, oversampling=1) -> np.ndarray:
     """
     calculate Fisher information matrix for a given psf grid. Multiply with N to get information for N counts
@@ -566,9 +569,29 @@ def psf_cramer_rao_bound(psf_img: np.ndarray, constant_noise_variance: float = 0
     return sigma
 
 
+RERUN_ALL_CACHED = False  # you can toggle this at the beginning of a script to re-do everything
+def cached(func: Callable[[],Any], filename: pathlib.Path, rerun: Optional[bool] = False):
+    global RERUN_ALL_CACHED
+    ext = '.pkl.zstd'
+    filename = filename.with_suffix(ext)
+    if not filename.exists() or rerun or RERUN_ALL_CACHED:
+        result = func()
+        with zstandard.open(filename, 'wb') as outfile:
+            pickle.dump(result, outfile)
+    else:
+        with zstandard.open(filename, 'rb') as infile:
+            result = pickle.load(infile)
+    return result
+
+
+def read_zstpkl(filename: pathlib.Path):
+    with zstandard.open(filename, 'rb') as f:
+        return pickle.load(f)
+
 
 def dictoflists_to_listofdicts(dict_of_list):
     return [dict(zip(dict_of_list.keys(), vals)) for vals in product(*dict_of_list.values())]
+
 
 # TODO rename me
 def dict_to_kwargs(function, kwargs_dict):

@@ -8,18 +8,24 @@ from astropy.modeling.fitting import TRFLSQFitter
 
 from thesis_lib.scopesim_helper import make_anisocado_model
 from thesis_lib.testdata.generators import read_or_generate_image
-from thesis_lib.testdata.recipes import scopesim_groups
+from thesis_lib.testdata.recipes import scopesim_groups, gaussian_cluster
 from thesis_lib import config
 from thesis_lib.astrometry.plots import plot_image_with_source_and_measured, plot_xy_deviation
+
+from photutils.psf.incremental_fit_photometry import *
+
 import numpy as np
 import matplotlib.pyplot as plt
-from thesis_lib.util import dictoflists_to_listofdicts, dict_to_kwargs
+from matplotlib.colors import LogNorm
+from thesis_lib.util import dictoflists_to_listofdicts, dict_to_kwargs, save_plot
 import multiprocess as mp
 import pandas as pd
 import timeit
 from tqdm.auto import tqdm
 from pathlib import Path
 import os
+from scipy.spatial import ConvexHull, convex_hull_plot_2d
+
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
 plt.rcParams['figure.dpi'] = 100
@@ -108,13 +114,13 @@ small_bound = performance_data[~np.isnan(performance_data.fluxbound) & (performa
 
 grpd=large_bound.groupby('groupsize', as_index=False)
 vp = plt.violinplot([group.runtime for _, group in grpd], [pos for pos, _ in grpd],
-               showmedians=True, showextrema=False, widths=1.5)
+               showmedians=True, showextrema=False, widths=1.5, points=1000, bw_method=0.3)
 fake_handles.append(vp['cmedians'])
 labels.append('large bounds')
 
 grpd=small_bound.groupby('groupsize', as_index=False)
 vp = plt.violinplot([group.runtime for _, group in grpd], [pos for pos, _ in grpd],
-               showmedians=True, showextrema=False, widths=1.5)
+               showmedians=True, showextrema=False, widths=1.5, points=1000, bw_method=0.3)
 
 fake_handles.append(vp['cmedians'])
 labels.append('small bounds')
@@ -128,25 +134,8 @@ plt.legend(fake_handles, labels, loc='upper left')
 plt.xlabel('size of fitted star-group')
 plt.ylabel('runtime in seconds')
 plt.yscale('log')
+save_plot(outdir, 'group_fit_bounds_runtime')
 
-
-# %% [markdown]
-# \todo{grouper finds connected components, not just all stars around target within radius}
-#
-# Considering the science case of astrometry in crowded fields a it is not at all unexpected to find a group of more than 30 stars that form a connected component within 2 FWHMs of the PSF. With the currently available Grouping and Fitting routines in photutils, this whole connected component is fit simultaneously. 
-#
-# To evaluate if a tight restriction on the fit-parameter can make this process viable \todo{we wanted this because diverging fits}, images containing isolated groups of sources are fit with a modified version of `BasicPSFPhotometry`. With the modifications in \todo{link branch for parameter_restriction} and using a TRF-Fitter one can specify constraints on the parameters.
-#
-# While initial experiments looked promising wrt. the quality of the results (i.e. no wandering sources) the run-time of the fits was concerning.
-#
-#
-# It is obvious that scaling the simultaneous fit to groups beyond 30 stars is prohibitively expensive. The mean run-time increases with $\mathcal O(N^2)$ with a significant amount of outliers towards much longer run-times. It is suspected that these outliers are pathological cases in which the fit is stuck in a low-gradient local environment.
-#
-# One could set an aggressive limit on the fit iterations or introduce a timeout on a per-group basis. This would require manual intervention and tuning on a per-image basis and would make an automatic analysis of a single frame infeasible
-#
-# A strict restriction on the star positions and fluxes within the group can improve performance by a factor of about $5$ in the best cases, but given the quadratic run-time scaling, even a drastic constant improvement factor will not make the simultaneous fit feasible for crowded fields
-#
-# \todo{image for connected component}
 
 # %% [markdown]
 # # Qualitative analysis of restriction effect
@@ -182,6 +171,48 @@ plot_xy_deviation(trialsession.tables.result_table)
 pass
 
 # %% [markdown]
-# ## Reinventing the wheel
-#
-# Severe performance bug when using RectBivariateSpline
+# # visualizing the grouper
+
+# %%
+rng = np.random.default_rng(seed=11)
+model = make_anisocado_model()
+def recipe():
+    return gaussian_cluster(N=150, tightness=0.25, magnitude=lambda N: rng.uniform(20.5, 21.5, size=N), custom_subpixel_psf=model, seed=11)
+
+img, table = read_or_generate_image('clusterN150', recipe=recipe)
+
+table.rename_columns(['x','y'], ['x_fit', 'y_fit'])
+table['update'] = True
+groups = make_groups(table, max_size=20, halo_radius=25)
+
+group_ids = np.sort(np.unique([i for group in groups for i in group['group_id']]))
+max_id = np.max(group_ids)
+
+plt.figure()
+for group in groups:
+    core_group = group[group['update']==True]
+    group_id = core_group['group_id'][0]
+    
+    cmap = plt.get_cmap('prism')
+    
+    xy_curr = np.array((group['x_fit'], group['y_fit'])).T
+    
+    if len(group)>=3:
+        hull = ConvexHull(xy_curr)
+        vertices = xy_curr[hull.vertices]
+        poly=Polygon(vertices, fill=False, color=cmap(group_id/max_id))
+        plt.gca().add_patch(poly)
+    
+    plt.scatter(core_group['x_fit'], core_group['y_fit'], color=cmap(group_id/max_id), s=8)
+
+    plt.annotate(group_id, (np.mean(core_group['x_fit']),np.mean(core_group['y_fit'])), 
+                 color='white', backgroundcolor=(0,0,0,0.25), alpha=0.7)
+    
+
+plt.imshow(img, norm=LogNorm())
+plt.xlim(300,710)
+plt.ylim(275,700)
+plt.gcf().set_size_inches(8,8)
+save_plot(outdir, 'grouper_visualization')
+
+# %%

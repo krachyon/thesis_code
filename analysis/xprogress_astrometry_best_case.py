@@ -79,17 +79,19 @@ def recipe_template_conv(seed):
         from thesis_lib.testdata.recipes import scopesim_grid
         from thesis_lib.testdata.helpers import lowpass
         import numpy as np
-        return scopesim_grid(seed=seed, N1d=25, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: np.random.uniform(18, 24, N))
+        return scopesim_grid(seed=seed, N1d=10, perturbation=2., psf_transform=lowpass(), magnitude=lambda N: np.random.uniform(18, 24, N))
     return inner
 
-psf = make_anisocado_model(lowpass=5)
+
 def recipe_template_subpixel(seed):
     def inner():
         # These imports are necessary to be able to execute in a forkserver context; it does not copy the full memory space, so
         # we'd have to rely on the target to know the imports
         from thesis_lib.testdata.recipes import scopesim_grid
         import numpy as np
-        return scopesim_grid(seed=seed, N1d=25, perturbation=2., custom_subpixel_psf=psf, magnitude=lambda N: np.random.uniform(18, 24, N))
+        from thesis_lib.scopesim_helper import make_anisocado_model
+        psf = make_anisocado_model(lowpass=5)
+        return scopesim_grid(seed=seed, N1d=10, perturbation=2., custom_subpixel_psf=psf, magnitude=lambda N: np.random.uniform(18, 24, N))
     return inner
 
 
