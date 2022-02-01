@@ -104,7 +104,7 @@ epsf_sources_improved['y'] = epsf_sources_improved['ycentroid']
 epsf_stars = extract_stars(NDData(img_combined-SExtractorBackground()(img_combined)), epsf_sources_improved, size=(fitshape+2, fitshape+2))
 from thesis_lib.util import make_gauss_kernel
 builder = EPSFBuilder(oversampling=4, smoothing_kernel=make_gauss_kernel(1.4), maxiters=7)
-improved_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'improved_epsf_naco')
+improved_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'improved_epsf_naco', rerun=True)
 builder = EPSFBuilder(oversampling=4, smoothing_kernel='quadratic', maxiters=7)
 quadratic_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'improved_epsf_naco_quadratic')
 
@@ -117,8 +117,8 @@ fig,axs = plt.subplots(2,2)
 
 axs[0,0].imshow(improved_epsf.data, norm=LogNorm())
 axs[0,1].imshow(np.fft.fftshift(np.abs(np.fft.fft2(improved_epsf.data))), norm=LogNorm(), extent=extent)
-axs[1,0].imshow(quartic_epsf.data, norm=LogNorm())
-axs[1,1].imshow(np.fft.fftshift(np.abs(np.fft.fft2(quartic_epsf.data))), norm=LogNorm(), extent=extent)
+axs[1,0].imshow(quadratic_epsf.data, norm=LogNorm())
+axs[1,1].imshow(np.fft.fftshift(np.abs(np.fft.fft2(quadratic_epsf.data))), norm=LogNorm(), extent=extent)
 axs[0,0].set_ylabel('gaussian smoothing')
 axs[1,0].set_ylabel('quadratic smoothing')
 axs[1,0].set_xlabel('PSF data')
@@ -226,10 +226,11 @@ photometry_quadratic = IncrementalFitPhotometry(SExtractorBackground(),
 
 
 result_table_combined_quadratic = cached(lambda: photometry_quadratic.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_quadratic')
-result_table_combined = cached(lambda: photometry.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_gauss')
+result_table_combined = cached(lambda: photometry.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_gauss', rerun=True)
 
 # %%
 photometry._last_image = img_combined - photometry.bkg_estimator(img_combined)
+#residual = photometry_quadratic.residual(result_table_combined_quadratic)
 residual = photometry.residual(result_table_combined)
 plt.figure()
 #plt.imshow(residual, norm=SymLogNorm(10,vmin=-7000,vmax=5000, clip=True))
@@ -239,7 +240,28 @@ cmap.set_under('red')
 plt.imshow(residual, norm=Normalize(vmin=-700, vmax=400, clip=False), cmap=cmap)
 #plt.imshow(np.abs(img_combined/residual), norm=Normalize(vmin=0, vmax=200, clip=False))
 plt.colorbar()
+#plt.plot(result_table_combined['x_fit'], result_table_combined['y_fit'], '.', markersize=2)
+plt.xlim(0,800)
+plt.ylim(0,800)
 save_plot(out_dir, "naco_residual")
+print(np.sum(np.abs(residual)))
+
+# %%
+fig,axs = plt.subplots(1,2, sharey=True)
+#plt.hexbin(xs%1, ys%1,gridsize=200)
+axs[0].plot(result_table_combined_quadratic['x_fit']%1, result_table_combined_quadratic['y_fit']%1,
+         'x', alpha=0.4, label='EPSF smoothed with quadratic interpolation')
+axs[0].set_ylabel('y-pixel-phase')
+axs[0].set_xlabel('x-pixel-phase')
+axs[0].set_title('EPSF smoothed with quadratic interpolation')
+axs[1].plot(result_table_combined['x_fit']%1, result_table_combined['y_fit']%1,
+         'x', alpha=0.4, label='EPSF smoothed with σ=1.4 gaussian')
+axs[1].set_title('EPSF smoothed with σ=1.4 gaussian')
+axs[1].set_xlabel('x-pixel-phase')
+
+plt.gcf().set_size_inches(8,4)
+#plt.legend()
+save_plot(out_dir, 'naco_pixelphase_distribution')
 
 # %%
 bootstrapped_imgs = [getdata(path).astype(np.float64)[image_cut] for path in sorted(list((base_dir).glob('ssa_deep_*.fits')))]
@@ -250,37 +272,26 @@ def run_photometry():
         result_tables.append(photometry.do_photometry(img, guess_table))
     return result_tables
 
-def run_photometry_quadratic():
-    result_tables = []
-    for img in bootstrapped_imgs:
-        result_tables.append(photomtery_quadratic.do_photometry(img, guess_table))
-    return result_tables
+#def run_photometry_quadratic():
+#    result_tables = []
+#    for img in bootstrapped_imgs:
+#        result_tables.append(photomtery_quadratic.do_photometry(img, guess_table))
+#    return result_tables
 
 result_tables = cached(run_photometry, cache_dir/'naco_photometry_bootstrapped_gauss')
-result_tables_quadratic = cached(run_photometry, cache_dir/'naco_photometry_bootstrapped_quadratic')
-
-# %%
-plt.figure()
-#plt.hexbin(xs%1, ys%1,gridsize=200)
-plt.plot(result_table_combined_quadratic['x_fit']%1, result_table_combined_quadratic['y_fit']%1,
-         '+', alpha=0.7, label='EPSF smoothed with quadratic interpolation')
-plt.plot(result_table_combined['x_fit']%1, result_table_combined['y_fit']%1,
-         'x', alpha=0.7, label='EPSF smoothed with σ=1.4 gaussian')
-plt.xlabel('x-pixel-phase')
-plt.ylabel('y-pixel-phase')
-plt.gcf().set_size_inches(6,6)
-plt.legend()
-save_plot(out_dir, 'naco_pixelphase_distribution')
+#result_tables_quadratic = cached(run_photometry, cache_dir/'naco_photometry_bootstrapped_quadratic')
 
 # %%
 result_table_combined.sort('id')
 for tab in result_tables:
     tab.sort('id')
+# todo exclude outlier fluxes
 xs = np.array([tab['x_fit'] for tab in result_tables]).flatten()
 ys = np.array([tab['y_fit'] for tab in result_tables]).flatten()
 xdev = np.array([tab['x_fit']-result_table_combined['x_fit'] for tab in result_tables]).flatten()
 ydev = np.array([tab['y_fit']-result_table_combined['y_fit'] for tab in result_tables]).flatten()
 flux = np.array([tab['flux_fit'] for tab in result_tables]).flatten()
+
 
 xstd = np.std(xdev)
 _,_,xstd_clipped = sigma_clipped_stats(xstd, sigma=100)
@@ -290,33 +301,65 @@ _,_,ystd_clipped = sigma_clipped_stats(ystd, sigma=100)
 fig = plt.figure()
 ax = fig.add_subplot(projection='polar')
 #ax.set_rscale('symlog')
-norm = LogNorm(flux.min(),flux.max())
+norm = LogNorm(1,flux.max())
 cmap = mpl.cm.get_cmap('plasma').copy()
-plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/32) , alpha=0.5, s=20, c=flux, norm=norm, cmap=cmap, linewidths=0)
-rs = np.array([0,0.2,0.4,0.6,0.8,1.])
+cmap.set_under('green')
+#plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.03, s=10, c=flux, norm=norm, cmap=cmap, linewidths=0)
+plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.35, s=8, c=flux, norm=norm, cmap=cmap, linewidths=0)
+#plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.5, s=3, c=flux, norm=norm, cmap=cmap, linewidths=0)
+rs = np.array([0.1, 0.001**(1/16),1.])
 rlabels = [f'{r:.2e}' for r in rs**16]
 ax.set_rticks(rs, rlabels, backgroundcolor=(1,1,1,0.8))
 ax.set_rlabel_position(67)
+ax.set_thetagrids([])
 cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)')
-save_plot(out_dir, 'naco_xy_density')
-xstd, ystd, xstd_clipped, ystd_clipped
+#save_plot(out_dir, 'naco_xy_density')
+xstd, ystd, xstd_clipped, ystd_clipped, np.sqrt(np.max(xdev**2+ydev**2))
+
+# %%
+plt.figure()
+plt.hist(np.abs(xdev)**(1/16), bins=100, log=False, alpha=0.5)
+plt.hist(np.abs(ydev)**(1/16), bins=100, log=False, alpha=0.5)
+
+# %%
+#vals, xbins, ybins = np.histogram2d(xdev,ydev, bins=100)
+#xindex np.argwhere(xdev)
+
+# %%
+print(np.sum((eucdev<0.01)&(eucdev>1e-8)&(xdev>1e-8)&(ydev>1e-8))/len(eucdev))
+print(np.sum((eucdev<0.01)&(eucdev>1e-8)/len(eucdev))
 
 # %%
 plt.figure()
 eucdev = np.sqrt(xdev**2+ydev**2)
-plt.hist(eucdev,bins=100, log=True)
+plt.hist(eucdev,bins=1000, log=True)
 plt.axvline(0.01, color='orange')
 np.sum(np.sqrt(xdev**2+ydev**2) < 0.01), len(xdev)
-plt.xlim(-0.05, 0.3)
-plt.text(-0.045, 4, f'$N_{{<0.01}} = {np.sum(eucdev<0.01)}$', bbox={'facecolor': 'white', 'alpha': 0.8})
-plt.text(0.03, 4, f'$N_{{>0.01}} = {np.sum(eucdev>0.01)}$', bbox={'facecolor': 'white', 'alpha': 0.8})
+plt.xlim(-0.1, 1)
+plt.text(-0.08, 4, f'$N_{{σ<0.01}} = {np.sum(eucdev<0.01)}$', bbox={'facecolor': 'white', 'alpha': 0.9})
+plt.text(0.15, 4, f'$N_{{σ>0.01}} = {np.sum(eucdev>0.01)}$', bbox={'facecolor': 'white', 'alpha': 0.9})
 plt.ylabel('number of samples')
 plt.xlabel('euclidean centroid deviation from summed image')
 save_plot(out_dir, 'naco_deviation_histogram')
 
 # %%
 plt.figure()
-plt.plot(np.log(1/flux), eucdev,'.', alpha=0.4)
+good = (flux>=1)#&(eucdev<0.25)
+order = np.argsort(flux[good])
+
+window_size = 120
+dev_slide = np.lib.stride_tricks.sliding_window_view(eucdev[good][order], window_size)
+flux_slide = np.lib.stride_tricks.sliding_window_view(flux[good][order], window_size)
+
+
+plt.plot(-np.log(flux[good]), eucdev[good],'.', alpha=0.4, label='individual samples')
+plt.plot(-np.log(np.mean(flux_slide,axis=1)), np.mean(dev_slide, axis=1), label=f'running average, length {window_size} window')
+plt.xlim(-12.2,-1)
+plt.ylim(0,0.13)
+plt.ylabel('centroid deviation [px]')
+plt.xlabel('-log(flux)')
+plt.legend()
+save_plot(out_dir, 'naco_noisefloor')
 
 # %% [markdown]
 # # Just debugging below
@@ -376,7 +419,7 @@ from scipy.spatial import ConvexHull, convex_hull_plot_2d
 from matplotlib.patches import Polygon
 def visualize_grouper(image, input_table, max_size=20, halo_radius=25):
     table = input_table.copy()
-    
+
     table.rename_columns(['x_0','y_0'], ['x_fit', 'y_fit'])
     table['update'] = True
     groups = make_groups(table, max_size=max_size, halo_radius=halo_radius)
@@ -401,7 +444,7 @@ def visualize_grouper(image, input_table, max_size=20, halo_radius=25):
 
         plt.scatter(core_group['x_fit'], core_group['y_fit'], color=cmap(group_id/max_id), s=8)
 
-        #plt.annotate(group_id, (np.mean(core_group['x_fit']),np.mean(core_group['y_fit'])), 
+        #plt.annotate(group_id, (np.mean(core_group['x_fit']),np.mean(core_group['y_fit'])),
         #             color='white', backgroundcolor=(0,0,0,0.25), alpha=0.7)
 
 
@@ -434,8 +477,11 @@ def sqrt_squish(xs, ys, base=2):
 # %%
 plt.figure()
 #plt.hexbin(*sqrt_squish(xdev, ydev, base=16), norm=LogNorm())
-plt.hexbin(xdev, ydev, norm=LogNorm(), gridsize=300)
+good = (np.abs(xdev)<0.1) & (np.abs(ydev)<0.1)
+plt.hexbin(xdev[good], ydev[good], norm=LogNorm(), gridsize=300)
 plt.xlabel('deviation in x direction')
 plt.ylabel('deviation in y direction')
 plt.colorbar(label='number of samples')
 save_plot(out_dir, 'naco_xy_density')
+
+# %%
