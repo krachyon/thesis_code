@@ -11,6 +11,8 @@ import numpy as np
 from photutils.psf import EPSFModel
 from .util import ClassRepr
 
+from pathlib import Path
+
 
 @dataclasses.dataclass(init=True, repr=True, eq=False, order=False)
 class Config(metaclass=ClassRepr):
@@ -63,7 +65,7 @@ class Config(metaclass=ClassRepr):
     bounds: dict[str, Tuple[Optional[float], Optional[float]]] = \
         dataclasses.field(default_factory=lambda: {'x_0': (None, None), 'y_0': (None, None), 'flux_0': (None, None)})
 
-    scopesim_working_dir: str = appdirs.user_cache_dir('scopesim_workspace')
+    scopesim_working_dir: Path = Path(appdirs.user_cache_dir('scopesim_workspace'))
 
     # TODO implement these
     disable_detector_saturation: bool = False

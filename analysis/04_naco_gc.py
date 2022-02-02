@@ -104,7 +104,7 @@ epsf_sources_improved['y'] = epsf_sources_improved['ycentroid']
 epsf_stars = extract_stars(NDData(img_combined-SExtractorBackground()(img_combined)), epsf_sources_improved, size=(fitshape+2, fitshape+2))
 from thesis_lib.util import make_gauss_kernel
 builder = EPSFBuilder(oversampling=4, smoothing_kernel=make_gauss_kernel(1.4), maxiters=7)
-improved_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'improved_epsf_naco', rerun=True)
+improved_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'improved_epsf_naco', rerun=False)
 builder = EPSFBuilder(oversampling=4, smoothing_kernel='quadratic', maxiters=7)
 quadratic_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'improved_epsf_naco_quadratic')
 
@@ -226,7 +226,7 @@ photometry_quadratic = IncrementalFitPhotometry(SExtractorBackground(),
 
 
 result_table_combined_quadratic = cached(lambda: photometry_quadratic.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_quadratic')
-result_table_combined = cached(lambda: photometry.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_gauss', rerun=True)
+result_table_combined = cached(lambda: photometry.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_gauss', rerun=False)
 
 # %%
 photometry._last_image = img_combined - photometry.bkg_estimator(img_combined)
@@ -313,7 +313,7 @@ ax.set_rticks(rs, rlabels, backgroundcolor=(1,1,1,0.8))
 ax.set_rlabel_position(67)
 ax.set_thetagrids([])
 cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)')
-#save_plot(out_dir, 'naco_xy_density')
+save_plot(out_dir, 'naco_xy_density')
 xstd, ystd, xstd_clipped, ystd_clipped, np.sqrt(np.max(xdev**2+ydev**2))
 
 # %%
@@ -485,3 +485,14 @@ plt.colorbar(label='number of samples')
 save_plot(out_dir, 'naco_xy_density')
 
 # %%
+from scipy.stats import binned_statistic_2d
+ret = binned_statistic_2d(xdev_t, ydev_t, None, 'count',bins=400, expand_binnumbers=True)
+binnumber, statistic = ret.binnumber, ret.statistic
+
+counts = statistic[binnumber[0]-1, binnumber[1]-1]
+alphas=0.5/(counts+1)
+alphas
+plt.figure()
+plt.scatter(xdev_t,ydev_t,c=flux,norm=norm,cmap=cmap,alpha=alphas,s=8)
+#plt.scatter(xdev_t,ydev_t,c=np.log(counts**0.25),cmap='jet',alpha=0.2,s=10)
+colorbar()

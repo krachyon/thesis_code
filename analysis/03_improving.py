@@ -3,7 +3,6 @@
 # %pylab
 
 import thesis_lib.scopesim_helper
-from thesis_lib.astrometry.wrapper import Session
 from astropy.modeling.fitting import TRFLSQFitter
 
 from thesis_lib.scopesim_helper import make_anisocado_model
@@ -11,8 +10,13 @@ from thesis_lib.testdata.generators import read_or_generate_image
 from thesis_lib.testdata.recipes import scopesim_groups, gaussian_cluster
 from thesis_lib import config
 from thesis_lib.astrometry.plots import plot_image_with_source_and_measured, plot_xy_deviation
+from thesis_lib.astrometry.wrapper import Session
+from thesis_lib.config import Config
+import thesis_lib.util as util
+
 
 from photutils.psf.incremental_fit_photometry import *
+from photutils.psf.culler import CorrelationCuller, ChiSquareCuller
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -47,6 +51,8 @@ HTML('''
 </style>''')
 
 # %%
+#util.RERUN_ALL_CACHED = True
+cache_dir = Path('./cached_results/')
 outdir = './03_improving/'
 if not os.path.exists(outdir):
     os.mkdir(outdir)
@@ -215,4 +221,104 @@ plt.ylim(275,700)
 plt.gcf().set_size_inches(8,8)
 save_plot(outdir, 'grouper_visualization')
 
+# %% [markdown]
+# # QOF culler
+
 # %%
+cull_config = Config()
+cull_config.photometry_iterations = 1
+cull_config.threshold_factor = -0.1
+cull_config.fwhm_guess = 5
+cull_config.max_epsf_stars = 150
+cull_config.oversampling = 2
+cull_config.cutout_size = 13
+cull_config.fitshape = 15
+cull_config.smoothing = util.make_gauss_kernel(1.2)
+cull_session = Session(cull_config, 'gausscluster_N2000_mag22_subpixel')
+cull_session.find_stars().select_epsfstars_auto().make_epsf()
+detections = cull_session.tables.finder_table
+
+# %%
+plt.figure()
+
+plt.imshow(cull_session.image, norm=LogNorm())
+input_table = cull_session.tables.input_table
+plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none', markersize=7, markeredgewidth=0.6, markeredgecolor='black',alpha=0.8, label='input positions')
+plt.plot(detections['xcentroid'],detections['ycentroid'],'rx')
+
+plt.figure()
+imshow(cull_session.epsf.data)
+
+# %%
+culler = CorrelationCuller(100, cull_session.image-cull_session.background(cull_session.image), cull_session.epsf)
+def runme():
+    culler(detections)
+    return detections
+culled = util.cached(runme,
+                     cache_dir/'culler_performance', rerun=False)
+#culled = ChiSquareCuller(100, cull_session.image, cull_session.epsf)(detections)
+
+# %%
+plt.figure()
+plt.imshow(cull_session.image, cmap='Greys_r', norm=LogNorm())
+plt.colorbar(label='pixel value', shrink=0.82)
+input_table = cull_session.tables.input_table
+plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none', markersize=7, markeredgewidth=0.6, markeredgecolor='black',alpha=0.8, label='input positions')
+chisquares = np.array(detections['model_chisquare'])
+norm=LogNorm(np.nanmin(chisquares),np.nanmax(chisquares))
+chisquares[np.isnan(chisquares)] = np.nanmax(chisquares)*2
+cmap=plt.cm.get_cmap('plasma').copy()
+cmap.set_over('green')
+plt.scatter(detections['xcentroid'], detections['ycentroid'], s=4, c=chisquares, cmap=cmap, norm=norm, label='detected sources')
+plt.colorbar(label='source residual with EPSF', shrink=0.82)
+plt.ylim(500,750)
+plt.xlim(200,500)
+plt.legend()
+plt.gcf().set_size_inches(8,5)
+plt.tight_layout()
+save_plot(outdir, 'culler_good')
+
+# %%
+cull_config_bad = Config()
+cull_config_bad.photometry_iterations = 1
+cull_config_bad.threshold_factor = 0.8
+cull_config_bad.fwhm_guess = 4
+cull_config_bad.max_epsf_stars = 150
+cull_config_bad.oversampling = 2
+cull_config_bad.cutout_size = 31
+cull_config_bad.fitshape = 21
+cull_config_bad.smoothing = util.make_gauss_kernel(1.2)
+cull_session_bad = Session(cull_config_bad, 'gausscluster_N2000_mag22_subpixel')
+cull_session_bad.find_stars().select_epsfstars_auto().make_epsf()
+detections_bad = cull_session_bad.tables.finder_table
+
+# %%
+culler_bad = CorrelationCuller(100, 
+                               cull_session_bad.image-cull_session_bad.background(cull_session_bad.image),
+                               cull_session_bad.epsf)
+def runme_bad():
+    culler_bad(detections_bad)
+    return detections_bad
+culled_bad = util.cached(runme_bad,
+                     cache_dir/'culler_performance_bad', rerun=False)
+
+# %%
+plt.figure()
+plt.imshow(cull_session_bad.image, cmap='Greys_r', norm=LogNorm())
+plt.colorbar(label='pixel value', shrink=0.82)
+input_table = cull_session_bad.tables.input_table
+plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none', markersize=7, markeredgewidth=0.6, markeredgecolor='black',alpha=0.8, label='input positions')
+#plt.plot(input_table['x'], input_table['y'], 'o', fillstyle='none', markeredgewidth=0.5, markeredgecolor='red')
+chisquares_bad = np.array(detections_bad['model_chisquare'])
+norm=LogNorm(np.nanmin(chisquares_bad),np.nanmax(chisquares_bad))
+chisquares_bad[np.isnan(chisquares_bad)] = np.nanmax(chisquares_bad)*2
+cmap=plt.cm.get_cmap('plasma').copy()
+cmap.set_over('green')
+plt.scatter(detections_bad['xcentroid'], detections_bad['ycentroid'], s=4, c=chisquares_bad, cmap=cmap, norm=norm, label='detected sources')
+plt.colorbar(label='source residual with EPSF', shrink=0.82)
+plt.ylim(500,750)
+plt.xlim(200,500)
+plt.legend()
+plt.gcf().set_size_inches(8,5)
+plt.tight_layout()
+save_plot(outdir, 'culler_bad')
