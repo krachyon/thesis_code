@@ -55,6 +55,10 @@ HTML('''
 </style>''')
 
 # %%
+#import os
+#os.environ['OMP_NUM_THREADS']
+
+# %%
 #util.RERUN_ALL_CACHED = True
 cache_dir = Path('./cached_results/')
 out_dir = Path('./04_comparison')
@@ -267,10 +271,27 @@ save_plot(out_dir, 'naco_pixelphase_distribution')
 bootstrapped_imgs = [getdata(path).astype(np.float64)[image_cut] for path in sorted(list((base_dir).glob('ssa_deep_*.fits')))]
 
 def run_photometry():
+    guess_table_bootstrap = result_table_combined.copy()
+    guess_table_bootstrap['x_0'] = guess_table_bootstrap['x_fit']
+    guess_table_bootstrap['y_0'] = guess_table_bootstrap['y_fit']
+    guess_table_bootstrap.remove_columns(['update','flux_fit', 'x_fit', 'y_fit'])
+    guess_table_bootstrap['x_0'] += np.random.uniform(-0.5,0.5,len(guess_table))
+    guess_table_bootstrap['y_0'] += np.random.uniform(-0.5,0.5,len(guess_table))
     result_tables = []
     for img in bootstrapped_imgs:
-        result_tables.append(photometry.do_photometry(img, guess_table))
+        result_tables.append(photometry.do_photometry(img, guess_table_bootstrap))
     return result_tables
+
+def run_photometry_unperturbed():
+    guess_table_bootstrap = guess_table.copy()
+    #guess_table_bootstrap['x_0'] = guess_table_bootstrap['x_fit']
+    #guess_table_bootstrap['y_0'] = guess_table_bootstrap['y_fit']
+    #guess_table_bootstrap.remove_columns(['update','flux_fit', 'x_fit', 'y_fit'])
+    result_tables = []
+    for img in bootstrapped_imgs:
+        result_tables.append(photometry.do_photometry(img, guess_table_bootstrap))
+    return result_tables
+
 
 #def run_photometry_quadratic():
 #    result_tables = []
@@ -278,56 +299,66 @@ def run_photometry():
 #        result_tables.append(photomtery_quadratic.do_photometry(img, guess_table))
 #    return result_tables
 
-result_tables = cached(run_photometry, cache_dir/'naco_photometry_bootstrapped_gauss')
+result_tables = cached(run_photometry, cache_dir/'naco_photometry_bootstrapped_gauss', rerun=False)
+result_tables_unperturbed = cached(run_photometry_unperturbed, cache_dir/'naco_photometry_bootstrapped_gauss_unperturbed', rerun=False)
 #result_tables_quadratic = cached(run_photometry, cache_dir/'naco_photometry_bootstrapped_quadratic')
 
 # %%
-result_table_combined.sort('id')
-for tab in result_tables:
-    tab.sort('id')
-# todo exclude outlier fluxes
-xs = np.array([tab['x_fit'] for tab in result_tables]).flatten()
-ys = np.array([tab['y_fit'] for tab in result_tables]).flatten()
-xdev = np.array([tab['x_fit']-result_table_combined['x_fit'] for tab in result_tables]).flatten()
-ydev = np.array([tab['y_fit']-result_table_combined['y_fit'] for tab in result_tables]).flatten()
-flux = np.array([tab['flux_fit'] for tab in result_tables]).flatten()
+def polar_dev(result_table_combined, result_tables):
+    result_table_combined.sort('id')
+    for tab in result_tables:
+        tab.sort('id')
+    # todo exclude outlier fluxes
+    xs = np.array([tab['x_fit'] for tab in result_tables]).flatten()
+    ys = np.array([tab['y_fit'] for tab in result_tables]).flatten()
+    xdev = np.array([tab['x_fit']-result_table_combined['x_fit'] for tab in result_tables]).flatten()
+    ydev = np.array([tab['y_fit']-result_table_combined['y_fit'] for tab in result_tables]).flatten()
+    flux = np.array([tab['flux_fit'] for tab in result_tables]).flatten()
+    
+    # shuffle entries to not imprint structure on plot
+    rng = np.random.default_rng(10)
+    order = rng.permutation(range(len(xdev)))
+    xdev, ydev, flux = xdev[order], ydev[order], flux[order]
 
+    xstd = np.std(xdev)
+    _,_,xstd_clipped = sigma_clipped_stats(xstd, sigma=100)
+    ystd = np.std(xdev)
+    _,_,ystd_clipped = sigma_clipped_stats(ystd, sigma=100)
 
-xstd = np.std(xdev)
-_,_,xstd_clipped = sigma_clipped_stats(xstd, sigma=100)
-ystd = np.std(xdev)
-_,_,ystd_clipped = sigma_clipped_stats(ystd, sigma=100)
+    fig = plt.figure(figsize=(6,6))
+    ax = fig.add_subplot(projection='polar')
+    #ax.set_rscale('symlog')
+    norm = LogNorm(1,flux.max())
+    cmap = mpl.cm.get_cmap('plasma').copy()
+    cmap.set_under('green')
+    squish_base = 8
+    #plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.03, s=10, c=flux, norm=norm, cmap=cmap, linewidths=0)
+    plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/squish_base) , alpha=0.35, s=8, c=flux, norm=norm, cmap=cmap, linewidths=0)
+    #plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.5, s=3, c=flux, norm=norm, cmap=cmap, linewidths=0)
+    rs = np.array([0.1, 0.01**(1/squish_base),1.])
+    rlabels = [f'{r:.2e}' for r in rs**squish_base]
+    ax.set_rticks(rs, rlabels, backgroundcolor=(1,1,1,0.8))
+    ax.set_rlabel_position(67)
+    ax.set_thetagrids([])
+    cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)')
+    save_plot(out_dir, 'naco_xy_density')
+    xstd, ystd, xstd_clipped, ystd_clipped, np.sqrt(np.max(xdev**2+ydev**2))
+    return xdev, ydev, flux
 
-fig = plt.figure()
-ax = fig.add_subplot(projection='polar')
-#ax.set_rscale('symlog')
-norm = LogNorm(1,flux.max())
-cmap = mpl.cm.get_cmap('plasma').copy()
-cmap.set_under('green')
-#plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.03, s=10, c=flux, norm=norm, cmap=cmap, linewidths=0)
-plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.35, s=8, c=flux, norm=norm, cmap=cmap, linewidths=0)
-#plt.scatter(np.arctan2(xdev,ydev), (xdev**2+ydev**2)**(1/16) , alpha=0.5, s=3, c=flux, norm=norm, cmap=cmap, linewidths=0)
-rs = np.array([0.1, 0.001**(1/16),1.])
-rlabels = [f'{r:.2e}' for r in rs**16]
-ax.set_rticks(rs, rlabels, backgroundcolor=(1,1,1,0.8))
-ax.set_rlabel_position(67)
-ax.set_thetagrids([])
-cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)')
+xdev_unpert, ydev_unpert, flux_unpert = polar_dev(result_table_combined, result_tables_unperturbed)
+save_plot(out_dir, 'naco_xy_density_unperturbed')
+xdev, ydev, flux = polar_dev(result_table_combined, result_tables)
 save_plot(out_dir, 'naco_xy_density')
-xstd, ystd, xstd_clipped, ystd_clipped, np.sqrt(np.max(xdev**2+ydev**2))
+
 
 # %%
-plt.figure()
-plt.hist(np.abs(xdev)**(1/16), bins=100, log=False, alpha=0.5)
-plt.hist(np.abs(ydev)**(1/16), bins=100, log=False, alpha=0.5)
+eucdev = np.sqrt(xdev**2+ydev**2)
+eucdev_unpert = np.sqrt(xdev_unpert**2+ydev_unpert**2)
+print(np.sum((eucdev_unpert<0.01)&(eucdev_unpert>1e-8)&(xdev_unpert>1e-8)&(ydev_unpert>1e-8))/len(eucdev_unpert))
+print(np.sum((eucdev_unpert<=0.01))/len(eucdev_unpert))
 
-# %%
-#vals, xbins, ybins = np.histogram2d(xdev,ydev, bins=100)
-#xindex np.argwhere(xdev)
-
-# %%
 print(np.sum((eucdev<0.01)&(eucdev>1e-8)&(xdev>1e-8)&(ydev>1e-8))/len(eucdev))
-print(np.sum((eucdev<0.01)&(eucdev>1e-8)/len(eucdev))
+print(np.sum((eucdev<=0.01))/len(eucdev))
 
 # %%
 plt.figure()
@@ -342,24 +373,31 @@ plt.ylabel('number of samples')
 plt.xlabel('euclidean centroid deviation from summed image')
 save_plot(out_dir, 'naco_deviation_histogram')
 
+
 # %%
-plt.figure()
-good = (flux>=1)#&(eucdev<0.25)
-order = np.argsort(flux[good])
+def plot_dev_vs_mag(flux, eucdev):
+    plt.figure()
+    good = (flux>=1)#&(eucdev<0.25)
+    order = np.argsort(flux[good])
 
-window_size = 120
-dev_slide = np.lib.stride_tricks.sliding_window_view(eucdev[good][order], window_size)
-flux_slide = np.lib.stride_tricks.sliding_window_view(flux[good][order], window_size)
+    window_size = 120
+    dev_slide = np.lib.stride_tricks.sliding_window_view(eucdev[good][order], window_size)
+    flux_slide = np.lib.stride_tricks.sliding_window_view(flux[good][order], window_size)
 
 
-plt.plot(-np.log(flux[good]), eucdev[good],'.', alpha=0.4, label='individual samples')
-plt.plot(-np.log(np.mean(flux_slide,axis=1)), np.mean(dev_slide, axis=1), label=f'running average, length {window_size} window')
-plt.xlim(-12.2,-1)
-plt.ylim(0,0.13)
-plt.ylabel('centroid deviation [px]')
-plt.xlabel('-log(flux)')
-plt.legend()
+    plt.plot(-np.log(flux[good]), eucdev[good],'.', alpha=0.4, label='individual samples')
+    ys = np.mean(dev_slide, axis=1)
+    plt.plot(-np.log(np.mean(flux_slide,axis=1)), ys, label=f'running average, length {window_size} window')
+    plt.xlim(-12.2,-1.5)
+    plt.ylim(0,1.1*np.max(ys))
+    plt.ylabel('centroid deviation [px]')
+    plt.xlabel('-log(flux)')
+    plt.legend()
+
+plot_dev_vs_mag(flux, eucdev)
 save_plot(out_dir, 'naco_noisefloor')
+plot_dev_vs_mag(flux_unpert, eucdev_unpert)
+save_plot(out_dir, 'naco_noisefloor_unpert')
 
 # %% [markdown]
 # # Just debugging below
@@ -477,7 +515,7 @@ def sqrt_squish(xs, ys, base=2):
 # %%
 plt.figure()
 #plt.hexbin(*sqrt_squish(xdev, ydev, base=16), norm=LogNorm())
-good = (np.abs(xdev)<0.1) & (np.abs(ydev)<0.1)
+good = (np.abs(xdev)<0.5) & (np.abs(ydev)<0.5)
 plt.hexbin(xdev[good], ydev[good], norm=LogNorm(), gridsize=300)
 plt.xlabel('deviation in x direction')
 plt.ylabel('deviation in y direction')
