@@ -410,6 +410,7 @@ def getdata_safer(filename, *args, **kwargs):
 
 def save_plot(outdir, name, dpi=250):
     plt.savefig(os.path.join(outdir, name+'.pdf'), dpi=dpi)
+    plt.savefig(os.path.join(outdir, name + '.png'), dpi=dpi)
     with open(os.path.join(outdir, name+'.mplf'), 'wb') as f:
         pickle.dump(plt.gcf(), f)
 
