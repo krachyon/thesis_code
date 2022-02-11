@@ -11,7 +11,7 @@ from thesis_lib.scopesim_helper import make_anisocado_model
 from thesis_lib.astrometry import wrapper
 from thesis_lib.config import Config
 from thesis_lib.testdata.recipes import scopesim_grid
-from thesis_lib.util import make_gauss_kernel, save_plot
+from thesis_lib.util import make_gauss_kernel, save_plot, cached
 from matplotlib.colors import LogNorm
 import numpy as np
 import matplotlib.pyplot as plt
@@ -43,6 +43,7 @@ HTML('''
 
 # %%
 outdir = './02_gridded_models/'
+cache_dir = Path('./cached_results/')
 if not os.path.exists(outdir):
     os.mkdir(outdir)
 
@@ -53,7 +54,7 @@ psf = make_anisocado_model(oversampling=4, degree=5)
 seed = 10
 
 def recipe():
-    return scopesim_grid(N1d=8, perturbation=2., seed=10,
+    return scopesim_grid(N1d=8, perturbation=2., seed=seed,
                   magnitude=lambda N: np.random.uniform(21.5, 23, N),
                   custom_subpixel_psf=psf)
 
@@ -78,7 +79,7 @@ img, table = read_or_generate_image(f'grid_N_seed{seed}', config, recipe=recipe,
 # %%
 def make_epsf_with_sigma(config, σ, N, oversampling):
     config = config.copy()
-    config.smoothing = make_gauss_kernel(σ=σ, N=N)
+    config.smoothing = make_gauss_kernel(σ=σ*oversampling/2, N=N*oversampling/2)
     config.oversampling = oversampling
     session = wrapper.Session(config, img, table)
     try: 
@@ -93,17 +94,9 @@ Ns=[5,11]
 oss=[2,4]
 args = list(itertools.product(cfgs, σs, Ns, oss))
 
-cachename = Path('cached_results/epsf_quality_samples.pkl')
-if cachename.exists():
-    with open(cachename, 'rb') as f:
-        epsfs = pickle.load(f)
-else:
-    #from thesis_lib.util import DebugPool
-    #with DebugPool() as p:
-    with mp.Pool() as p:
-        epsfs = p.starmap(make_epsf_with_sigma, tqdm(args))
-    with open(cachename, 'wb') as f:
-        pickle.dump(epsfs, f)
+
+with mp.Pool(mp.cpu_count()-1) as p:
+    epsfs = cached(lambda: p.starmap(make_epsf_with_sigma, tqdm(args), 1), cache_dir/'epsf_quality_samples',rerun=False)
 
 # %%
 y, x = np.mgrid[-50:50:101j,-50:50:101j]
@@ -125,13 +118,13 @@ for (_, σ, N, os), epsf in zip(args, epsfs):
 df = pd.DataFrame.from_records(recs)                
 
 # %%
-fig, axs =plt.subplots(2,1, sharex=True, sharey=True)
+fig, axs =plt.subplots(2,1, sharex=False, sharey=True)
 axcom = fig.add_subplot(111, frameon=False)
 plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
 plt.grid(False)
 for (N,os), group in df.groupby(['N','oversampling']):
     i = 0 if os==2 else 1
-    axs[i].plot(group['σ'], group['dev'], label=f'smoothing kernel size: {N}')
+    axs[i].plot(group['σ']*os/2, group['dev'], label=f'smoothing kernel size: {N*os/2}')
     axs[i].set_yscale('log')
 
 axcom.set_ylabel('RMS residual between EPSF and input PSF on 100x100 pixel grid')
@@ -150,34 +143,41 @@ def comparison_plot(empiric, title):
     actual = psf(x,y)
     empiric/=empiric.max()
     actual/=actual.max()
-
+    
     diff = actual-empiric
+    
+    power_diff = np.fft.fftshift(np.abs(np.fft.fft2(actual))**2 - np.abs(np.fft.fft2(empiric))**2 )
 
-    fig, axs = plt.subplots(1,2)
+    fig, axs = plt.subplots(1,3)
 
     im = axs[0].imshow(empiric)
-    fig.colorbar(im, ax=axs[0])
-    axs[0].set_title('derived EPSF')
+    fig.colorbar(im, ax=axs[0], shrink=0.7)
+    axs[0].set_title('EPSF')
 
     im = axs[1].imshow(diff)
-    fig.colorbar(im, ax=axs[1])
-    axs[1].set_title('EPSF subtracted from PSF')
+    fig.colorbar(im, ax=axs[1], shrink=0.7)
+    axs[1].set_title('EPSF-PSF')
+    
+    im = axs[2].imshow(power_diff)
+    fig.colorbar(im, ax=axs[2], shrink=0.7)
+    axs[2].set_title('Powerspectrum difference')
 
-    fig.set_size_inches(8,3.5)
-    fig.suptitle(title)
+    fig.set_size_inches(10,3.5)
+    fig.tight_layout()
+    fig.suptitle(title, fontsize=15)
     return fig
 
 # best 
 best_idx = df[(df.N==11)&(df.oversampling==2)].dev.idxmin()
-comparison_plot(epsfs[best_idx](x,y), 'best EPSF')
+comparison_plot(epsfs[best_idx](x,y), 'Minimum RMS EPSF')
 save_plot(outdir, 'epsf_residual_best')
 # too much smoothing
 best_idx = df[(df.N==11)&(df.oversampling==2)&(df.σ > 4)].dev.idxmin()
-comparison_plot(epsfs[best_idx](x,y), 'too much smoothing')
+comparison_plot(epsfs[best_idx](x,y), 'Too much smoothing')
 save_plot(outdir, 'epsf_residual_toomuch')
 # not enough smoothing
 best_idx = df[(df.N==11)&(df.oversampling==2)&(df.σ < 0.7)].dev.idxmin()
-comparison_plot(epsfs[best_idx](x,y), 'not enough smoothing')
+comparison_plot(epsfs[best_idx](x,y), 'Not enough smoothing')
 save_plot(outdir, 'epsf_residual_notenough')
 pass
 
