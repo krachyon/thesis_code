@@ -549,8 +549,8 @@ cluster_result = cached(lambda: photometry.do_photometry(img_gausscluster, guess
 
 # %%
 if photometry._last_image is None:
-    photometry._last_image = image - photometry.bkg_estimator(image)
-#residual = photometry.residual(cluster_result)
+    photometry._last_image = img_gausscluster - photometry.bkg_estimator(img_gausscluster)
+residual = photometry.residual(cluster_result)
 
 fig = plt.figure(figsize=(9,12))
 gs = GridSpec(5, 2, figure=fig)
@@ -599,14 +599,10 @@ image_and_sources(img_gausscluster, cluster_result)
 
 # %%
 xy_scatter(cluster_result)
+save_plot(out_dir, 'synthetic_cluster_xy')
 
 # %%
 visualize_grouper(img_gausscluster, tab_gausscluster, 12, 20)
 
 # %%
 plot_dev_vs_mag(cluster_result[cluster_result['flux_fit']>10000])
-
-# %% [markdown]
-# # Cluster without cheating
-
-# %%
