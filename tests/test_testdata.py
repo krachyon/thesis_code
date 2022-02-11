@@ -118,3 +118,15 @@ def test_grid_mean_devation(printer, generator_args):
     printer(f'{xdev_mean=} {ydev_mean=}')
     assert xdev_mean < 0.001
     assert ydev_mean < 0.001
+
+
+@pytest.mark.skip(reason='manual only, no good idea how to verify result automatically')
+def test_subpixel_conv_diff():
+    import matplotlib.pyplot as plt
+    from thesis_lib.testdata.generators import read_or_generate_image
+    sp_img, sp_tab = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
+    conv_img, conv_tab = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24')
+
+    plt.figure()
+    plt.imshow(sp_img - conv_img)
+    plt.show()
