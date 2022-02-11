@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from photutils.psf import EPSFModel
 from astropy.nddata import NDData
 from photutils import extract_stars, EPSFBuilder
