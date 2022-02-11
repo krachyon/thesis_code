@@ -26,7 +26,7 @@ from photutils import IRAFStarFinder, EPSFBuilder, extract_stars, \
 from astropy.nddata import NDData
 from astropy.stats import sigma_clipped_stats
 import astropy.table as table
-from thesis_lib.util import cached, save_plot
+from thesis_lib.util import cached, save_plot, make_gauss_kernel
 from thesis_lib import util
 from thesis_lib.testdata.generators import read_or_generate_image
 from thesis_lib.scopesim_helper import make_anisocado_model
@@ -38,6 +38,8 @@ from photutils.psf.incremental_fit_photometry import *
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+from pprint import pformat
+
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
 plt.rcParams['figure.dpi'] = 100
@@ -81,6 +83,11 @@ def xy_scatter(result_table):
     ystd, ystd_clipped = np.std(ydiff),sigma_clipped_stats(ydiff, sigma=3)[2]
     
     flux = result_table['flux_fit']
+    
+    rng = np.random.default_rng(0)
+    order = rng.permutation(range(len(xdiff)))
+    xdiff, ydiff, flux = xdiff[order], ydiff[order], flux[order]
+    
     norm = LogNorm(max(flux.min(),1),flux.max())
     cmap = mpl.cm.get_cmap('plasma').copy()
     cmap.set_under('green')
@@ -139,7 +146,7 @@ def visualize_grouper(image, input_table, max_size=20, halo_radius=25):
     
     plt.imshow(image, norm=LogNorm())
     
-def plot_dev_vs_mag(result_table, window_size=60):
+def plot_dev_vs_mag(result_table, window_size=60, create_figure=True, label='', alpha=0.7):
     eucdev = np.sqrt((result_table['x_fit']-result_table['x_orig'])**2 + (result_table['y_fit']-result_table['y_orig'])**2)
     flux = result_table['flux_fit']
     
@@ -148,11 +155,12 @@ def plot_dev_vs_mag(result_table, window_size=60):
     dev_slide = np.lib.stride_tricks.sliding_window_view(eucdev[order], window_size)
     flux_slide = np.lib.stride_tricks.sliding_window_view(flux[order], window_size)
     
-    plt.figure()
-    plt.semilogy(-np.log(flux), eucdev, 'x', alpha=0.8, label='data points')
-    plt.semilogy(-np.log(np.mean(flux_slide, axis=1)), np.mean(dev_slide, axis=1), 
-                 label=f'running average, window size {window_size}')
-    plt.xlabel('-log(flux)')
+    if create_figure:
+        plt.figure()
+    points=plt.semilogy(-np.log(flux), eucdev, 'x', alpha=alpha, label=f'{label}: data points')
+    plt.semilogy(-np.log(np.mean(flux_slide, axis=1)), np.mean(dev_slide, axis=1), lw=2,
+                 label=f'{label}: running average, window size {window_size}', color=points[0].get_color())
+    plt.xlabel('-log(fitted_flux)')
     plt.ylabel('centroid deviation')
     plt.legend()
     
@@ -163,7 +171,7 @@ def plot_residual(photometry,image,result_table):
     residual = photometry.residual(result_table)
     plt.imshow(residual, norm=SymLogNorm(linthresh=10))
     plt.plot(result_table['x_fit'], result_table['y_fit'], 'rx', markersize=2, label='fit')
-    plt.plot(result_table['x_orig'], result_table['y_orig'], 'k+', markersize=2, label='target')
+    plt.plot(result_table['x_orig'], result_table['y_orig'], 'k+', markersize=2, label='input position')
     plt.colorbar()
     plt.legend()
     
@@ -228,7 +236,7 @@ def do_photometry(seed):
     result_table['id'] += seed*10000
     return result_table, photometry.residual(result_table)
     
-results = cached(lambda: list(map(do_photometry, range(20))), cache_dir/'synthetic_noisefloor')
+results = cached(lambda: list(map(do_photometry, range(20))), cache_dir/'synthetic_noisefloor', rerun=False)
 
 noisefloor_result = table.vstack([res[0] for res in results])
 noisefloor_result = noisefloor_result[noisefloor_result['flux_fit']>=1]
@@ -237,7 +245,21 @@ noisefloor_result = noisefloor_result[noisefloor_result['flux_fit']>=1]
 xy_scatter(noisefloor_result)
 
 # %%
-plot_dev_vs_mag(noisefloor_result)
+#seed=0
+#rng = np.random.default_rng(seed)
+#def recipe():
+#    return scopesim_grid(N1d=7, border=100, perturbation=7,
+#                           magnitude=lambda N: rng.uniform(15, 16, N),
+#                           custom_subpixel_psf=anisocado_psf, seed=seed)
+
+#img_noisefloor, tab_noisefloor = read_or_generate_image(f'grid7_pert7_seed{seed}', recipe=recipe, force_generate=False)
+#plt.figure()
+#plt.imshow(img_noisefloor[10:-10,10:-10], norm=LogNorm())
+#plt.colorbar()
+
+# %%
+plot_dev_vs_mag(noisefloor_result[noisefloor_result['flux_fit']>1000])
+save_plot(out_dir, 'synthetic_grid_noisefloor')
 
 
 # %% [markdown]
@@ -245,19 +267,22 @@ plot_dev_vs_mag(noisefloor_result)
 
 # %%
 def grid_photometry():
-    fit_stages_grid = [FitStage(10, 1e-10, 1e-11, np.inf, all_individual), # first stage: get flux approximately right
-                  FitStage(20, 0.5, 0.5, 100_000, all_individual),
-                  FitStage(30, 0.1, 0.1, 10_000, all_individual),
-                  FitStage(30, 0.1, 0.1, 5_000, all_simultaneous)
+    fit_stages_grid = [FitStage(1, 1e-10, 1e-11, np.inf, all_individual), # first stage: get flux approximately right
+                       FitStage(10, 0.52, 0.52, 150_000, brightest_simultaneous(3)),
+                       FitStage(10, 0.52, 0.52, 80_000, not_brightest_individual(3)),
+                       #FitStage(30, 0.1, 0.1, 20_000, all_individual),
+                       #FitStage(30, 0.1, 0.1, 5_000, all_simultaneous)
                  ]
 
 
     photometry_grid = IncrementalFitPhotometry(SExtractorBackground(),
                                                anisocado_psf,
-                                               max_group_size=4,
+                                               max_group_size=8,
                                                group_extension_radius=100,
                                                fit_stages=fit_stages_grid,
                                                use_noise=True)
+    with open(out_dir/'processing_params_synthetic_grid.txt', 'w') as f:
+        f.write(pformat(photometry_grid.__dict__))
     return photometry_grid
 
 # %%
@@ -270,23 +295,38 @@ grid_result = cached(lambda: photometry.do_photometry(img_grid, guess_table), ca
 [(np.min(np.abs(i)),np.mean(np.abs(i)),np.max(np.abs(i))) for i in calc_devation(grid_result)]
 
 # %%
-visualize_grouper(img_grid, tab_grid, 4, 90)
+#visualize_grouper(img_grid, tab_grid, 4, 90)
 
 # %%
 plot_residual(photometry, img_grid, grid_result)
-
-# %%
-xy_scatter(grid_result)
+plt.xlim(460,610)
+plt.ylim(440,290)
+save_plot(out_dir, 'synthetic_grid_residual')
 
 # %%
 plot_dev_vs_mag(grid_result)
 
 
 # %% [markdown]
-# # Grid no crowding
+# # Grid no crowding/saturation
 
 # %%
-def do_photometry(seed):
+def do_photometry_baseline(seed):
+    rng = np.random.default_rng(seed=seed)
+    def recipe():
+        return scopesim_grid(N1d=16, border=50, perturbation=2,
+                               magnitude=lambda N: rng.uniform(18, 24, N),
+                               custom_subpixel_psf=anisocado_psf, seed=seed)
+    img_grid, tab_grid = read_or_generate_image(f'grid16_pert2_mag18_24_seed{seed}', recipe=recipe, force_generate=False)
+    #img_grid, tab_grid = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
+
+    guess_table = prepare_table(tab_grid)
+
+    photometry = grid_photometry()
+    result_table = photometry.do_photometry(img_grid, guess_table)
+    return result_table
+
+def do_photometry_nocrowd(seed):
     rng = np.random.default_rng(seed=seed)
     def recipe():
         return scopesim_grid(N1d=8, border=50, perturbation=2,
@@ -299,44 +339,177 @@ def do_photometry(seed):
 
     photometry = grid_photometry()
     result_table = photometry.do_photometry(img_grid_nocrowd, guess_table)
-    return result_table, photometry
+    return result_table
 
-nocrowd_results = cached(lambda: [do_photometry(i) for i in range(4)], cache_dir/'synthetic_grid_nocrowd', rerun=False)
-grid_result_nocrowd = table.vstack([table for table, photometry in nocrowd_results])
+def do_photometry_nocrowd_bigger_group(seed):
+    rng = np.random.default_rng(seed=seed)
+    def recipe():
+        return scopesim_grid(N1d=8, border=50, perturbation=2,
+                               magnitude=lambda N: rng.uniform(18, 24, N),
+                               custom_subpixel_psf=anisocado_psf, seed=seed)
+    img_grid_nocrowd, tab_grid_nowcrowd = read_or_generate_image(f'grid8_pert2_seed{seed}', recipe=recipe, force_generate=False)
+    #img_grid, tab_grid = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
 
-[(np.min(np.abs(i)),np.mean(np.abs(i)),np.max(np.abs(i))) for i in calc_devation(grid_result_nocrowd)]
+    guess_table = prepare_table(tab_grid_nowcrowd)
+
+    photometry = grid_photometry()
+    photometry.group_extension_radius = 130
+    result_table = photometry.do_photometry(img_grid_nocrowd, guess_table)
+    return result_table
+
+def do_photometry_nosat(seed):
+    rng = np.random.default_rng(seed=seed)
+    def recipe():
+        rng = np.random.default_rng(seed)
+        return scopesim_grid(N1d=16, border=50, perturbation=2,
+                               magnitude=lambda N: rng.uniform(19.5, 24, N),
+                               custom_subpixel_psf=anisocado_psf, seed=seed)
+    img_grid_nosat, tab_grid_nosat = read_or_generate_image(f'grid16_pert2_mag195_24_seed{seed}', recipe=recipe, force_generate=False)
+
+    guess_table = prepare_table(tab_grid_nosat)
+
+    photometry = grid_photometry()
+    result_table = photometry.do_photometry(img_grid_nosat, guess_table)
+    return result_table
+
+
+n_images = 4
+
+nocrowd_results = cached(lambda: [do_photometry_nocrowd(i) for i in range(n_images*4)], cache_dir/'synthetic_grid_nocrowd', rerun=False)
+grid_result_nocrowd = table.vstack(nocrowd_results)
+
+nosat_results = cached(lambda: [do_photometry_nosat(i) for i in range(n_images)], cache_dir/'synthetic_grid_nosat', rerun=False)
+grid_result_nosat = table.vstack(nosat_results)
+
+baseline_results = cached(lambda: [do_photometry_baseline(i) for i in range(n_images)], cache_dir/'synthetic_grid_baseline', rerun=False)
+grid_result_baseline = table.vstack(baseline_results)
+
+nocrowd_bigger_results = cached(lambda: [do_photometry_nocrowd_bigger_group(i) for i in range(n_images*4)], cache_dir/'synthetic_grid_nocrowd_bigger', rerun=False)
+grid_result_nocrowd_bigger = table.vstack(nocrowd_bigger_results)
 
 # %%
-xy_scatter(grid_result_nocrowd)
+plt.figure(figsize=(8,6))
+plot_dev_vs_mag(grid_result_baseline, create_figure=False, label='baseline', alpha=0.3)
+plot_dev_vs_mag(grid_result_nosat, create_figure=False, label='less saturation', alpha=0.3)
+save_plot(out_dir, 'synthetic_grid_magdevcomparison_saturation')
+
+plt.figure(figsize=(8,6))
+plot_dev_vs_mag(grid_result_baseline, create_figure=False, label='baseline', alpha=0.3)
+plot_dev_vs_mag(grid_result_nocrowd, create_figure=False, label='less crowding', alpha=0.3)
+plot_dev_vs_mag(grid_result_nocrowd_bigger, create_figure=False, label='less crowding, groups bigger', alpha=0.3)
+save_plot(out_dir, 'synthetic_grid_magdevcomparison_crowding')
 
 # %%
-plot_dev_vs_mag(grid_result_nocrowd)
-
+xy_scatter(grid_result_baseline)
 
 # %% [markdown]
-# # grid no saturation
+# # EPSF
 
 # %%
-def recipe():
-    return scopesim_grid(N1d=16, border=50, perturbation=2,
-                           magnitude=lambda N: rng.uniform(19.5, 21, N),
-                           custom_subpixel_psf=anisocado_psf, seed=11)
-img_grid_nosat, tab_grid_nosat = read_or_generate_image('grid16_pert2_mag195_21', recipe=recipe, force_generate=False)
-#img_grid, tab_grid = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
+from thesis_lib.util import center_of_image
+from photutils.centroids import centroid_quadratic
 
-guess_table = prepare_table(tab_grid_nosat)
+img_grid, tab_grid = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
 
-photometry = grid_photometry()
+epsf_sources = tab_grid.copy()
+epsf_sources = epsf_sources[(epsf_sources['m']>19.5)
+                            &((1024-100)>epsf_sources['x'])&(epsf_sources['x']>100)
+                            &((1024-100)>epsf_sources['y'])&(epsf_sources['y']>100)]
+epsf_sources.sort('m', reverse=False)
 
-grid_result_nosat = cached(lambda: photometry.do_photometry(img_grid_nosat, guess_table), cache_dir/'synthetic_grid_nosat', rerun=False)
+fitshape = 41
 
-[(np.min(np.abs(i)),np.mean(np.abs(i)),np.max(np.abs(i))) for i in calc_devation(grid_result_nosat)]
+epsf_stars = extract_stars(NDData(img_grid), epsf_sources[:100], size=(fitshape+2, fitshape+2))
+builder = EPSFBuilder(oversampling=4, smoothing_kernel=make_gauss_kernel(2.3,N=21), maxiters=5)
+pre_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'epsf_synthetic', rerun=False)
+data = pre_epsf.data[9:-9,9:-9]
+data /= np.sum(data)/np.sum(pre_epsf.oversampling)
+epsf = FittableImageModel(data=data, oversampling=pre_epsf.oversampling)
+epsf.origin = centroid_quadratic(epsf.data)
+
+def grid_photometry_epsf():
+    fit_stages_grid = [FitStage(5, 1e-10, 1e-11, np.inf, all_individual), # first stage: get flux approximately right
+                       FitStage(5, 0.6, 0.6, 10, all_individual),
+                       FitStage(5, 0.3, 0.3, 500_000, all_individual),
+                       #FitStage(30, 0.1, 0.1, 5_000, all_simultaneous)
+                 ]
+
+
+    photometry_grid = IncrementalFitPhotometry(SExtractorBackground(),
+                                               anisocado_psf,
+                                               max_group_size=1,
+                                               group_extension_radius=10,
+                                               fit_stages=fit_stages_grid,
+                                               use_noise=True)
+    with open(out_dir/'processing_params_synthetic_grid_epsf.txt', 'w') as f:
+        f.write(pformat(photometry_grid.__dict__))
+    return photometry_grid
+grid_photometry_epsf()
+
+def do_photometry_epsf(seed):
+    rng = np.random.default_rng(seed=seed)
+    def recipe():
+        return scopesim_grid(N1d=16, border=50, perturbation=2,
+                               magnitude=lambda N: rng.uniform(18, 24, N),
+                               custom_subpixel_psf=anisocado_psf, seed=seed)
+    img_grid, tab_grid = read_or_generate_image(f'grid16_pert2_mag18_24_seed{seed}', recipe=recipe, force_generate=False)
+    #img_grid, tab_grid = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
+
+    guess_table = prepare_table(tab_grid)
+
+    photometry = grid_photometry_epsf()
+    photometry.psf_model = epsf
+    result_table = photometry.do_photometry(img_grid, guess_table)
+    return result_table
+
+epsf_results = cached(lambda: [do_photometry_epsf(i) for i in range(n_images)], cache_dir/'synthetic_grid_epsf', rerun=False)
+grid_result_epsf = table.vstack(epsf_results)
 
 # %%
-xy_scatter(grid_result_nosat)
+plt.figure()
+grid_result_epsf_plot = grid_result_epsf[grid_result_epsf['flux_fit']>1]
+
+offset = np.max(grid_result_epsf_plot['flux_fit']) / np.max(grid_result_baseline['flux_fit'])
+grid_result_epsf_plot['flux_fit'] /= offset 
+
+plot_dev_vs_mag(grid_result_baseline, create_figure=False, label='known PSF', alpha=0.4)
+plot_dev_vs_mag(grid_result_epsf_plot, create_figure=False, label='with epsf', alpha=0.4)
+
+save_plot(out_dir, 'synthetic_grid_magdevepsf')
 
 # %%
-plot_dev_vs_mag(grid_result_nosat)
+center_of_image(epsf.data), centroid_quadratic(epsf.data, fit_boxsize=5)
+
+# %%
+figure()
+imshow(epsf.data, norm=LogNorm())
+
+# %%
+img_grid, tab_grid = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
+
+guess_table = prepare_table(tab_grid)
+
+photometry = grid_photometry_epsf()
+photometry.psf_model = epsf
+
+grid_result_epsf_single = photometry.do_photometry(img_grid, guess_table)
+[(np.min(np.abs(i)),np.mean(np.abs(i)),np.max(np.abs(i))) for i in calc_devation(grid_result_epsf_single)]
+
+# %%
+xy_scatter(grid_result_epsf_plot)
+plt.xlim(np.array(plt.xlim())*1.2)
+plt.ylim(np.array(plt.ylim())*1.2)
+save_plot(out_dir, 'synthetic_grid_epsf_xy')
+
+# %%
+plt.xlim(), plt.ylim()
+
+# %%
+plot_residual(photometry, img_grid, grid_result_epsf_single)
+plt.gcf().set_size_inches(8,6)
+plt.xlim(457,570)
+plt.ylim(805, 695)
+save_plot(out_dir, 'synthetic_grid_epsf_residual')
 
 # %% [markdown]
 # # Cluster Best effort
@@ -364,6 +537,9 @@ photometry = IncrementalFitPhotometry(SExtractorBackground(),
                                            group_extension_radius=20,
                                            fit_stages=fit_stages,
                                            use_noise=True)
+
+with open(out_dir/'processing_params_synthetic_cluster.txt', 'w') as f:
+    f.write(pformat(photometry.__dict__))
 
 cluster_result = cached(lambda: photometry.do_photometry(img_gausscluster, guess_table), cache_dir/'synthetic_gausscluster', rerun=False)
 [(np.min(np.abs(i)),np.mean(np.abs(i)),np.max(np.abs(i))) for i in calc_devation(cluster_result)]
@@ -397,7 +573,7 @@ tr.plot(cluster_result['x_orig'], cluster_result['y_orig'], 'k+', markersize=3, 
 tr.imshow(residual, norm=norm, cmap=cmap)
 tr.set_xlim(650,780)
 tr.set_ylim(850,720)
-tr.set_title('bright source halo')
+tr.set_title('saturated source halo')
 tr.legend()
 
 br = fig.add_subplot(gs[2:4,1])

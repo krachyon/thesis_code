@@ -24,9 +24,9 @@ from matplotlib.colors import LogNorm,SymLogNorm, Normalize
 from photutils import IRAFStarFinder, EPSFBuilder, extract_stars, \
  BasicPSFPhotometry, DAOGroup, MMMBackground, SExtractorBackground, FittableImageModel, StarFinder
 from astropy.nddata import NDData
-from astropy.stats import sigma_clipped_stats
 from thesis_lib.util import cached, save_plot
 from thesis_lib import util
+from astropy.stats import sigma_clipped_stats
 # only on my branch
 from photutils.psf.culler import CorrelationCuller
 from photutils.psf.incremental_fit_photometry import IncrementalFitPhotometry, FitStage, all_individual, brightest_simultaneous
@@ -34,6 +34,7 @@ from photutils.psf.incremental_fit_photometry import IncrementalFitPhotometry, F
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+from pprint import pformat
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
 plt.rcParams['figure.dpi'] = 100
@@ -228,6 +229,8 @@ photometry_quadratic = IncrementalFitPhotometry(SExtractorBackground(),
                                            fit_stages=fit_stages,
                                            use_noise=True)
 
+with open(out_dir/'processing_params_naco.txt', 'w') as f:
+    f.write(pformat(photometry.__dict__))
 
 result_table_combined_quadratic = cached(lambda: photometry_quadratic.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_quadratic')
 result_table_combined = cached(lambda: photometry.do_photometry(img_combined, guess_table), cache_dir/'photometry_combined_naco_gauss', rerun=False)
@@ -340,7 +343,7 @@ def polar_dev(result_table_combined, result_tables):
     ax.set_rticks(rs, rlabels, backgroundcolor=(1,1,1,0.8))
     ax.set_rlabel_position(67)
     ax.set_thetagrids([])
-    cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)')
+    cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)', shrink=0.8)
     save_plot(out_dir, 'naco_xy_density')
     xstd, ystd, xstd_clipped, ystd_clipped, np.sqrt(np.max(xdev**2+ydev**2))
     return xdev, ydev, flux
