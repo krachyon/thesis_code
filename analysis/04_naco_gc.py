@@ -127,7 +127,7 @@ axs[1,1].imshow(np.fft.fftshift(np.abs(np.fft.fft2(quadratic_epsf.data))), norm=
 axs[0,0].set_ylabel('gaussian smoothing')
 axs[1,0].set_ylabel('quadratic smoothing')
 axs[1,0].set_xlabel('PSF data')
-axs[1,1].set_xlabel('Fourier transformed (absolute value)')
+axs[1,1].set_xlabel('Power Spectrum')
 plt.tight_layout()
 save_plot(out_dir, 'naco_findpsfs')
 
@@ -249,7 +249,7 @@ plt.imshow(residual, norm=Normalize(vmin=-700, vmax=400, clip=False), cmap=cmap)
 plt.colorbar()
 #plt.plot(result_table_combined['x_fit'], result_table_combined['y_fit'], '.', markersize=2)
 plt.xlim(0,800)
-plt.ylim(0,800)
+plt.ylim(800,0)
 save_plot(out_dir, "naco_residual")
 print(np.sum(np.abs(residual)))
 
