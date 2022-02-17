@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.0
+#       jupytext_version: 1.13.6
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -38,13 +38,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import clear_output
 from matplotlib.colors import LogNorm
+from pathlib import Path
 
 import thesis_lib
 from thesis_lib import *
 from thesis_lib.astrometry import plots
 from thesis_lib.astrometry.types import INPUT_TABLE_NAMES, RESULT_TABLE_NAMES, X, Y, MAGNITUDE
 from thesis_lib.astrometry.wrapper import Session
-from thesis_lib.util import save_plot
+from thesis_lib.util import save_plot, cached
+from thesis_lib import util
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
@@ -67,9 +69,11 @@ HTML('''
 
 # %%
 outdir = './01_initial_astrometry'
+cachedir = Path('cached_results/')
 if not os.path.exists(outdir):
     os.mkdir(outdir)
 scopesim_helper.download()
+#util.RERUN_ALL_CACHED = True
 
 # %%
 # content of the module and default config
@@ -92,10 +96,12 @@ image_name_scc = 'scopesim_cluster'
 #imshow(image_scc, norm=LogNorm())
 
 # %%
-scc_session = Session(default_config, 'scopesim_cluster')
-scc_session.do_it_all()
-scc_session
-clear_output()
+def do_it():
+    scc_session = Session(default_config, 'scopesim_cluster')
+    scc_session.do_it_all()
+    return scc_session
+scc_session = cached(do_it, cachedir/'initial_scc_photometry')
+#clear_output()
 
 # %%
 # the cluster template generates a lot of very faint sources, only show the ones that could reasonably be detected. 
@@ -140,9 +146,8 @@ save_plot(outdir, 'photutils_grid')
 # # EPSF derivation
 
 # %%
-
 gauss_config = config.Config()
-gauss_config.smoothing = util.make_gauss_kernel()
+gauss_config.smoothing = util.make_gauss_kernel(1.5)
 sg_gauss_session = Session(gauss_config, image_name_sg)
 
 sg_session.find_stars().select_epsfstars_auto().make_epsf()
@@ -211,25 +216,39 @@ save_plot(outdir,'psf_lowpass')
 # %%
 # create a new configuration object with the necessary parameters for analyzing a lowpass filtered PS
 lowpass_config = config.Config()
-lowpass_config.smoothing = util.make_gauss_kernel()  # avoid EPSF artifacts
+lowpass_config.smoothing = util.make_gauss_kernel(σ=1.,N=9)  # avoid EPSF artifacts
+lowpass_config.oversampling = 2
 lowpass_config.output_folder = 'output_files_lowpass'
 lowpass_config.use_catalogue_positions = True  # cheat with guesses
 lowpass_config.photometry_iterations = 1  # with known positions we know all stars on first iter
-lowpass_config.cutout_size = 20  # adapted by hand for PSF at hand
-lowpass_config.fitshape = 15
+lowpass_config.cutout_size = 23  # adapted by hand for PSF at hand
+lowpass_config.fitshape = 21
 lowpass_config.separation_factor = 2
 lowpass_config.create_dirs()
 
 # %%
 # use an image with less sources to not have to filter the input positions
-image_name_lpc = 'gausscluster_N2000_mag22'
-session_lpc = Session(lowpass_config, image_name_lpc)
-session_lpc.do_it_all()
+image_name_lpc = 'gausscluster_N2000_mag22_lowpass'
+def do_it():
+    session_lpc = Session(lowpass_config, image_name_lpc)
+    session_lpc.correct_scopesim_flux_hack()
+    #session_lpc.find_stars().select_epsfstars_auto().make_epsf()
+    session_lpc.do_it_all()
+    return session_lpc
+session_lpc = cached(do_it, cachedir/'initial_session_lpc')
+
+# %%
+figure()
+plt.imshow(session_lpc.epsf.data)
+plt.colorbar()
+#plt.imshow(session_lpc.image)
+#plt.plot(session_lpc.tables.input_table['x'], session_lpc.tables.input_table['y'], 'rx')
 
 # %%
 #DEBUG
 result_table = session_lpc.tables.result_table
-result_table['x_fit']-result_table['x_0']
+#result_table['x_fit']-result_table['x_orig']
+session_lpc.tables.result_table['x_offset']
 
 # %%
 input_table = session_lpc.tables.input_table
@@ -255,6 +274,16 @@ ref_phot_plot()
 plt.xlim((66.41381370421695, 396.3265565090578))
 plt.ylim((995.3013431030644, 644.769053872921))
 save_plot(outdir, 'lowpass_astrometry')
+
+# %%
+from photutils import DAOStarFinder
+# debug to determine flux fudge factor
+plt.figure()
+influx = np.sort(session_lpc.tables.input_table['f'])
+measflux = np.sort(DAOStarFinder(500,3)(session_lpc.image)['peak'])
+l = min(len(influx),len(measflux))
+plot(influx[:l-1]/measflux[:l-1])
+print(np.min(influx)/np.min(measflux), np.mean(influx)/np.mean(measflux), np.max(influx)/np.max(measflux))
 
 # %%
 fig = plots.plot_xy_deviation(session_lpc.tables.valid_result_table)
@@ -287,7 +316,12 @@ def recipe_template(seed):
     return inner
 
 
-sessions_multi = thesis_lib.astrometry.wrapper.photometry_multi(recipe_template, 'mag18-24_grid', n_images=12, config=no_overlap_config, threads=None)
+sessions_multi = cached(lambda: thesis_lib.astrometry.wrapper.photometry_multi(recipe_template, 
+                                                                'mag18-24_grid',
+                                                                n_images=12,
+                                                                config=no_overlap_config,
+                                                                threads=None),
+                        cachedir/'intial_multi_photometry', rerun=False)
 result_table_multi = astropy.table.vstack([session.tables.result_table for session in sessions_multi])
 clear_output()
 
