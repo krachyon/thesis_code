@@ -43,11 +43,10 @@ def to_pixel_scale(as_coord):
     else:
         as_coord *= u.arcsec
 
-
     shifted_pixel_coord = as_coord / pixel_scale
-    # FIXME the -0.5 pixel are a fudge factor for scopesim. IMHO center of image should be at 0,0 as
-    #  but it's offset by 0.5 pixel...
-    pixel = shifted_pixel_coord + max_pixel_coord / 2 - 0.5 * u.pixel
+    # FIXME the 1.5 pixel are a fudge factor for scopesim. IMHO center of image should be at 0,0 as
+    #  but it's offset
+    pixel = shifted_pixel_coord + max_pixel_coord / 2 + 1.5 * u.pixel
     return pixel.to(u.pixel).value
 
 

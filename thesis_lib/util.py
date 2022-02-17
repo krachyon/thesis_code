@@ -577,6 +577,8 @@ def cached(func: Callable[[],Any], filename: pathlib.Path, rerun: Optional[bool]
     filename = filename.with_suffix(ext)
     if not filename.exists() or rerun or RERUN_ALL_CACHED:
         result = func()
+        if result is None:
+            raise ValueError('The function you passed did not return anything')
         with zstandard.open(filename, 'wb') as outfile:
             pickle.dump(result, outfile)
     else:

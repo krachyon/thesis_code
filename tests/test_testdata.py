@@ -116,8 +116,8 @@ def test_grid_mean_devation(printer, generator_args):
     xdev_mean = np.mean(x-xref)
     ydev_mean = np.mean(y-yref)
     printer(f'{xdev_mean=} {ydev_mean=}')
-    assert xdev_mean < 0.001
-    assert ydev_mean < 0.001
+    assert xdev_mean < 0.002
+    assert ydev_mean < 0.002
 
 
 @pytest.mark.skip(reason='manual only, no good idea how to verify result automatically')

@@ -13,7 +13,8 @@ from photutils import DAOStarFinder, DAOGroup, EPSFBuilder, IterativelySubtracte
 from thesis_lib import config
 from .functions import calc_image_stats, extract_epsf_stars, perturb_guess_table, \
     match_finder_to_reference, calc_extra_result_columns, mark_outliers
-from .types import REFERENCE_NAMES, StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable, OUTLIER
+from .types import REFERENCE_NAMES, StarfinderTable, InputTable, ResultTable, GuessTable, ReferenceTable, OUTLIER, \
+    INPUT_TABLE_NAMES, FLUX
 from .. import util
 from ..config import Config
 from ..testdata.generators import read_or_generate_image
@@ -217,6 +218,10 @@ class Session:
 
         return self
 
+    def correct_scopesim_flux_hack(self):
+        """"""
+        self.tables.input_table[INPUT_TABLE_NAMES[FLUX]] *= 1e13
+
     def do_astrometry_mine(self, initial_guess: Optional[GuessTable] = None) -> __class__:
         raise NotImplementedError
 
@@ -247,6 +252,7 @@ def photometry_multi(image_recipe_template: Callable[[int], Callable[[], Tuple[n
         image_name = image_name_template+f'_{i}'
         image, input_table = read_or_generate_image(image_name, config, image_recipe)
         session = Session(config, image, input_table)
+        session.correct_scopesim_flux_hack()
         session.do_it_all()
 
         # TODO maybe do this as part of the calc_additional function
