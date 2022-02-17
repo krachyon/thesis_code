@@ -189,7 +189,10 @@ def scopesim_cluster(seed: int = 9999, custom_subpixel_psf=None) -> Tuple[np.nda
                      distance=50000,  # parsec
                      core_radius=0.3,  # parsec
                      seed=seed)
-
+    if source.fields[0]['x'].unit is None:
+        import astropy.units as u
+        source.fields[0]['x'] *= u.arcsec
+        source.fields[0]['y'] *= u.arcsec
     detector = setup_optical_train(psf_effect=make_psf(), custom_subpixel_psf=custom_subpixel_psf)
 
     detector.observe(source, random_seed=seed, update=True)

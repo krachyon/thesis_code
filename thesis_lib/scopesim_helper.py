@@ -35,14 +35,20 @@ def to_pixel_scale(as_coord):
     convert position of objects from arcseconds to pixel coordinates
     Numpy/photutils center convention
     """
-    if not isinstance(as_coord, u.Quantity):
+    if hasattr(as_coord, 'unit'):
+        if as_coord.unit is None:
+            as_coord *= u.arcsec
+        else:
+            as_coord = as_coord.to(u.arcsec)
+    else:
         as_coord *= u.arcsec
+
 
     shifted_pixel_coord = as_coord / pixel_scale
     # FIXME the -0.5 pixel are a fudge factor for scopesim. IMHO center of image should be at 0,0 as
     #  but it's offset by 0.5 pixel...
     pixel = shifted_pixel_coord + max_pixel_coord / 2 - 0.5 * u.pixel
-    return pixel.value
+    return pixel.to(u.pixel).value
 
 
 def pixel_to_mas(px_coord):

@@ -2,8 +2,9 @@ import pytest
 import numpy as np
 from thesis_lib.util import center_of_image
 from photutils.centroids import centroid_quadratic
+import astropy.units as u
 
-from thesis_lib.scopesim_helper import make_anisocado_model
+from thesis_lib.scopesim_helper import make_anisocado_model, to_pixel_scale
 
 @pytest.mark.parametrize('anisocado_model', [0, 5], indirect=True)
 def test_anisocado_model_centered(anisocado_model):
@@ -49,3 +50,15 @@ def test_anisocado_psf_even(psf_effect_even):
     # TODO ideally this should be a lot tighter, but honestly even arrays are probably bad anyway
     # TODO does this work wih <0.001 on different computer?
     assert np.all(np.abs(np.array(actual) - np.array(expected)) < 0.05)
+
+
+def test_to_pixel_scale():
+    from astropy.table import Column
+    to_pixel_scale(1)
+    to_pixel_scale(1*u.arcsec)
+    to_pixel_scale(1*u.arcmin)
+    to_pixel_scale(np.array([1, 3, 4]))
+    to_pixel_scale(np.array([23, 3]*u.arcsec))
+    to_pixel_scale(Column([2, 3, 4], name='foo'))
+    to_pixel_scale(Column([2, 3, 4], name='foo')*u.arcsec)
+
