@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
+from astropy.stats import sigma_clipped_stats
 from matplotlib.colors import LogNorm
 
 import photutils
@@ -50,21 +51,47 @@ def plot_image_with_source_and_measured(image: np.ndarray,
 def plot_xy_deviation(matched_table: ResultTable) -> matplotlib.pyplot.figure:
     """
     Plot the x and y offsets between two catalogues as scatterplot
-    :param matched_table: Table with columns 'x_fit', 'y_fit', 'x_orig', 'y_orig', 'offset'
-    :param output_path: optionally save plot to this base filename
+    :param matched_table: Table with columns 'x_fit', 'y_fit', 'x_orig', 'y_orig', 'x_offset', 'y_offset'
     :return:
     """
 
     fig = plt.figure()
 
-    plt.title('offset between measured and input position')
-    plt.xlabel('x offsets [pixel]')
-    plt.ylabel('y offsets [pixel]')
-    xs = matched_table['x_offset']
-    ys = matched_table['y_offset']
-    plt.plot(xs, ys, '.', markersize=2, markeredgecolor='orange')
-    text = f'$σ_x={np.std(xs):.3f}$\n$σ_y={np.std(ys):.3f}$'
-    plt.annotate(text, xy=(0.01, 0.9), xycoords='axes fraction')
+    rng = np.random.default_rng(0)
+
+    xdiff, ydiff, flux = matched_table['x_offset'],  matched_table['y_offset'], matched_table['flux_fit']
+    # random plotting order to avoid unreal color clusters
+    order = rng.permutation(range(len(xdiff)))
+    xdiff, ydiff, flux = xdiff[order], ydiff[order], flux[order]
+
+    xstd, xstd_clipped = np.std(xdiff), sigma_clipped_stats(xdiff, sigma=3)[2]
+    ystd, ystd_clipped = np.std(ydiff), sigma_clipped_stats(ydiff, sigma=3)[2]
+
+    norm = LogNorm(max(flux.min(), 1), flux.max())
+    cmap = plt.cm.get_cmap('plasma').copy()
+    cmap.set_under('green')
+
+    plt.scatter(xdiff, ydiff, c=flux, norm=norm, cmap=cmap, s=20, alpha=0.8)
+    plt.errorbar([0], [0], xerr=xstd, yerr=ystd, capsize=5, ls=':', color='tab:blue', label='σ')
+    plt.errorbar([0], [0], xerr=xstd_clipped, yerr=ystd_clipped, capsize=5, ls=':', color='tab:green',
+                 label='σ clipped')
+    plt.xlabel(f'x centroid deviation; $σ_x$={xstd:.4f}  $σ_x$ clipped={xstd_clipped:.4f}')
+    plt.ylabel(f'y centroid deviation; $σ_y$={ystd:.4f}  $σ_y$ clipped={ystd_clipped:.4f}')
+
+    plt.xlim(-1.3 * xstd, 1.3 * xstd)
+    plt.ylim(-1.3 * xstd, 1.3 * xstd)
+
+    cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)')
+    plt.legend()
+
+    # plt.title('offset between measured and input position')
+    # plt.xlabel('x offsets [pixel]')
+    # plt.ylabel('y offsets [pixel]')
+    # xs = matched_table['x_offset']
+    # ys = matched_table['y_offset']
+    # plt.plot(xs, ys, '.', markersize=2, markeredgecolor='orange')
+    # text = f'$σ_x={np.std(xs):.3f}$\n$σ_y={np.std(ys):.3f}$'
+    # plt.annotate(text, xy=(0.01, 0.9), xycoords='axes fraction')
 
     return fig
 
