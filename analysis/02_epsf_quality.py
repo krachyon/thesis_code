@@ -147,6 +147,9 @@ def comparison_plot(empiric, title):
     diff = actual-empiric
     
     power_diff = np.fft.fftshift(np.abs(np.fft.fft2(actual))**2 - np.abs(np.fft.fft2(empiric))**2 )
+    xfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[1]))
+    yfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[0]))
+    extent = (xfreq[0], xfreq[-1], yfreq[0], yfreq[-1])
 
     fig, axs = plt.subplots(1,3)
 
@@ -158,7 +161,7 @@ def comparison_plot(empiric, title):
     fig.colorbar(im, ax=axs[1], shrink=0.7)
     axs[1].set_title('EPSF-PSF')
     
-    im = axs[2].imshow(power_diff)
+    im = axs[2].imshow(power_diff, extent=extent)
     fig.colorbar(im, ax=axs[2], shrink=0.7)
     axs[2].set_title('Powerspectrum difference')
 
@@ -180,6 +183,11 @@ best_idx = df[(df.N==11)&(df.oversampling==2)&(df.σ < 0.7)].dev.idxmin()
 comparison_plot(epsfs[best_idx](x,y), 'Not enough smoothing')
 save_plot(outdir, 'epsf_residual_notenough')
 pass
+
+# %%
+#figure()
+#y, x = np.mgrid[-50:50:101j,-50:50:101j]
+#imshow(np.fft.fftshift(np.abs(np.fft.fft2(psf(x,y)))**2), norm=LogNorm())
 
 # %%
 print("script run success")
