@@ -31,6 +31,8 @@ from astropy.modeling.functional_models import Const2D
 from matplotlib.cm import get_cmap, ScalarMappable
 from matplotlib.colors import Normalize
 
+from thesis_lib.util import dictoflists_to_listofdicts
+
 from photutils import FittableImageModel
 
 
@@ -342,7 +344,7 @@ def plot_fitshape(results: pd.DataFrame):
         xs = [i[0] for i in modelgroup.groupby('fitshape').mean().index]
         ys = modelgroup.groupby('fitshape').mean().dev
         errs = modelgroup.groupby('fitshape').std().dev
-        style = '-' if weight==True else '--'
+        style = '-' if weight is True else '--'
         plt.plot(xs, ys, style,
                  label=f'{type(modelgroup.input_model.iloc[0]).__name__} weights: {weight}, N: {n_sources}')
         plt.fill_between(xs, ys - errs, ys + errs, alpha=0.3)

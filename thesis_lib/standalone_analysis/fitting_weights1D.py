@@ -78,7 +78,7 @@ def fit(model, σ, λ, weight_calc, iters, seed_queue=None, return_arrays=True):
                         'σ': σ, 'λ': λ,
                         'weight_calc': weight_calc.__name__, 'weights': weights})
         else:
-            ret.append({'deviation': diff, 'fitted': fitted,
+            ret.append({'deviation': diff,
                         'σ': σ, 'λ': λ,
                         'weight_calc': weight_calc.__name__})
 
