@@ -121,25 +121,31 @@ plt.tight_layout()
 save_plot(outdir, 'standard_photutils')
 
 # %% [markdown]
-# # Grid
+# # Benchmark Images
 
 # %%
-image_name_sg = 'scopesim_grid_16_perturb2'
-sg_session = Session(default_config, image_name_sg)
+sg_session = Session(default_config, 'scopesim_grid_16_perturb2_mag18_24')
+gc_session = Session(default_config, 'gausscluster_N2000_mag22')
 
 
 # %%
 #fig = plots_and_sanitycheck.plot_image_with_source_and_measured(
 #    photometry_result_sg.image, photometry_result_sg.input_table, photometry_result_sg.result_table)
 
-fig = plt.figure()
-plt.imshow(sg_session.image, norm=LogNorm())
-plt.title('')
-cb = plt.colorbar(shrink=0.7)
-cb.set_label('pixel count')
-fig.set_size_inches(7,7)
-#plt.plot(sg_session.tables.input_table['x'], sg_session.tables.input_table['y'], '.')
+
+def show_image(img):
+    fig = plt.figure()
+    plt.imshow(img[8:-8,8:-8], norm=LogNorm())
+    plt.title('')
+    cb = plt.colorbar(shrink=0.8)
+    cb.set_label('pixel count')
+    fig.set_size_inches(7,7)
+    #plt.plot(sg_session.tables.input_table['x'], sg_session.tables.input_table['y'], '.')
+
+show_image(sg_session.image)
 save_plot(outdir, 'photutils_grid')
+show_image(gc_session.image)
+save_plot(outdir, 'photutils_gausscluster')
 
 
 # %% [markdown]
@@ -327,6 +333,8 @@ clear_output()
 
 # %%
 fig = plots.plot_xy_deviation(result_table_multi)
+plt.xlim(np.array(plt.xlim())*1.7)
+plt.ylim(np.array(plt.ylim())*1.7)
 save_plot(outdir, 'multi_astrometry_xy')
 
 # %%
