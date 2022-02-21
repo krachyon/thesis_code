@@ -12,6 +12,8 @@ from thesis_lib.astrometry import wrapper
 from thesis_lib.config import Config
 from thesis_lib.testdata.recipes import scopesim_grid
 from thesis_lib.util import make_gauss_kernel, save_plot, cached
+import anisocado
+import thesis_lib.util as util
 from matplotlib.colors import LogNorm
 import numpy as np
 import matplotlib.pyplot as plt
@@ -46,6 +48,7 @@ outdir = './02_gridded_models/'
 cache_dir = Path('./cached_results/')
 if not os.path.exists(outdir):
     os.mkdir(outdir)
+#util.RERUN_ALL_CACHED = True
 
 # %%
 psf = make_anisocado_model(oversampling=4, degree=5)
@@ -141,8 +144,8 @@ save_plot(outdir, 'epsf_quality')
 y, x = np.mgrid[-50:50:101j,-50:50:101j]
 def comparison_plot(empiric, title):
     actual = psf(x,y)
-    empiric/=empiric.max()
-    actual/=actual.max()
+    empiric/=empiric.sum()
+    actual/=actual.sum()
     
     diff = actual-empiric
     
@@ -188,6 +191,40 @@ pass
 #figure()
 #y, x = np.mgrid[-50:50:101j,-50:50:101j]
 #imshow(np.fft.fftshift(np.abs(np.fft.fft2(psf(x,y)))**2), norm=LogNorm())
+
+# %%
+base_psf = anisocado.AnalyticalScaoPsf(pixelSize=0.004, N=101, seed=seed).shift_off_axis(0,0)
+actual = psf(x,y)
+empiric = epsfs[best_idx](x,y)
+empiric/=empiric.sum()
+actual/=actual.sum()
+
+xfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[1]))
+yfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[0]))
+extent = (xfreq[0], xfreq[-1], yfreq[0], yfreq[-1])
+
+fig, axs = plt.subplots(1,3)
+fig.set_size_inches(10,3.5)
+
+im = axs[0].imshow(np.fft.fftshift(np.abs(np.fft.fft2(actual)))**2, extent=extent, norm=LogNorm())
+axs[0].set_title('PSF model')
+plt.colorbar(im,ax=axs[0],shrink=0.7)
+
+im=axs[1].imshow(np.fft.fftshift(np.abs(np.fft.fft2(empiric)))**2, extent=extent, norm=LogNorm())
+axs[1].set_title('ePSF')
+plt.colorbar(im,ax=axs[1], shrink=0.7)
+
+im = axs[2].imshow(np.fft.fftshift(np.abs(np.fft.fft2(base_psf)))**2, extent=extent, norm=LogNorm())
+plt.tight_layout()
+axs[2].set_title('Raw AnisoCADO array')
+plt.colorbar(im,ax=axs[2], shrink=0.7)
+
+plt.suptitle('PSF powerspectra')
+save_plot(outdir, 'epsf_psf_powerspectrums')
+
+# %%
+figure()
+plt.imshow(base_psf, norm = LogNorm())
 
 # %%
 print("script run success")
