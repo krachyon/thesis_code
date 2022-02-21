@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.0
+#       jupytext_version: 1.13.3
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -29,7 +29,7 @@ from pathlib import Path
 import matplotlib as mpl
 from matplotlib.colors import LogNorm
 from tqdm.auto import tqdm
-from thesis_lib.util import save_plot, psf_to_fisher
+from thesis_lib.util import save_plot, psf_to_fisher,psf_cramer_rao_bound, cached
 import os
 from IPython.display import HTML
 
@@ -40,6 +40,7 @@ plt.rcParams['font.size'] = 10
 plt.rcParams['figure.autolayout'] = True
 
 outdir = './02_gridded_models/'
+cachedir = Path('cached_results/')
 if not os.path.exists(outdir):
     os.mkdir(outdir)
 
@@ -56,14 +57,12 @@ HTML('''
     }}
 </style>''')
 
-
-
 # %%
 # maybe finer spacing, esp in center?
 shape = (60, 60, 2, 2)
-arr_file_name = Path('inv_fisher.npy')
-if not arr_file_name.exists():
-    shared_array = mp.Array('d', reduce(mul, shape))
+shared_array = mp.Array('d', reduce(mul, shape))
+
+def make_array():    
     psf = anisocado.AnalyticalScaoPsf()
 
     def inv_fisher(psf, shift):
@@ -76,9 +75,10 @@ if not arr_file_name.exists():
         p.starmap(inv_fisher, tqdm(args) , 10)
 
     out_array = np.frombuffer(shared_array.get_obj()).reshape(shape)
-    np.save(arr_file_name,out_array)
-else:
-    out_array = np.load(arr_file_name)
+    return out_array
+
+
+out_array = cached(make_array, cachedir/'inv_fisher')
 
 # %%
 fig, axs = plt.subplots(2,2, sharex=True, sharey=True)
@@ -120,3 +120,12 @@ pass
 #ax2.plot(r.flatten(), np.sqrt(cov_img.flatten())/np.sqrt(euc_img.flatten()), 'o', color='C2')
 #ax2.set_ylabel('relative')
 
+
+# %%
+psf = anisocado.AnalyticalScaoPsf().shift_off_axis(0,0)
+def id(N):
+    return np.sqrt(N)*psf_cramer_rao_bound(psf,constant_noise_variance=0,n_photons=N)
+    
+id(1),id(5)    
+
+# %%
