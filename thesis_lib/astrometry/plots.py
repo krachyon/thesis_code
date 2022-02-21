@@ -7,7 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
-from astropy.stats import sigma_clipped_stats
+from astropy.stats import sigma_clipped_stats, sigma_clip
 from matplotlib.colors import LogNorm
 
 import photutils
@@ -55,7 +55,8 @@ def plot_xy_deviation(matched_table: ResultTable) -> matplotlib.pyplot.figure:
     :return:
     """
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(7.7, 6))
+    plt.gca().set_aspect('equal')
 
     rng = np.random.default_rng(0)
 
@@ -67,7 +68,9 @@ def plot_xy_deviation(matched_table: ResultTable) -> matplotlib.pyplot.figure:
     xstd, xstd_clipped = np.std(xdiff), sigma_clipped_stats(xdiff, sigma=3)[2]
     ystd, ystd_clipped = np.std(ydiff), sigma_clipped_stats(ydiff, sigma=3)[2]
 
-    norm = LogNorm(max(flux.min(), 1), flux.max())
+    min_flux_clipped = np.min(np.exp(sigma_clip(np.log(flux), sigma=5)))
+
+    norm = LogNorm(min_flux_clipped, flux.max())
     cmap = plt.cm.get_cmap('plasma').copy()
     cmap.set_under('green')
 
