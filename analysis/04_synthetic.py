@@ -24,12 +24,13 @@ from matplotlib.colors import LogNorm, SymLogNorm, Normalize
 from photutils import IRAFStarFinder, EPSFBuilder, extract_stars, \
  BasicPSFPhotometry, DAOGroup, MMMBackground, SExtractorBackground, FittableImageModel, StarFinder
 from astropy.nddata import NDData
-from astropy.stats import sigma_clipped_stats
+from astropy.stats import sigma_clipped_stats, sigma_clip
 import astropy.table as table
 from thesis_lib.util import cached, save_plot, make_gauss_kernel
 from thesis_lib import util
 from thesis_lib.testdata.generators import read_or_generate_image
 from thesis_lib.scopesim_helper import make_anisocado_model
+from thesis_lib.astrometry.plots import plot_xy_deviation
 from scipy.spatial import ConvexHull
 from thesis_lib.testdata.recipes import scopesim_grid
 # only on my branch
@@ -71,38 +72,10 @@ out_dir = Path('./04_comparison')
 def calc_devation(result_table):
     xdiff, ydiff = result_table['x_fit']-result_table['x_orig'], result_table['y_fit']-result_table['y_orig']
     eucdev = np.sqrt(xdiff**2+ydiff**2)
+    result_table['x_offset'] = xdiff
+    result_table['y_offset'] = ydiff
+    result_table['offset'] = eucdev
     return xdiff, ydiff, eucdev 
-
-def xy_scatter(result_table):
-    plt.figure(figsize=(7.7,6))
-    plt.gca().set_aspect('equal')
-    result_table.sort('flux_fit', reverse=False)
-
-    xdiff, ydiff, eucdev = calc_devation(result_table)
-    xstd, xstd_clipped = np.std(xdiff),sigma_clipped_stats(xdiff, sigma=3)[2]
-    ystd, ystd_clipped = np.std(ydiff),sigma_clipped_stats(ydiff, sigma=3)[2]
-    
-    flux = result_table['flux_fit']
-    
-    rng = np.random.default_rng(0)
-    order = rng.permutation(range(len(xdiff)))
-    xdiff, ydiff, flux = xdiff[order], ydiff[order], flux[order]
-    
-    norm = LogNorm(max(flux.min(),1),flux.max())
-    cmap = mpl.cm.get_cmap('plasma').copy()
-    cmap.set_under('green')
-
-    plt.scatter(xdiff,ydiff, c=flux, norm=norm, cmap=cmap, s=20, alpha=0.8)
-    plt.errorbar([0],[0],xerr=xstd,yerr=ystd, capsize=5, ls=':', color='tab:blue', label='σ')
-    plt.errorbar([0],[0],xerr=xstd_clipped,yerr=ystd_clipped, capsize=5, ls=':', color='tab:green', label='σ clipped')
-    plt.xlabel(f'x centroid deviation; $σ_x$={xstd:.4f}  $σ_x$ clipped={xstd_clipped:.4f}')
-    plt.ylabel(f'y centroid deviation; $σ_y$={ystd:.4f}  $σ_y$ clipped={ystd_clipped:.4f}')
-
-    plt.xlim(-1.3*xstd,1.3*xstd)
-    plt.ylim(-1.3*xstd,1.3*xstd)
-
-    cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), label='log(flux)')
-    plt.legend()
     
 
 def image_and_sources(image, result_table):
@@ -242,7 +215,9 @@ noisefloor_result = table.vstack([res[0] for res in results])
 noisefloor_result = noisefloor_result[noisefloor_result['flux_fit']>=1]
 
 # %%
-xy_scatter(noisefloor_result)
+calc_devation(noisefloor_result)
+plot_xy_deviation(noisefloor_result)
+pass
 
 # %%
 #seed=0
@@ -400,7 +375,9 @@ plot_dev_vs_mag(grid_result_nocrowd_bigger, create_figure=False, label='less cro
 save_plot(out_dir, 'synthetic_grid_magdevcomparison_crowding')
 
 # %%
-xy_scatter(grid_result_baseline)
+calc_devation(grid_result_baseline)
+plot_xy_deviation(grid_result_baseline)
+pass
 
 # %% [markdown]
 # # EPSF
@@ -496,13 +473,20 @@ grid_result_epsf_single = photometry.do_photometry(img_grid, guess_table)
 [(np.min(np.abs(i)),np.mean(np.abs(i)),np.max(np.abs(i))) for i in calc_devation(grid_result_epsf_single)]
 
 # %%
-xy_scatter(grid_result_epsf_plot)
+print(np.mean(grid_result_epsf['x_fit']-grid_result_epsf['x_orig']),
+np.mean(grid_result_epsf['y_fit']-grid_result_epsf['y_orig']))
+
+print(np.std(grid_result_epsf['x_fit']-grid_result_epsf['x_orig']),
+np.std(grid_result_epsf['y_fit']-grid_result_epsf['y_orig']))
+
+# %%
+#xy_scatter(grid_result_epsf[grid_result_epsf['flux_fit']>10**6])
+#xy_scatter(grid_result_epsf[grid_result_epsf['flux_fit']<10**6])
+calc_devation(grid_result_epsf)
+plot_xy_deviation(grid_result_epsf)
 plt.xlim(np.array(plt.xlim())*1.2)
 plt.ylim(np.array(plt.ylim())*1.2)
 save_plot(out_dir, 'synthetic_grid_epsf_xy')
-
-# %%
-plt.xlim(), plt.ylim()
 
 # %%
 plot_residual(photometry, img_grid, grid_result_epsf_single)
@@ -598,7 +582,8 @@ save_plot(out_dir, 'synthetic_cluster_overview')
 image_and_sources(img_gausscluster, cluster_result)
 
 # %%
-xy_scatter(cluster_result)
+calc_devation(cluster_result)
+plot_xy_deviation(cluster_result)
 save_plot(out_dir, 'synthetic_cluster_xy')
 
 # %%
