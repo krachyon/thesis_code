@@ -61,7 +61,7 @@ class Config(metaclass=ClassRepr):
     # use known star positions from input catalogue as initial guess for photometry?
     use_catalogue_positions: bool = False
     perturb_catalogue_guess: Optional[float] = 0.1  # by how many pixels to randomize when using initial guess
-    photometry_iterations: int = 3
+    photometry_iterations: int = 1
     bounds: dict[str, Tuple[Optional[float], Optional[float]]] = \
         dataclasses.field(default_factory=lambda: {'x_0': (None, None), 'y_0': (None, None), 'flux_0': (None, None)})
 
