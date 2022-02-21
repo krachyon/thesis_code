@@ -48,8 +48,10 @@ HTML('''
 
 # %%
 outdir = './02_gridded_models/'
+cachedir = Path('cached_results/')
 if not os.path.exists(outdir):
     os.mkdir(outdir)
+#util.RERUN_ALL_CACHED=True
 
 # %% [markdown]
 # # PSF convolution
@@ -159,10 +161,12 @@ dl = {'input_model': [model],
       'fit_accuracy': [1.49012e-08],
       'fitter_name': ['LM', 'Simplex'],
       }
-
-with mp.Pool() as p:
-    results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
-results = transform_dataframe(results)
+def do_it():
+    with mp.Pool() as p:
+        results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl)),2))
+    results = transform_dataframe(results)
+    return results
+results = cached(do_it, cachedir/'gridded_identity_fit')
 
 # %%
 lm = results[results.fitter_name == 'LM']
@@ -202,9 +206,12 @@ dl = {'input_model': [model],
       'fit_accuracy': [1.49012e-08]
       }
 
-with mp.Pool() as p:
-    results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl)), 10))
-results = transform_dataframe(results)
+def do_it():
+    with mp.Pool() as p:
+        results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl)), 10))
+    results = transform_dataframe(results)
+    return results
+results = cached(do_it, cachedir/'gridded_gridded_fit')
 
 # %%
 plot_phase_vs_deviation3d(results[results.model_oversampling == 1])
@@ -239,10 +246,12 @@ dl = {'input_model': [AiryDisk2D(radius=5)],
       'model_mode': ['grid'],
       'fit_accuracy': [1.49012e-08]
       }
-
-with mp.Pool() as p:
-    results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
-results = transform_dataframe(results)
+def do_it():
+    with mp.Pool() as p:
+        results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
+    results = transform_dataframe(results)
+    return results
+results = cached(do_it, cachedir/'gridded_model_degree_os')
 
 # %%
 degree_grouped = results.groupby(['model_degree'])
@@ -315,12 +324,15 @@ dl = {'input_model': [anisocado],
       'fit_bounds': [None, (1.1, 1.1)]
       }
 
-with mp.Pool() as p:
-    results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
+def do_it():
+    with mp.Pool() as p:
+        results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
 
-results = transform_dataframe(results)
-results_constrained = results[~results.fit_bounds.isnull()]
-results = results[results.fit_bounds.isnull()]
+    results = transform_dataframe(results)
+    results_constrained = results[~results.fit_bounds.isnull()]
+    results = results[results.fit_bounds.isnull()]
+    return results, results_constrained
+results, results_constrained = cached(do_it, cachedir/'gridded_lm_v_simplex')
 
 # %%
 lm = results[results.fitter_name == 'LM']
@@ -382,18 +394,13 @@ dl = {'input_model': [anisocado],
       'use_weights': [True]
       }
 
-# TODO zstandard here
-savefile = Path('noisevdev.pkl.zstd')
-if not savefile.exists():
+def do_it():
     with mp.Pool() as p:
         results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
     results = transform_dataframe(results)
     results = results[results.dev < 1]
-    with zstandard.open(savefile, 'wb') as f:
-        pickle.dump(results, f)
-else:
-    with zstandard.open(savefile, 'rb') as f:
-        results = pickle.load(f)
+    return results
+results = cached(do_it, cachedir/'gridded_noisevdev')
 # %%
 # calculate k*FWHM of anisocado PSF
 k_times_fwhm = np.sqrt(np.sum(np.linalg.inv(psf_to_fisher(anisocado.data, oversampling=anisocado.oversampling[0]))))
@@ -425,7 +432,8 @@ def plot_deviation_vs_noise(results: pd.DataFrame):
     
 plot_deviation_vs_noise(results)
 
-grpd = results.groupby(['λ'], as_index=False).mean()
+
+grpd = results.groupby(['λ','σ'], as_index=False).mean()
 
 deviation0 = np.array([psf_cramer_rao_bound(
         mod.data, n_photons=λ, constant_noise_variance=0, oversampling=mod.oversampling[0])
@@ -435,7 +443,9 @@ deviation25 = np.array([psf_cramer_rao_bound(
     for λ in grpd.λ])
 
 
-plt.plot(grpd.λ, k_times_fwhm / grpd.snr, ':', label=f'k*FWHM/SNR = {k_times_fwhm:.3f}/SNR')
+plt.plot(grpd[grpd.σ==0].λ, k_times_fwhm / grpd[grpd.σ==0].snr, ':', label=f'k FWHM/SNR = {k_times_fwhm:.3f}/SNR σ=0', color='C0')
+plt.plot(grpd[grpd.σ==25].λ, k_times_fwhm / grpd[grpd.σ==25].snr, ':', label=f'k FWHM/SNR = {k_times_fwhm:.3f}/SNR σ=25', color='C1')
+
 plt.plot(grpd.λ, deviation0,'--', label='Cramér-Rao bound σ=0', color='C0')
 plt.plot(grpd.λ, deviation25,'--', label='Cramér-Rao bound σ=25', color='C1')
 
@@ -480,6 +490,8 @@ pass
 def plot_xy_fitshape_scatter(results):
     fig = plt.figure()
     cmap = 'turbo'
+    plt.gca().set_aspect('equal')
+
 
     shapes = results.fitshape.apply(lambda shape: shape[0])
 
@@ -487,54 +499,112 @@ def plot_xy_fitshape_scatter(results):
     plt.xlabel('x_dev')
     plt.ylabel('y_dev')
 
+    plt.gca().set_aspect('equal')
     plt.colorbar(ScalarMappable(norm=Normalize(shapes.min(), shapes.max()), cmap=cmap)).set_label('Fitshape')
 
-
 # %%
-anisocado = make_anisocado_model(oversampling=2)
+anisocado = make_anisocado_model(oversampling=2, degree=3)
 
-fitshapes = [(i, i) for i in range(3, 71)]
+fitshapes = [(i, i) for i in range(3, 60)]
 
 dl = {'input_model': [anisocado],
       'n_sources': [1, 4],
-      'img_border': [64],
-      'img_size': [64 * 2 + 40],  # 40 pixel separation beween source positions
+      'img_border': [70],
+      'img_size': [70 * 2 + 25],  # 40 pixel separation beween source positions
       'pixelphase': ['random'] * 25,
       'fitshape': fitshapes,
-      'σ': [5.],
+      'σ': [1.],
       'λ': [500_000],
-      'model_mode': ['same'],
+      'model_mode': ['grid'],
+      'model_degree': [3],
       'fit_accuracy': [1.49012e-08],
       'use_weights': [True, False]
       }
 
-with mp.Pool() as p:
-    results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
-results = transform_dataframe(results)
-results = results[results.dev < 1]
+def do_it():
+    with mp.Pool() as p:
+        results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
+    results = transform_dataframe(results)
+    results = results[results.dev < 1]
+    return results
+results = cached(do_it, cachedir/'gridded_fitshape', rerun=False)
+results=results[results.dev>1e-4]
+
 
 # %%
-plot_xy_fitshape_scatter(results[(results.n_sources == 4) & (results.use_weights == False)])
-save_plot(outdir, 'fitshape_xy_unweighted')
+def calc_expected_deviation(input_model, fitshape, σ, λ):
+    os = input_model.oversampling[0]
+    y,x = np.mgrid[-fitshape/2:fitshape/2:os*fitshape*1j,
+                   -fitshape/2:fitshape/2:os*fitshape*1j]
+    psf_img = input_model(x,y)
+
+    return psf_cramer_rao_bound(psf_img, constant_noise_variance=σ**2, n_photons=λ, oversampling=os)
+
+def calc_kfwhm(input_model, fitshape, σ, λ):
+    return psf_cramer_rao_bound(input_model.data, constant_noise_variance=0, n_photons=1, oversampling=input_model.oversampling[0])
+
+for (input_model,fitshape,σ,λ), group in results.groupby([results.input_model.astype('str'),'fitshape','σ','λ'],as_index=False):
+    input_model = anisocado if 'anisocado' in input_model else airy
+    results.loc[group.index,'expected_deviation'] = calc_expected_deviation(input_model,fitshape[0],σ,λ)
+    results.loc[group.index,'kfwhm'] = calc_kfwhm(input_model,fitshape[0],σ,λ)
+    
+results['kfwhm_over_snr'] = results.kfwhm/results.snr
+results['ratio'] = results.expected_deviation/results.kfwhm_over_snr
+
 
 # %%
-plot_xy_fitshape_scatter(results[(results.n_sources == 4) & (results.use_weights == True)])
-save_plot(outdir, 'fitshape_xy_weighted')
+#plot_xy_fitshape_scatter(results[(results.n_sources == 4) & (results.use_weights == False)])
+#save_plot(outdir, 'fitshape_xy_unweighted')
 
 # %%
-grpd = results.groupby(results.fitshape.apply(lambda s: s[0])).mean()
+#plot_xy_fitshape_scatter(results[(results.n_sources == 4) & (results.use_weights == True)])
+#save_plot(outdir, 'fitshape_xy_weighted')
 
-plot_fitshape(results)
-plt.plot(grpd.index, estimate_fwhm(anisocado) / grpd.snr, ':', label='FWHM/SNR')
-plt.legend()
-plt.yscale('log')
+# %%
+def plot_fitshape(results: pd.DataFrame, ax):
+    grouped = results.groupby('n_sources',
+                              as_index=False)
+
+    #fig, axes = plt.subplots(len(grouped), sharex='all')
+    for i, (n_sources, modelgroup) in enumerate(grouped):
+        xs = [i[0] for i in modelgroup.groupby('fitshape').mean().index]
+        ys = modelgroup.groupby('fitshape').mean().dev
+        errs = modelgroup.groupby('fitshape').std().dev
+        ax.plot(xs, ys,
+                 label=f'{n_sources} sources', color=f'C{i}')
+        ax.fill_between(xs, ys - errs, ys + errs, alpha=0.3)
+        
+        grpd = modelgroup.groupby(modelgroup.fitshape.apply(lambda s: s[0])).mean()
+        ax.plot(grpd.index, grpd.kfwhm / grpd.snr, ':', label='k FWHM/SNR',color=f'C{i}')
+    
+    grpd = results.groupby('fitshape',as_index=False).min()
+    ax.plot([i[0] for i in grpd.fitshape], grpd.expected_deviation, '--', label='Crámer-Rao bound', color='C2')
+
+    ax.set_xlabel('Cutout size of fit around star')    
+    ax.axvline(2*25, lw=0.5)
+    ax.legend()
+    ax.set_yscale('log')
+
+fig, axs = plt.subplots(1, 2, sharey=True)
+axs[0].set_ylabel('mean position deviation')
+fig.set_size_inches(11,5.6)
+    
+results_weighted = results[results.use_weights==True]
+plot_fitshape(results_weighted, axs[0])
+axs[0].set_title('weighted fit')
+results_unweighted = results[results.use_weights==False]
+plot_fitshape(results_unweighted, axs[1])
+axs[1].set_title('unweighted fit')
+
+plt.ylim(5e-4,0.04)
+plt.tight_layout()
 save_plot(outdir, 'crowding_deviation')
 
 # %%
 ref_img = fit_models_dictarg({'input_model': anisocado,
                               'n_sources': 4,
-                              'img_border': 64,
-                              'img_size': 64 * 2 + 40,  # 40 pixel separation beween source positions
+                              'img_border': 70,
+                              'img_size': 70 * 2 + 25,  # 40 pixel separation beween source positions
                               'pixelphase': 'random',
                               'fitshape': 23,
                               'σ': 5.,
@@ -553,7 +623,7 @@ save_plot(outdir, 'crowding_img')
 #
 
 # %%
-model = Gaussian1D()
+model = weights1d.Gaussian1D()
 
 
 class DummySeedQueue:
@@ -561,10 +631,9 @@ class DummySeedQueue:
         return 0
 
 
-res_anderson = fit(model, σ=15, λ=1000, weight_calc=anderson, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[
-    0]
+res_anderson = weights1d.fit(model, σ=15, λ=1000, weight_calc=weights1d.anderson, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[0]
 res_anderson_gauss = \
-fit(model, σ=15, λ=5000, weight_calc=anderson_gauss, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[0]
+weights1d.fit(model, σ=15, λ=5000, weight_calc=weights1d.anderson_gauss, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[0]
 
 
 # %%
@@ -573,7 +642,7 @@ def plot_foo(res):
     ys = res['ys']
 
     plt.figure()
-    plt.plot(xs, ys, label='signal')
+    plt.plot(weights1d.xs, ys, label='signal')
     plt.ylabel('signal value')
     plt.legend(loc='upper left')
     plt.xlabel('arbitrary units')
@@ -582,8 +651,8 @@ def plot_foo(res):
     plt.plot([], [])
     effective_weights = (ys * weights) ** 2
     effective_weights /= effective_weights.max()
-    plt.plot(xs, weights, label='weights')
-    plt.plot(xs, effective_weights, label='effective weights')
+    plt.plot(weights1d.xs, weights, label='weights')
+    plt.plot(weights1d.xs, effective_weights, label='effective weights')
     plt.legend(loc='upper right')
     plt.ylabel('weights')
 
@@ -596,36 +665,36 @@ save_plot(outdir, '1d_anderson_gauss')
 # %%
 manager = mp.Manager()
 q = manager.Queue(5000)
-queueproc = mp.Process(target=fillqueue, args=(q,))
+queueproc = mp.Process(target=weights1d.fillqueue, args=(q,))
 queueproc.start()
 
 # %%
-model = Gaussian1D()
+model = weights1d.Gaussian1D()
 
 params = {
     'λ': [λ for λ in np.linspace(100, 50_000, 150)],
-    'σ': [σ for σ in np.linspace(0, 50, 80)],
-    'weight_calc': [ones, anderson, anderson_gauss],
+    'σ': [σ for σ in np.linspace(0, 20, 30)],
+    'weight_calc': [weights1d.ones, weights1d.anderson, weights1d.anderson_gauss],
     'model': [model],
-    'iters': [100],
+    'iters': [200],
     'seed_queue': [q],
     'return_arrays': [False],
 }
-resname = 'sigmalambdaresults.pkl.gz'
-if os.path.exists(resname):
-    results_pic = pd.read_pickle(resname)
-else:
+
+def do_it():
     with mp.Pool() as p:
-        records_pic = chain(*p.map(fit_dictarg, tqdm(dictoflists_to_listofdicts(params)), 10))
-        results_pic = pd.DataFrame.from_records(records_pic)
-        small_results = results_pic[results_pic.columns.difference(['fitted'])]
-        small_results.to_pickle(resname)
+        records_pic = chain(*p.map(weights1d.fit_dictarg, tqdm(dictoflists_to_listofdicts(params)), 100))
+    results_pic = pd.DataFrame.from_records(records_pic)
+    #small_results = results_pic[results_pic.columns.difference(['fitted'])]
+    return results_pic
+#results_pic = do_it()
+results_pic = cached(do_it, cachedir/'gridded_1Dsigmalambdaresults')
 
 # %%
 results_pic = results_pic.replace('anderson_gauss', 'inverse variance')
 
 # %%
-figs = plot_lambda_vs_precission_relative(results_pic[results_pic.σ < 20])
+figs = weights1d.plot_lambda_vs_precission_relative(results_pic)
 plt.title('Poisson + Gaussian noise $0<σ<20$')
 plt.text(10000, 1.05, 'weighted worse')
 plt.text(10000, 0.95, 'weighted better')
@@ -662,6 +731,64 @@ plt.xlabel('radius from PSF center [px]')
 plt.ylabel('fractional PSF value')
 plt.legend()
 save_plot(outdir, 'radial_reduce')
+
+# %% [markdown]
+# # SNR calculation
+
+# %%
+anisocado = make_anisocado_model(oversampling=4,degree=5)
+
+y, x = np.mgrid[-100:100:401j, -100:100:401j]
+airy = FittableImageModel(AiryDisk2D(radius=5)(x,y)+0.001, oversampling=2)
+
+dl = {'input_model': [anisocado,airy],
+      'n_sources': [1],
+      'img_border': [64],
+      'img_size': [64 * 2],  # 40 pixel separation beween source positions
+      'pixelphase': ['random'] * 10,
+      'fitshape': [(21,21)],
+      'σ': [0.,5.],
+      'λ': [1000, 20_000, 500_000],
+      'model_mode': ['same'],
+      'fit_accuracy': [1.49012e-08],
+      'use_weights': [True]
+      }
+
+def do_it():
+    with mp.Pool() as p:
+        results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl)),2))
+    results = transform_dataframe(results)
+    return results
+
+results = cached(do_it, cachedir/'gridded_snr',rerun=False)
+
+
+# %%
+def calc_expected_deviation(input_model, fitshape, σ, λ):
+    y,x = np.mgrid[-fitshape/2:fitshape/2:fitshape*1j,
+                   -fitshape/2:fitshape/2:fitshape*1j]
+    psf_img = input_model(x,y)
+
+    return psf_cramer_rao_bound(psf_img, constant_noise_variance=σ**2, n_photons=λ)
+
+def calc_kfwhm(input_model, fitshape, σ, λ):
+    return psf_cramer_rao_bound(input_model.data, constant_noise_variance=0, n_photons=1, oversampling=input_model.oversampling[0])
+
+for (input_model,fitshape,σ,λ), group in results.groupby([results.input_model.astype('str'),'fitshape','σ','λ'],as_index=False):
+    input_model = anisocado if 'anisocado' in input_model else airy
+    results.loc[group.index,'expected_deviation'] = calc_expected_deviation(input_model,fitshape[0],σ,λ)
+    results.loc[group.index,'kfwhm'] = calc_kfwhm(input_model,fitshape[0],σ,λ)
+    
+results['kfwhm_over_snr'] = results.kfwhm/results.snr
+results['ratio'] = results.expected_deviation/results.kfwhm_over_snr
+
+# %%
+tab = results.groupby([results.input_model.apply(lambda model: repr(model)[1:15]), 'σ', 'λ']).mean()[['snr','kfwhm', 'kfwhm_over_snr','expected_deviation', 'ratio']]
+tab
+#tab.to_latex()
+
+# %%
+print(tab.to_latex(float_format="{:0.2f}".format))
 
 # %%
 print('script successful')
