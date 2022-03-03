@@ -24,10 +24,10 @@ import pandas as pd
 import pickle
 from pathlib import Path
 import os
-## use these for interactive, disable for export
+
 plt.rcParams['figure.figsize'] = (10, 8)
 plt.rcParams['figure.dpi'] = 100
-plt.rcParams['font.size'] = 10
+plt.rcParams['font.size'] = 12
 plt.rcParams['figure.autolayout'] = True
 from IPython.display import HTML
 HTML('''
@@ -193,7 +193,7 @@ pass
 #imshow(np.fft.fftshift(np.abs(np.fft.fft2(psf(x,y)))**2), norm=LogNorm())
 
 # %%
-base_psf = anisocado.AnalyticalScaoPsf(pixelSize=0.004, N=101, seed=10).shift_off_axis(0, 0)
+base_psf = anisocado.AnalyticalScaoPsf(pixelSize=0.004, N=101, seed=10).shift_off_axis(0,14)
 actual = psf(x, y)
 empiric = epsfs[best_idx](x, y)
 
@@ -211,30 +211,48 @@ xfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[1]))
 yfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[0]))
 extent = (xfreq[0], xfreq[-1], yfreq[0], yfreq[-1])
 
-fig, axs = plt.subplots(1, 3)
-fig.set_size_inches(10, 3.5)
+actual_mtf = np.fft.fftshift(np.abs(np.fft.fft2(actual)))**2
+empiric_mtf = np.fft.fftshift(np.abs(np.fft.fft2(empiric)))**2
+base_mtf = np.fft.fftshift(np.abs(np.fft.fft2(base_psf)))**2
 
-im = axs[0].imshow(np.fft.fftshift(np.abs(np.fft.fft2(actual)))
-                   ** 2, extent=extent, norm=LogNorm())
+fig, axs = plt.subplots(1, 3)
+fig.set_size_inches(11, 3.5)
+
+im = axs[0].imshow(actual_mtf, extent=extent, norm=LogNorm())
 axs[0].set_title('PSF model')
 plt.colorbar(im, ax=axs[0], shrink=0.7)
 
 axs[1].add_artist(Circle((0.,0.),radius=0.333, lw=1.5, ec='red', fill=None, alpha=0.5))
-im = axs[1].imshow(np.fft.fftshift(
-    np.abs(np.fft.fft2(empiric)))**2, extent=extent, norm=LogNorm())
+im = axs[1].imshow(empiric_mtf, extent=extent, norm=LogNorm())
 axs[1].set_title('ePSF')
 plt.colorbar(im, ax=axs[1], shrink=0.7)
 
-
-im = axs[2].imshow(np.fft.fftshift(
-    np.abs(np.fft.fft2(base_psf)))**2, extent=extent, norm=LogNorm())
+                
+im = axs[2].imshow(base_mtf, extent=extent, norm=LogNorm())
 plt.tight_layout()
 axs[2].set_title('Raw AnisoCADO array')
 plt.colorbar(im, ax=axs[2], shrink=0.7)
 
-
 plt.suptitle('PSF powerspectra')
 save_plot(outdir, 'epsf_psf_powerspectrums')
+
+fig, axs = plt.subplots(1,3, sharey=True, sharex=True)
+fig.set_size_inches(11, 3.5)
+
+axs[0].plot(xfreq,actual_mtf[:,int(actual_mtf.shape[1]/2)])
+axs[0].plot(xfreq,actual_mtf[int(actual_mtf.shape[0]/2),:])
+axs[0].set_ylabel('fractional value')
+axs[1].plot(xfreq,empiric_mtf[:,int(empiric_mtf.shape[1]/2)])
+axs[1].plot(xfreq,empiric_mtf[int(empiric_mtf.shape[0]/2),:])
+axs[2].plot(xfreq,base_mtf[:,int(base_mtf.shape[1]/2)], label='vertical profile')
+axs[2].plot(xfreq,base_mtf[int(base_mtf.shape[0]/2),:], label='horizontal profile')
+axs[2].legend()
+for ax in axs:
+    ax.set_xlabel('spatial frequencies')
+plt.suptitle('1D profiles through powerspectra')
+
+save_plot(outdir, 'epsf_psf_powerspectrums_cuts')
+
 
 # %%
 figure()
@@ -242,3 +260,5 @@ plt.imshow(base_psf, norm = LogNorm())
 
 # %%
 print("script run success")
+
+# %%

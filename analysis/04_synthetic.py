@@ -44,7 +44,7 @@ from pprint import pformat
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
 plt.rcParams['figure.dpi'] = 100
-plt.rcParams['font.size'] = 10
+plt.rcParams['font.size'] = 12
 plt.rcParams['figure.autolayout'] = True
 from IPython.display import HTML
 from thesis_lib.scopesim_helper import download
@@ -451,7 +451,7 @@ grid_result_epsf_plot['flux_fit'] /= offset
 
 plot_dev_vs_mag(grid_result_baseline, create_figure=False, label='known PSF', alpha=0.4)
 plot_dev_vs_mag(grid_result_epsf_plot, create_figure=False, label='with epsf', alpha=0.4)
-
+plt.tight_layout()
 save_plot(out_dir, 'synthetic_grid_magdevepsf')
 
 # %%

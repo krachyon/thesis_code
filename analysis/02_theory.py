@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.3
+#       jupytext_version: 1.13.6
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -36,7 +36,7 @@ from IPython.display import HTML
 # %%
 plt.rcParams['figure.figsize'] = (8, 6)
 plt.rcParams['figure.dpi'] = 100
-plt.rcParams['font.size'] = 10
+plt.rcParams['font.size'] = 12
 plt.rcParams['figure.autolayout'] = True
 
 outdir = './02_gridded_models/'
@@ -127,5 +127,3 @@ def id(N):
     return np.sqrt(N)*psf_cramer_rao_bound(psf,constant_noise_variance=0,n_photons=N)
     
 id(1),id(5)    
-
-# %%

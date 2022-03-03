@@ -51,7 +51,7 @@ from thesis_lib import util
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
 plt.rcParams['figure.dpi'] = 100
-plt.rcParams['font.size'] = 10
+plt.rcParams['font.size'] = 12
 plt.rcParams['figure.autolayout'] = True
 from IPython.display import HTML
 HTML('''
@@ -154,7 +154,7 @@ save_plot(outdir, 'photutils_gausscluster')
 # %%
 gauss_config = config.Config()
 gauss_config.smoothing = util.make_gauss_kernel(1.5)
-sg_gauss_session = Session(gauss_config, image_name_sg)
+sg_gauss_session = Session(gauss_config, sg_session.image_name)
 
 sg_session.find_stars().select_epsfstars_auto().make_epsf()
 sg_gauss_session.find_stars().select_epsfstars_auto().make_epsf()

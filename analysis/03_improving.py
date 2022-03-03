@@ -33,7 +33,7 @@ from scipy.spatial import ConvexHull, convex_hull_plot_2d
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
 plt.rcParams['figure.dpi'] = 100
-plt.rcParams['font.size'] = 10
+plt.rcParams['font.size'] = 12
 plt.rcParams['figure.autolayout'] = True
 from IPython.display import HTML
 
@@ -215,7 +215,8 @@ for group in groups:
                  color='white', backgroundcolor=(0,0,0,0.25), alpha=0.7)
     
 
-plt.imshow(img, norm=LogNorm())
+norm = LogNorm(vmax=(np.max(img)), vmin=np.min(np.min(img[9:-9,9:-9])))
+plt.imshow(img, norm=norm)
 plt.xlim(300,710)
 plt.ylim(275,700)
 plt.gcf().set_size_inches(8,8)
@@ -322,3 +323,5 @@ plt.legend()
 plt.gcf().set_size_inches(8,5)
 plt.tight_layout()
 save_plot(outdir, 'culler_bad')
+
+# %%

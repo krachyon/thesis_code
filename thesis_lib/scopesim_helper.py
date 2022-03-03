@@ -185,7 +185,8 @@ def setup_optical_train(psf_effect: Optional[scopesim.effects.Effect] = None,
     micado['micado_ncpas_psf'].include = False
 
     # TODO Apparently atmospheric dispersion is messed up. Ignore both dispersion and correction for now
-    micado['armazones_atmo_dispersion'].include = False
+    if 'armazones_atmo_dispersion' in micado.effects:
+        micado['armazones_atmo_dispersion'].include = False
     micado['micado_adc_3D_shift'].include = False
 
     return micado

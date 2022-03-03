@@ -26,12 +26,12 @@ from thesis_lib.util import save_plot, estimate_fwhm, psf_cramer_rao_bound, psf_
 from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
     fillqueue, plot_lambda_vs_precission_relative, fit_dictarg
 from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce
-
+from thesis_lib.standalone_analysis import fitting_weights1D
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
 plt.rcParams['figure.dpi'] = 100
-plt.rcParams['font.size'] = 10
+plt.rcParams['font.size'] = 12
 plt.rcParams['figure.autolayout'] = True
 from IPython.display import HTML
 
@@ -466,22 +466,22 @@ plt.legend()
 save_plot(outdir, 'deviation_vs_noise_anisocado')
 
 # %%
-grpd = results[results.σ == 0].groupby(['λ'], as_index=False)
-fig, axs = plt.subplots(2, 1)
-axs[0].semilogy(grpd.std().λ, grpd.std().x_dev, label='xdev')
-axs[0].semilogy(grpd.std().λ, grpd.std().y_dev, label='ydev')
-axs[0].semilogy(grpd.std().λ, grpd.std().dev, label='dev')
-axs[0].semilogy(grpd.std().λ, deviation0, label='CRLB')
-axs[0].legend()
-axs[0].set_title('std')
+#grpd = results[results.σ == 0].groupby(['λ'], as_index=False)
+#fig, axs = plt.subplots(2, 1)
+#axs[0].semilogy(grpd.std().λ, grpd.std().x_dev, label='xdev')
+#axs[0].semilogy(grpd.std().λ, grpd.std().y_dev, label='ydev')
+#axs[0].semilogy(grpd.std().λ, grpd.std().dev, label='dev')
+#axs[0].semilogy(grpd.std().λ, deviation0, label='CRLB')
+#axs[0].legend()
+#axs[0].set_title('std')
 
-magg = grpd.agg(lambda group: np.mean(np.abs(group)))
-axs[1].semilogy(magg.λ, magg.x_dev, label='xdev')
-axs[1].semilogy(magg.λ, magg.y_dev, label='ydev')
-axs[1].semilogy(magg.λ, magg.dev, label='dev')
-axs[1].semilogy(magg.λ, deviation0, label='CRLB')
-axs[1].legend()
-axs[1].set_title('mean')
+#magg = grpd.agg(lambda group: np.mean(np.abs(group)))
+#axs[1].semilogy(magg.λ, magg.x_dev, label='xdev')
+#axs[1].semilogy(magg.λ, magg.y_dev, label='ydev')
+#axs[1].semilogy(magg.λ, magg.dev, label='dev')
+#axs[1].semilogy(magg.λ, deviation0, label='CRLB')
+#axs[1].legend()
+#axs[1].set_title('mean')
 pass
 
 
@@ -547,7 +547,7 @@ def calc_kfwhm(input_model, fitshape, σ, λ):
     return psf_cramer_rao_bound(input_model.data, constant_noise_variance=0, n_photons=1, oversampling=input_model.oversampling[0])
 
 for (input_model,fitshape,σ,λ), group in results.groupby([results.input_model.astype('str'),'fitshape','σ','λ'],as_index=False):
-    input_model = anisocado if 'anisocado' in input_model else airy
+    input_model = anisocado
     results.loc[group.index,'expected_deviation'] = calc_expected_deviation(input_model,fitshape[0],σ,λ)
     results.loc[group.index,'kfwhm'] = calc_kfwhm(input_model,fitshape[0],σ,λ)
     
@@ -626,7 +626,7 @@ save_plot(outdir, 'crowding_img')
 #
 
 # %%
-model = weights1d.Gaussian1D()
+model = fitting_weights1D.Gaussian1D()
 
 
 class DummySeedQueue:
@@ -634,9 +634,9 @@ class DummySeedQueue:
         return 0
 
 
-res_anderson = weights1d.fit(model, σ=15, λ=1000, weight_calc=weights1d.anderson, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[0]
+res_anderson = fitting_weights1D.fit(model, σ=15, λ=1000, weight_calc=fitting_weights1D.anderson, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[0]
 res_anderson_gauss = \
-weights1d.fit(model, σ=15, λ=5000, weight_calc=weights1d.anderson_gauss, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[0]
+fitting_weights1D.fit(model, σ=15, λ=5000, weight_calc=fitting_weights1D.anderson_gauss, iters=1, seed_queue=DummySeedQueue(), return_arrays=True)[0]
 
 
 # %%
@@ -645,7 +645,7 @@ def plot_foo(res):
     ys = res['ys']
 
     plt.figure()
-    plt.plot(weights1d.xs, ys, label='signal')
+    plt.plot(fitting_weights1D.xs, ys, label='signal')
     plt.ylabel('signal value')
     plt.legend(loc='upper left')
     plt.xlabel('arbitrary units')
@@ -654,8 +654,8 @@ def plot_foo(res):
     plt.plot([], [])
     effective_weights = (ys * weights) ** 2
     effective_weights /= effective_weights.max()
-    plt.plot(weights1d.xs, weights, label='weights')
-    plt.plot(weights1d.xs, effective_weights, label='effective weights')
+    plt.plot(fitting_weights1D.xs, weights, label='weights')
+    plt.plot(fitting_weights1D.xs, effective_weights, label='effective weights')
     plt.legend(loc='upper right')
     plt.ylabel('weights')
 
@@ -668,16 +668,16 @@ save_plot(outdir, '1d_anderson_gauss')
 # %%
 manager = mp.Manager()
 q = manager.Queue(5000)
-queueproc = mp.Process(target=weights1d.fillqueue, args=(q,))
+queueproc = mp.Process(target=fitting_weights1D.fillqueue, args=(q,))
 queueproc.start()
 
 # %%
-model = weights1d.Gaussian1D()
+model = fitting_weights1D.Gaussian1D()
 
 params = {
     'λ': [λ for λ in np.linspace(100, 50_000, 150)],
     'σ': [σ for σ in np.linspace(0, 20, 30)],
-    'weight_calc': [weights1d.ones, weights1d.anderson, weights1d.anderson_gauss],
+    'weight_calc': [fitting_weights1D.ones, fitting_weights1D.anderson, fitting_weights1D.anderson_gauss],
     'model': [model],
     'iters': [200],
     'seed_queue': [q],
@@ -697,7 +697,7 @@ results_pic = cached(do_it, cachedir/'gridded_1Dsigmalambdaresults')
 results_pic = results_pic.replace('anderson_gauss', 'inverse variance')
 
 # %%
-figs = weights1d.plot_lambda_vs_precission_relative(results_pic)
+figs = fitting_weights1D.plot_lambda_vs_precission_relative(results_pic)
 plt.title('Poisson + Gaussian noise $0<σ<20$')
 plt.text(10000, 1.05, 'weighted worse')
 plt.text(10000, 0.95, 'weighted better')
