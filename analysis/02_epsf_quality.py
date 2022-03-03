@@ -14,7 +14,7 @@ from thesis_lib.testdata.recipes import scopesim_grid
 from thesis_lib.util import make_gauss_kernel, save_plot, cached
 import anisocado
 import thesis_lib.util as util
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, SymLogNorm
 import numpy as np
 import matplotlib.pyplot as plt
 import multiprocess as mp
@@ -193,31 +193,45 @@ pass
 #imshow(np.fft.fftshift(np.abs(np.fft.fft2(psf(x,y)))**2), norm=LogNorm())
 
 # %%
-base_psf = anisocado.AnalyticalScaoPsf(pixelSize=0.004, N=101, seed=seed).shift_off_axis(0,0)
-actual = psf(x,y)
-empiric = epsfs[best_idx](x,y)
-empiric/=empiric.sum()
-actual/=actual.sum()
+base_psf = anisocado.AnalyticalScaoPsf(pixelSize=0.004, N=101, seed=10).shift_off_axis(0, 0)
+actual = psf(x, y)
+empiric = epsfs[best_idx](x, y)
+
+empiric /= empiric.sum()
+actual /= actual.sum()
+base_psf /= base_psf.sum()
+
+vmin = np.min(np.hstack((actual, empiric, base_psf)))
+vmax = np.max(np.hstack((actual, empiric, base_psf)))
+print(vmin, vmax)
+norm = SymLogNorm(linthresh=1e-12, vmin=vmin, vmax=vmax)
+cmap = plt.cm.get_cmap('viridis')
 
 xfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[1]))
 yfreq = np.fft.fftshift(np.fft.fftfreq(actual.data.shape[0]))
 extent = (xfreq[0], xfreq[-1], yfreq[0], yfreq[-1])
 
-fig, axs = plt.subplots(1,3)
-fig.set_size_inches(10,3.5)
+fig, axs = plt.subplots(1, 3)
+fig.set_size_inches(10, 3.5)
 
-im = axs[0].imshow(np.fft.fftshift(np.abs(np.fft.fft2(actual)))**2, extent=extent, norm=LogNorm())
+im = axs[0].imshow(np.fft.fftshift(np.abs(np.fft.fft2(actual)))
+                   ** 2, extent=extent, norm=LogNorm())
 axs[0].set_title('PSF model')
-plt.colorbar(im,ax=axs[0],shrink=0.7)
+plt.colorbar(im, ax=axs[0], shrink=0.7)
 
-im=axs[1].imshow(np.fft.fftshift(np.abs(np.fft.fft2(empiric)))**2, extent=extent, norm=LogNorm())
+axs[1].add_artist(Circle((0.,0.),radius=0.333, lw=1.5, ec='red', fill=None, alpha=0.5))
+im = axs[1].imshow(np.fft.fftshift(
+    np.abs(np.fft.fft2(empiric)))**2, extent=extent, norm=LogNorm())
 axs[1].set_title('ePSF')
-plt.colorbar(im,ax=axs[1], shrink=0.7)
+plt.colorbar(im, ax=axs[1], shrink=0.7)
 
-im = axs[2].imshow(np.fft.fftshift(np.abs(np.fft.fft2(base_psf)))**2, extent=extent, norm=LogNorm())
+
+im = axs[2].imshow(np.fft.fftshift(
+    np.abs(np.fft.fft2(base_psf)))**2, extent=extent, norm=LogNorm())
 plt.tight_layout()
 axs[2].set_title('Raw AnisoCADO array')
-plt.colorbar(im,ax=axs[2], shrink=0.7)
+plt.colorbar(im, ax=axs[2], shrink=0.7)
+
 
 plt.suptitle('PSF powerspectra')
 save_plot(outdir, 'epsf_psf_powerspectrums')

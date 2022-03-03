@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.3
+#       jupytext_version: 1.13.6
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -399,7 +399,7 @@ fitshape = 41
 epsf_stars = extract_stars(NDData(img_grid), epsf_sources[:100], size=(fitshape+2, fitshape+2))
 builder = EPSFBuilder(oversampling=4, smoothing_kernel=make_gauss_kernel(2.3,N=21), maxiters=5)
 pre_epsf, _ = cached(lambda: builder.build_epsf(epsf_stars), cache_dir/'epsf_synthetic', rerun=False)
-data = pre_epsf.data[9:-9,9:-9]
+data = pre_epsf.data[9:-9,9:-9].copy()
 data /= np.sum(data)/np.sum(pre_epsf.oversampling)
 epsf = FittableImageModel(data=data, oversampling=pre_epsf.oversampling)
 epsf.origin = centroid_quadratic(epsf.data)
@@ -458,8 +458,10 @@ save_plot(out_dir, 'synthetic_grid_magdevepsf')
 center_of_image(epsf.data), centroid_quadratic(epsf.data, fit_boxsize=5)
 
 # %%
-figure()
-imshow(epsf.data, norm=LogNorm())
+plt.figure()
+plt.imshow(pre_epsf.data, norm=LogNorm())
+plt.colorbar()
+save_plot(out_dir,'failed_epsf_example')
 
 # %%
 img_grid, tab_grid = read_or_generate_image('scopesim_grid_16_perturb2_mag18_24_subpixel')
@@ -536,22 +538,22 @@ if photometry._last_image is None:
     photometry._last_image = img_gausscluster - photometry.bkg_estimator(img_gausscluster)
 residual = photometry.residual(cluster_result)
 
-fig = plt.figure(figsize=(9,12))
-gs = GridSpec(5, 2, figure=fig)
+fig = plt.figure(figsize=(9,11))
+gs = GridSpec(4, 2, figure=fig, height_ratios=[12, 12, 0.8, 1])
 
 norm=SymLogNorm(linthresh=10, vmin=residual.min(), vmax=residual.max())
 cmap=plt.cm.get_cmap('viridis')
 
 
-tl = fig.add_subplot(gs[:2,0])
+tl = fig.add_subplot(gs[0,0])
 tl.imshow(residual, norm=norm, cmap=cmap)
 tl.set_title('residual')
 
-bl = fig.add_subplot(gs[2:4,0])
+bl = fig.add_subplot(gs[1,0])
 im = bl.imshow(img_gausscluster, cmap='viridis', norm=LogNorm())
 bl.set_title('original image')
 
-tr = fig.add_subplot(gs[:2,1])
+tr = fig.add_subplot(gs[0,1])
 tr.plot(cluster_result['x_fit'], cluster_result['y_fit'], 'rx', markersize=3, label='fit')
 tr.plot(cluster_result['x_orig'], cluster_result['y_orig'], 'k+', markersize=3, label='input position')
 tr.imshow(residual, norm=norm, cmap=cmap)
@@ -560,7 +562,7 @@ tr.set_ylim(850,720)
 tr.set_title('saturated source halo')
 tr.legend()
 
-br = fig.add_subplot(gs[2:4,1])
+br = fig.add_subplot(gs[1,1])
 br.plot(cluster_result['x_fit'], cluster_result['y_fit'], 'rx', markersize=3, label='fit')
 br.plot(cluster_result['x_orig'], cluster_result['y_orig'], 'k+', markersize=3, label='input position')
 br.imshow(residual, norm=norm, cmap=cmap)
@@ -569,11 +571,11 @@ br.set_xlim(470,540)
 br.set_ylim(490,420)
 br.legend()
 
-cbarax = fig.add_subplot(gs[4,:])
-cbarax.set_axis_off()
+cbarax = fig.add_subplot(gs[3,0])
+fig.colorbar(im, orientation='horizontal', cax=cbarax,shrink=0.9,label='image', pad=3, ticklocation='bottom')
+cbarax = fig.add_subplot(gs[3,1])
 fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-             orientation='horizontal', ax=cbarax,location='top',shrink=1, label='residuals',  pad=0.25)
-fig.colorbar(im, orientation='horizontal', ax=cbarax, location='top',shrink=1,label='image', pad=0.35, ticklocation='bottom')
+             orientation='horizontal', cax=cbarax,shrink=0.9, label='residuals',  pad=3)
 
 #fig.tight_layout()
 save_plot(out_dir, 'synthetic_cluster_overview')
@@ -591,3 +593,5 @@ visualize_grouper(img_gausscluster, tab_gausscluster, 12, 20)
 
 # %%
 plot_dev_vs_mag(cluster_result[cluster_result['flux_fit']>10000])
+
+# %%

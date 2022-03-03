@@ -232,6 +232,10 @@ lowpass_config.fitshape = 21
 lowpass_config.separation_factor = 2
 lowpass_config.create_dirs()
 
+with open(os.path.join(outdir, 'lowpass_config.txt'), 'w') as f:
+    def_config = str(config.Config.instance())
+    f.write(def_config)
+
 # %%
 # use an image with less sources to not have to filter the input positions
 image_name_lpc = 'gausscluster_N2000_mag22_lowpass'

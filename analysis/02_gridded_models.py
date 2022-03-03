@@ -9,6 +9,7 @@ import multiprocess as mp
 from pathlib import Path
 import pickle
 import zstandard
+from tqdm.auto import tqdm
 
 from matplotlib.colors import LogNorm
 from matplotlib.ticker import MaxNLocator
@@ -21,10 +22,11 @@ from astropy.convolution import AiryDisk2DKernel, convolve
 
 from thesis_lib.standalone_analysis.sampling_precision import *
 from thesis_lib.testdata.recipes import convolved_grid
-from thesis_lib.util import save_plot, estimate_fwhm, psf_cramer_rao_bound, psf_to_fisher, dictoflists_to_listofdicts
+from thesis_lib.util import save_plot, estimate_fwhm, psf_cramer_rao_bound, psf_to_fisher, dictoflists_to_listofdicts, cached
 from thesis_lib.standalone_analysis.fitting_weights1D import fit, Gaussian1D, anderson_gauss, anderson, ones, xs, \
     fillqueue, plot_lambda_vs_precission_relative, fit_dictarg
 from thesis_lib.standalone_analysis.psf_radial_average import psf_radial_reduce
+
 
 ## use these for interactive, disable for export
 plt.rcParams['figure.figsize'] = (9, 6)
@@ -391,16 +393,17 @@ dl = {'input_model': [anisocado],
       'model_degree': [5],
       'model_mode': ['same'],
       'fit_accuracy': [1.49012e-08],
-      'use_weights': [True]
+      'use_weights': [True],
+      'fitter_name': ['LM']
       }
 
 def do_it():
     with mp.Pool() as p:
         results = pd.DataFrame.from_records(p.map(fit_models_dictarg, tqdm(create_arg_list(dl))))
     results = transform_dataframe(results)
-    results = results[results.dev < 1]
     return results
-results = cached(do_it, cachedir/'gridded_noisevdev')
+results = cached(do_it, cachedir/'gridded_noisevdev', rerun=False)
+#results = results[results.dev < 10]
 # %%
 # calculate k*FWHM of anisocado PSF
 k_times_fwhm = np.sqrt(np.sum(np.linalg.inv(psf_to_fisher(anisocado.data, oversampling=anisocado.oversampling[0]))))
@@ -747,7 +750,7 @@ dl = {'input_model': [anisocado,airy],
       'img_size': [64 * 2],  # 40 pixel separation beween source positions
       'pixelphase': ['random'] * 10,
       'fitshape': [(21,21)],
-      'σ': [0.,5.],
+      'σ': [0.,25.],
       'λ': [1000, 20_000, 500_000],
       'model_mode': ['same'],
       'fit_accuracy': [1.49012e-08],
@@ -785,10 +788,27 @@ results['ratio'] = results.expected_deviation/results.kfwhm_over_snr
 # %%
 tab = results.groupby([results.input_model.apply(lambda model: repr(model)[1:15]), 'σ', 'λ']).mean()[['snr','kfwhm', 'kfwhm_over_snr','expected_deviation', 'ratio']]
 tab
-#tab.to_latex()
 
 # %%
 print(tab.to_latex(float_format="{:0.2f}".format))
+
+# %%
+from thesis_lib.config import Config
+import thesis_lib.util as util
+
+with util.work_in(Config.scopesim_working_dir):
+    fpa_lin=Path('./inst_pkgs/MICADO/FPA_linearity.dat')
+    data = np.genfromtxt(fpa_lin)[1:-1]
+
+incident = data[:,0]
+measured = data[:,1]
+
+plt.figure()
+plt.plot(incident, measured)
+plt.xlabel('incident')
+plt.ylabel('measured')
+plt.title('ScopeSim MICADO detector linearity curve')
+save_plot(outdir, 'scopesim_linearity')
 
 # %%
 print('script successful')

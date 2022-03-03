@@ -75,9 +75,10 @@ def plot_xy_deviation(matched_table: ResultTable) -> matplotlib.pyplot.figure:
     cmap.set_under('green')
 
     plt.scatter(xdiff, ydiff, c=flux, norm=norm, cmap=cmap, s=20, alpha=0.8)
-    plt.errorbar([0], [0], xerr=xstd, yerr=ystd, capsize=5, ls=':', color='tab:blue', label='σ')
+    plt.errorbar([0], [0], xerr=xstd, yerr=ystd, capsize=5, ls=':', color='tab:blue',
+                 label=f'σ : {np.sqrt(xstd**2+ystd**2):.4f} px')
     plt.errorbar([0], [0], xerr=xstd_clipped, yerr=ystd_clipped, capsize=5, ls=':', color='tab:green',
-                 label='σ clipped')
+                 label=f'σ clipped: {np.sqrt(xstd_clipped**2+ystd_clipped**2):.4f} px')
     plt.xlabel(f'x centroid deviation; $σ_x$={xstd:.4f}  $σ_x$ clipped={xstd_clipped:.4f}')
     plt.ylabel(f'y centroid deviation; $σ_y$={ystd:.4f}  $σ_y$ clipped={ystd_clipped:.4f}')
 
