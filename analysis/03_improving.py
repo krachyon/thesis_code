@@ -301,7 +301,7 @@ def runme_bad():
     culler_bad(detections_bad)
     return detections_bad
 culled_bad = util.cached(runme_bad,
-                     cache_dir/'culler_performance_bad', rerun=False)
+                     cache_dir/'culler_performance_bad', rerun=True)
 
 # %%
 plt.figure()

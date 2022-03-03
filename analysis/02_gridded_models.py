@@ -805,8 +805,8 @@ measured = data[:,1]
 
 plt.figure()
 plt.plot(incident, measured)
-plt.xlabel('incident')
-plt.ylabel('measured')
+plt.xlabel('incident [photons]')
+plt.ylabel('measured [ADU]')
 plt.title('ScopeSim MICADO detector linearity curve')
 save_plot(outdir, 'scopesim_linearity')
 
