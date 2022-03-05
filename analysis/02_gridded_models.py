@@ -302,7 +302,7 @@ plt.colorbar(im, ax=axs[0], shrink=0.6)
 axs[0].set_title('On axis PSF at 2.15 μm')
 
 im = axs[1].imshow(fftconvolve(anisocado.data, anisocado.data, mode='same'), norm=LogNorm())
-axs[1].set_title('PSF cross correlation')
+axs[1].set_title('PSF auto-correlation')
 plt.colorbar(im, ax=axs[1], shrink=0.6)
 
 fig.set_size_inches(10, 5)

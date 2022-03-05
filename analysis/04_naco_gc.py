@@ -392,7 +392,7 @@ def plot_dev_vs_mag(flux, eucdev):
     ys = np.mean(dev_slide, axis=1)
     plt.plot(-np.log(np.mean(flux_slide,axis=1)), ys, label=f'running average, length {window_size} window')
     plt.xlim(-12.2,-1.5)
-    plt.ylim(0,1.1*np.max(ys))
+    plt.ylim(0,0.8)
     plt.ylabel('centroid deviation [px]')
     plt.xlabel('-log(flux)')
     plt.legend()
