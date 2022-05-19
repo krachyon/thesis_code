@@ -204,3 +204,4 @@ def download(to_directory=Config.instance().scopesim_working_dir) -> None:
             scopesim.download_package(["locations/Armazones",
                                        "telescopes/ELT",
                                        "instruments/MICADO"])
+
